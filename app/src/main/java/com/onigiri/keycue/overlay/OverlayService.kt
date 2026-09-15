@@ -1,0 +1,444 @@
+package com.onigiri.keycue.overlay
+
+import android.app.Service
+import android.content.Context
+import android.content.Intent
+import android.content.pm.ServiceInfo
+import android.os.Build
+import android.os.IBinder
+import androidx.core.content.ContextCompat
+import com.onigiri.keycue.app.MainActivity
+import com.onigiri.keycue.data.InMemoryPlaybackSessionRepository
+import com.onigiri.keycue.data.PlaybackSessionRepository
+import com.onigiri.keycue.data.SettingsRepository
+import com.onigiri.keycue.data.SharedPreferencesSettingsRepository
+import com.onigiri.keycue.playback.NoteScheduler
+import com.onigiri.keycue.playback.PlaybackEngine
+import com.onigiri.keycue.playback.PlaybackState
+import android.net.Uri
+import com.onigiri.keycue.model.SongData
+import com.onigiri.keycue.song.SongSelectionCoordinator
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+
+/**
+ * ゲーム画面上で演奏ガイドおよびコントロールUIを常駐表示するための Foreground Service。
+ *
+ * 主な責務:
+ * - **ライフサイクル管理**: フォアグラウンド通知を表示し、バックグラウンドでのプロセス破棄を防ぎながらオーバーレイを維持します。
+ * - **再生制御連携**: [PlaybackEngine] の再生状態・時間進行を購読し、[GuideOverlayView] へフレーム情報をリアルタイムに供給します。
+ * - **ウィンドウ制御**: [OverlayWindowController] を通じてガイド、コントロールパネル、フィッティング画面の表示・破棄を一元管理します。
+ */
+class OverlayService : Service() {
+
+    companion object {
+        const val ACTION_START = "com.onigiri.keycue.overlay.ACTION_START"
+        const val ACTION_STOP = "com.onigiri.keycue.overlay.ACTION_STOP"
+
+        private var isRunning = false
+
+        fun isServiceRunning(): Boolean = isRunning
+
+        /**
+         * OverlayServiceを起動する。
+         */
+        fun start(context: Context) {
+            val intent = Intent(context, OverlayService::class.java).apply {
+                action = ACTION_START
+            }
+            ContextCompat.startForegroundService(context, intent)
+        }
+
+        /**
+         * OverlayServiceを停止するIntentを生成する。
+         */
+        fun createStopIntent(context: Context): Intent {
+            return Intent(context, OverlayService::class.java).apply {
+                action = ACTION_STOP
+            }
+        }
+
+        /**
+         * OverlayServiceを停止する。
+         */
+        fun stop(context: Context) {
+            val intent = createStopIntent(context)
+            context.startService(intent)
+        }
+    }
+
+    private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private lateinit var settingsRepository: SettingsRepository
+    private val sessionRepository: PlaybackSessionRepository = InMemoryPlaybackSessionRepository.instance
+
+    private val playbackEngine: PlaybackEngine = PlaybackEngine()
+    private val noteScheduler: NoteScheduler = NoteScheduler()
+
+    private var windowController: OverlayWindowController? = null
+    private var loadedSong: SongData? = null
+    private var isFrameLoopRunning = false
+
+    // ディスプレイの垂直同期信号 (VSYNC) に合わせて60fps/120fpsでフレーム描画を駆動するChoreographerコールバック
+    private val frameCallback = object : android.view.Choreographer.FrameCallback {
+        override fun doFrame(frameTimeNanos: Long) {
+            if (!isFrameLoopRunning) return
+
+            renderCurrentFrame()
+            android.view.Choreographer.getInstance().postFrameCallback(this)
+        }
+    }
+
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onCreate() {
+        super.onCreate()
+        isRunning = true
+        OverlayNotificationFactory.createNotificationChannel(this)
+
+        settingsRepository = SharedPreferencesSettingsRepository.getInstance(this)
+
+        windowController = OverlayWindowController(
+            context = this,
+            onOpenApp = { openMainActivity() },
+            onCloseOverlay = { stopSelf() },
+            onPositionChanged = { normX, normY, pixelX, pixelY ->
+                serviceScope.launch {
+                    settingsRepository.saveOverlayPositionNormalized(normX, normY)
+                    settingsRepository.saveOverlayPosition(pixelX, pixelY)
+                }
+            },
+            onSelectFile = { handleSelectFile() },
+            onPlayPause = { handlePlayPause() },
+            onStop = { handleStop() },
+            onRestart = { handleRestart() },
+            onSeekBack = { handleSeekBack() },
+            onSeekForward = { handleSeekForward() },
+            onSpeedChange = { newSpeed ->
+                serviceScope.launch {
+                    settingsRepository.saveSpeed(newSpeed)
+                }
+            },
+            onLeadTimeChange = { newLead ->
+                serviceScope.launch {
+                    settingsRepository.saveLeadTimeMs(newLead)
+                }
+            },
+            onSaveFitProfile = { profile ->
+                serviceScope.launch {
+                    settingsRepository.saveFitProfile(profile)
+                }
+            }
+        )
+
+        observePlaybackState()
+        observeSettings()
+        observePlaybackSession()
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_STOP) {
+            stopOverlayAndSelf()
+            return START_NOT_STICKY
+        }
+
+        startAsForeground()
+
+        // GuideOverlayView を先、ControlOverlayView を手前に配置
+        windowController?.showGuideOverlay()
+
+        val savedNorm = settingsRepository.overlayPositionNormalized.value
+        val savedPixel = settingsRepository.overlayPosition.value
+        windowController?.showControlOverlay(
+            initialNormX = savedNorm?.x,
+            initialNormY = savedNorm?.y,
+            initialPixelX = savedPixel?.first,
+            initialPixelY = savedPixel?.second
+        )
+
+        applyCurrentState()
+        renderCurrentFrame()
+
+        return START_NOT_STICKY
+    }
+
+    private fun applyCurrentState() {
+        val session = sessionRepository.currentSession.value
+        applySong(session?.song)
+        applyPlaybackConfig(settingsRepository.playbackConfig.value)
+        val profile = settingsRepository.fitProfile.value ?: session?.fitProfile
+        if (profile != null) windowController?.updateFitProfile(profile)
+    }
+
+    private fun applySong(song: SongData?) {
+        if (song == null || song === loadedSong) return
+        playbackEngine.stop()
+        playbackEngine.setSong(song)
+        loadedSong = song
+    }
+
+    private fun applyPlaybackConfig(config: com.onigiri.keycue.model.PlaybackConfig) {
+        playbackEngine.countdownMs = config.countdownMs
+        playbackEngine.setSpeed(config.speed)
+    }
+
+    private fun handlePlayPause() {
+        when (val state = playbackEngine.state.value) {
+            is PlaybackState.Playing -> playbackEngine.pause()
+            is PlaybackState.CountingDown -> playbackEngine.stop()
+            is PlaybackState.Finished -> playbackEngine.restart(skipCountdown = false)
+            else -> playbackEngine.play()
+        }
+    }
+
+    private fun handleStop() {
+        playbackEngine.stop()
+        renderCurrentFrame()
+    }
+
+    private fun handleRestart() {
+        playbackEngine.restart(skipCountdown = false)
+    }
+
+    private fun handleSeekBack() {
+        playbackEngine.seekBack(10_000L)
+        renderCurrentFrame()
+    }
+
+    private fun handleSeekForward() {
+        playbackEngine.seekForward(10_000L)
+        renderCurrentFrame()
+    }
+
+    private fun observePlaybackState() {
+        serviceScope.launch {
+            playbackEngine.state.collect { state ->
+                when (state) {
+                    is PlaybackState.Playing, is PlaybackState.CountingDown -> {
+                        startFrameLoop()
+                    }
+                    is PlaybackState.Paused, is PlaybackState.Stopped, is PlaybackState.Finished -> {
+                        stopFrameLoop()
+                        // 停止・一時停止時の最終状態を1回描画
+                        renderCurrentFrame()
+                    }
+                }
+            }
+        }
+    }
+
+    private var sessionCollectJob: Job? = null
+
+    private fun observeSettings() {
+        serviceScope.launch {
+            settingsRepository.playbackConfig.collect { config ->
+                applyPlaybackConfig(config)
+                renderCurrentFrame()
+            }
+        }
+        serviceScope.launch {
+            settingsRepository.visualConfig.collect { config ->
+                windowController?.updateVisualConfig(config)
+                renderCurrentFrame()
+            }
+        }
+        serviceScope.launch {
+            settingsRepository.fitProfile.collect { profile ->
+                val profileToUse = profile ?: sessionRepository.currentSession.value?.fitProfile
+                if (profileToUse != null) {
+                    windowController?.updateFitProfile(profileToUse)
+                    renderCurrentFrame()
+                }
+            }
+        }
+    }
+
+    private fun observePlaybackSession() {
+        sessionCollectJob?.cancel()
+        sessionCollectJob = serviceScope.launch {
+            sessionRepository.currentSession.collect { session ->
+                applySong(session?.song)
+                val profile = settingsRepository.fitProfile.value ?: session?.fitProfile
+                if (profile != null) windowController?.updateFitProfile(profile)
+                renderCurrentFrame()
+            }
+        }
+    }
+
+    private fun handleSelectFile() {
+        val previousState = playbackEngine.state.value
+        val wasPlaying = previousState is PlaybackState.Playing || previousState is PlaybackState.CountingDown
+        val previousPosition = playbackEngine.getCurrentPositionMs(allowNegative = false)
+
+        if (wasPlaying) {
+            playbackEngine.pause()
+        }
+
+        OverlayFilePickerActivity.start(
+            context = this,
+            listener = object : OverlayFilePickerActivity.OverlayFilePickerListener {
+                override fun onPickerStarted() {
+                    windowController?.hideForFilePicker()
+                }
+
+                override fun onFileSelected(uri: Uri, onComplete: (title: String?) -> Unit) {
+                    serviceScope.launch {
+                        android.util.Log.d("OverlayService", "onFileSelected: uri=$uri")
+                        val coordinator = SongSelectionCoordinator(
+                            contentResolver = contentResolver,
+                            sessionRepository = sessionRepository,
+                            settingsRepository = settingsRepository
+                        )
+                        val result = coordinator.select(uri)
+                        android.util.Log.d("OverlayService", "coordinator.select result: isSuccess=${result.isSuccess}")
+                        windowController?.restoreAfterFilePicker()
+                        if (result.isSuccess) {
+                            val song = result.getOrNull()
+                            onComplete(song?.title ?: "楽曲")
+                        } else {
+                            android.util.Log.e(
+                                "OverlayService",
+                                "Failed to load song from URI: $uri",
+                                result.exceptionOrNull()
+                            )
+                            // 失敗時は元の再生状態を復元
+                            if (wasPlaying) {
+                                playbackEngine.seekTo(previousPosition)
+                                playbackEngine.resume()
+                            }
+                            onComplete(null)
+                        }
+                    }
+                }
+
+                override fun onPickerCancelled() {
+                    android.util.Log.d("OverlayService", "onPickerCancelled called")
+                    windowController?.restoreAfterFilePicker()
+                    // キャンセル時はPlayingだった場合のみResume、Paused/Stoppedなら維持
+                    if (wasPlaying) {
+                        playbackEngine.resume()
+                    }
+                }
+            }
+        )
+    }
+
+    private fun startFrameLoop() {
+        if (isFrameLoopRunning) return
+        isFrameLoopRunning = true
+        android.view.Choreographer.getInstance().postFrameCallback(frameCallback)
+    }
+
+    private fun stopFrameLoop() {
+        if (!isFrameLoopRunning) return
+        isFrameLoopRunning = false
+        android.view.Choreographer.getInstance().removeFrameCallback(frameCallback)
+    }
+
+    private fun renderCurrentFrame() {
+        val session = sessionRepository.currentSession.value
+        val song = session?.song ?: playbackEngine.songData
+        val config = settingsRepository.playbackConfig.value
+
+        val state = playbackEngine.state.value
+        val currentPos = playbackEngine.getCurrentPositionMs(allowNegative = true)
+
+        // カウントダウン表示テキストの判定 (3, 2, 1, START)
+        val countdownText = when (state) {
+            is PlaybackState.CountingDown -> {
+                state.countNumber.toString()
+            }
+            is PlaybackState.Playing -> {
+                if (currentPos in 0L..600L) "START" else null
+            }
+            else -> null
+        }
+
+        // 停止時および再生完了時は空フレームにしてノーツ・ハイライト等を即座にクリア
+        val frame = if (state is PlaybackState.Stopped || state is PlaybackState.Finished) {
+            com.onigiri.keycue.playback.GuideFrame(
+                currentTimeMs = if (state is PlaybackState.Stopped) 0L else currentPos,
+                upcomingNotes = emptyList(),
+                highlightedKeys = emptySet(),
+                justKeys = emptySet(),
+                countdownText = null,
+                leadTimeMs = config.leadTimeMs
+            )
+        } else {
+            noteScheduler.scheduleFrame(
+                events = song?.events ?: emptyList(),
+                currentTimeMs = currentPos,
+                leadTimeMs = config.leadTimeMs,
+                highlightTimeMs = config.highlightTimeMs,
+                countdownText = countdownText
+            )
+        }
+
+        windowController?.renderGuideFrame(frame)
+        windowController?.updateControlStatus(
+            isPlaying = state is PlaybackState.Playing,
+            positionMs = if (currentPos < 0L) 0L else currentPos,
+            durationMs = song?.durationMs ?: 0L,
+            speed = config.speed,
+            songTitle = song?.title,
+            leadTimeMs = config.leadTimeMs
+        )
+    }
+
+    private fun startAsForeground() {
+        val notification = OverlayNotificationFactory.buildNotification(this)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(
+                OverlayNotificationFactory.NOTIFICATION_ID,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            )
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(
+                OverlayNotificationFactory.NOTIFICATION_ID,
+                notification,
+                0
+            )
+        } else {
+            startForeground(OverlayNotificationFactory.NOTIFICATION_ID, notification)
+        }
+    }
+
+    private fun openMainActivity() {
+        handleStop()
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+        startActivity(intent)
+    }
+
+    private fun stopOverlayAndSelf() {
+        stopFrameLoop()
+        playbackEngine.stop()
+        windowController?.destroy()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } else {
+            @Suppress("DEPRECATION")
+            stopForeground(true)
+        }
+        stopSelf()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        isRunning = false
+        stopFrameLoop()
+        sessionCollectJob?.cancel()
+        sessionCollectJob = null
+        playbackEngine.release()
+        loadedSong = null
+        windowController?.destroy()
+        windowController = null
+        serviceScope.cancel()
+    }
+}
