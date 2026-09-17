@@ -60,6 +60,7 @@ interface SettingsRepository {
     suspend fun saveShowKeyNumbers(show: Boolean) = updateVisualConfig { it.copy(showKeyNumbers = show) }
     suspend fun saveShowFallingNotes(show: Boolean) = updateVisualConfig { it.copy(showFallingNotes = show) }
     suspend fun saveShowApproachCircles(show: Boolean) = updateVisualConfig { it.copy(showApproachCircles = show) }
+    suspend fun saveShowRepeatCountBadge(show: Boolean) = updateVisualConfig { it.copy(showRepeatCountBadge = show) }
     suspend fun saveShowJustEffect(show: Boolean) = updateVisualConfig { it.copy(showJustEffect = show) }
     suspend fun saveGuideRadiusRatio(ratio: Float) = updateVisualConfig {
         it.copy(guideRadiusRatio = ratio.coerceIn(com.onigiri.keycue.model.VisualConfig.MIN_GUIDE_RADIUS_RATIO, com.onigiri.keycue.model.VisualConfig.MAX_GUIDE_RADIUS_RATIO))
@@ -110,6 +111,7 @@ class SharedPreferencesSettingsRepository(
         private const val KEY_SHOW_KEY_NUMBERS = "show_key_numbers"
         private const val KEY_SHOW_FALLING_NOTES = "show_falling_notes"
         private const val KEY_SHOW_APPROACH_CIRCLES = "show_approach_circles"
+        private const val KEY_SHOW_REPEAT_COUNT_BADGE = "show_repeat_count_badge"
         private const val KEY_SHOW_JUST_EFFECT = "show_just_effect"
         private const val KEY_GUIDE_RADIUS_RATIO = "guide_radius_ratio"
         private const val KEY_GUIDE_COLOR = "guide_color"
@@ -186,6 +188,7 @@ class SharedPreferencesSettingsRepository(
             showKeyNumbers = prefs.getBoolean(KEY_SHOW_KEY_NUMBERS, com.onigiri.keycue.model.VisualConfig.DEFAULT_SHOW_KEY_NUMBERS),
             showFallingNotes = prefs.getBoolean(KEY_SHOW_FALLING_NOTES, com.onigiri.keycue.model.VisualConfig.DEFAULT_SHOW_FALLING_NOTES),
             showApproachCircles = prefs.getBoolean(KEY_SHOW_APPROACH_CIRCLES, com.onigiri.keycue.model.VisualConfig.DEFAULT_SHOW_APPROACH_CIRCLES),
+            showRepeatCountBadge = prefs.getBoolean(KEY_SHOW_REPEAT_COUNT_BADGE, com.onigiri.keycue.model.VisualConfig.DEFAULT_SHOW_REPEAT_COUNT_BADGE),
             showJustEffect = prefs.getBoolean(KEY_SHOW_JUST_EFFECT, com.onigiri.keycue.model.VisualConfig.DEFAULT_SHOW_JUST_EFFECT),
             guideRadiusRatio = prefs.getFloat(KEY_GUIDE_RADIUS_RATIO, _fitProfile.value?.keyRadiusRatio ?: com.onigiri.keycue.model.VisualConfig.DEFAULT_GUIDE_RADIUS_RATIO),
             guideColor = prefs.getInt(KEY_GUIDE_COLOR, com.onigiri.keycue.model.VisualConfig.DEFAULT_GUIDE_COLOR),
@@ -286,6 +289,7 @@ class SharedPreferencesSettingsRepository(
             showKeyNumbers = config.showKeyNumbers,
             showFallingNotes = config.showFallingNotes,
             showApproachCircles = config.showApproachCircles,
+            showRepeatCountBadge = config.showRepeatCountBadge,
             showJustEffect = config.showJustEffect,
             guideRadiusRatio = config.guideRadiusRatio,
             guideColor = config.guideColor,
@@ -298,6 +302,7 @@ class SharedPreferencesSettingsRepository(
             .putBoolean(KEY_SHOW_KEY_NUMBERS, safeConfig.showKeyNumbers)
             .putBoolean(KEY_SHOW_FALLING_NOTES, safeConfig.showFallingNotes)
             .putBoolean(KEY_SHOW_APPROACH_CIRCLES, safeConfig.showApproachCircles)
+            .putBoolean(KEY_SHOW_REPEAT_COUNT_BADGE, safeConfig.showRepeatCountBadge)
             .putBoolean(KEY_SHOW_JUST_EFFECT, safeConfig.showJustEffect)
             .putFloat(KEY_GUIDE_RADIUS_RATIO, safeConfig.guideRadiusRatio)
             .putInt(KEY_GUIDE_COLOR, safeConfig.guideColor)
@@ -431,6 +436,7 @@ class InMemorySettingsRepository(
             showKeyNumbers = config.showKeyNumbers,
             showFallingNotes = config.showFallingNotes,
             showApproachCircles = config.showApproachCircles,
+            showRepeatCountBadge = config.showRepeatCountBadge,
             showJustEffect = config.showJustEffect,
             guideRadiusRatio = config.guideRadiusRatio,
             guideColor = config.guideColor,

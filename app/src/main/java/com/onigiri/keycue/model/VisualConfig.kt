@@ -20,6 +20,7 @@ data class VisualConfig(
     val showKeyNumbers: Boolean = DEFAULT_SHOW_KEY_NUMBERS,
     val showFallingNotes: Boolean = DEFAULT_SHOW_FALLING_NOTES,
     val showApproachCircles: Boolean = DEFAULT_SHOW_APPROACH_CIRCLES,
+    val showRepeatCountBadge: Boolean = DEFAULT_SHOW_REPEAT_COUNT_BADGE,
     val showJustEffect: Boolean = DEFAULT_SHOW_JUST_EFFECT,
     val guideRadiusRatio: Float = DEFAULT_GUIDE_RADIUS_RATIO,
     val guideColor: Int = DEFAULT_GUIDE_COLOR,
@@ -40,6 +41,7 @@ data class VisualConfig(
         const val DEFAULT_SHOW_KEY_NUMBERS = false
         const val DEFAULT_SHOW_FALLING_NOTES = true
         const val DEFAULT_SHOW_APPROACH_CIRCLES = true
+        const val DEFAULT_SHOW_REPEAT_COUNT_BADGE = true
         const val DEFAULT_SHOW_JUST_EFFECT = false
 
         const val DEFAULT_GUIDE_RADIUS_RATIO = 0.04f
@@ -70,6 +72,7 @@ data class VisualConfig(
             showKeyNumbers: Boolean = DEFAULT_SHOW_KEY_NUMBERS,
             showFallingNotes: Boolean = DEFAULT_SHOW_FALLING_NOTES,
             showApproachCircles: Boolean = DEFAULT_SHOW_APPROACH_CIRCLES,
+            showRepeatCountBadge: Boolean = DEFAULT_SHOW_REPEAT_COUNT_BADGE,
             showJustEffect: Boolean = DEFAULT_SHOW_JUST_EFFECT,
             guideRadiusRatio: Float = DEFAULT_GUIDE_RADIUS_RATIO,
             guideColor: Int = DEFAULT_GUIDE_COLOR,
@@ -81,6 +84,7 @@ data class VisualConfig(
                 showKeyNumbers = showKeyNumbers,
                 showFallingNotes = showFallingNotes,
                 showApproachCircles = showApproachCircles,
+                showRepeatCountBadge = showRepeatCountBadge,
                 showJustEffect = showJustEffect,
                 guideRadiusRatio = guideRadiusRatio.coerceIn(MIN_GUIDE_RADIUS_RATIO, MAX_GUIDE_RADIUS_RATIO),
                 guideColor = guideColor,

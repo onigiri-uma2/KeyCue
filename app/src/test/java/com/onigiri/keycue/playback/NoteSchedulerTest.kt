@@ -234,4 +234,118 @@ class NoteSchedulerTest {
             assertEquals(-1.0f, frame.keyHighlightProgress[k], 0.001f)
         }
     }
+
+    @Test
+    fun scheduleFrame_consecutiveThreeNotesOnSameKey_returnsAllThreeApproachCircles() {
+        // 同一 key 3 に 3連打: 1000ms, 1100ms, 1200ms
+        val events = listOf(
+            NoteEvent(timeMs = 1000L, key = 3),
+            NoteEvent(timeMs = 1100L, key = 3),
+            NoteEvent(timeMs = 1200L, key = 3)
+        )
+        val hlTime = 500L
+        val frame = scheduler.scheduleFrame(events, currentTimeMs = 800L, highlightTimeMs = hlTime)
+
+        // 3個すべてのアプローチサークルが返ること
+        assertEquals(3, frame.approachCircles.size)
+
+        // progress昇順（遠い未来・大きい円 -> 直近・小さい円）の順序保証を検証
+        // 1200ms: remaining = 400ms -> 1 - 400/500 = 0.2f
+        // 1100ms: remaining = 300ms -> 1 - 300/500 = 0.4f
+        // 1000ms: remaining = 200ms -> 1 - 200/500 = 0.6f
+        assertEquals(3, frame.approachCircles[0].key)
+        assertEquals(0.2f, frame.approachCircles[0].progress, 0.01f)
+        assertEquals(1, frame.approachCircles[0].remainingCount)
+
+        assertEquals(3, frame.approachCircles[1].key)
+        assertEquals(0.4f, frame.approachCircles[1].progress, 0.01f)
+        assertEquals(1, frame.approachCircles[1].remainingCount)
+
+        // 最前面（直近）のサークルにキーの合計連続打数 3 が設定される
+        assertEquals(3, frame.approachCircles[2].key)
+        assertEquals(0.6f, frame.approachCircles[2].progress, 0.01f)
+        assertEquals(3, frame.approachCircles[2].remainingCount)
+    }
+
+    @Test
+    fun scheduleFrame_firstNotePassed_remainingTwoNotesContinueWithCorrectProgress() {
+        val events = listOf(
+            NoteEvent(timeMs = 1000L, key = 3),
+            NoteEvent(timeMs = 1100L, key = 3),
+            NoteEvent(timeMs = 1200L, key = 3)
+        )
+        val hlTime = 500L
+
+        // 1000ms 通過後 (1050ms): 最初のノートは消え、残り2個が正しいprogressで継続
+        val frame = scheduler.scheduleFrame(events, currentTimeMs = 1050L, highlightTimeMs = hlTime)
+
+        assertEquals(2, frame.approachCircles.size)
+
+        // 1200ms: remaining = 150ms -> 1 - 150/500 = 0.7f
+        assertEquals(3, frame.approachCircles[0].key)
+        assertEquals(0.7f, frame.approachCircles[0].progress, 0.01f)
+        assertEquals(1, frame.approachCircles[0].remainingCount)
+
+        // 1100ms: remaining = 50ms -> 1 - 50/500 = 0.9f、直近の残り打数は 2 にカウントダウン
+        assertEquals(3, frame.approachCircles[1].key)
+        assertEquals(0.9f, frame.approachCircles[1].progress, 0.01f)
+        assertEquals(2, frame.approachCircles[1].remainingCount)
+    }
+
+    @Test
+    fun scheduleFrame_duplicateNotesOnSameKeyAndSameTime_returnsSingleCircle() {
+        // 同一 key 2・同一 timeMs 1000L の重複ノート
+        val events = listOf(
+            NoteEvent(timeMs = 1000L, key = 2),
+            NoteEvent(timeMs = 1000L, key = 2)
+        )
+        val frame = scheduler.scheduleFrame(events, currentTimeMs = 800L, highlightTimeMs = 500L)
+
+        // 重複は1 circleになること
+        assertEquals(1, frame.approachCircles.size)
+        assertEquals(2, frame.approachCircles[0].key)
+        assertEquals(0.6f, frame.approachCircles[0].progress, 0.01f)
+    }
+
+    @Test
+    fun scheduleFrame_sameTimeDifferentKeys_generatesCirclesForEachKey() {
+        // 同一 timeMs 1000L で異なる key の和音 (key 1, 5, 12)
+        val events = listOf(
+            NoteEvent(timeMs = 1000L, key = 1),
+            NoteEvent(timeMs = 1000L, key = 5),
+            NoteEvent(timeMs = 1000L, key = 12)
+        )
+        val frame = scheduler.scheduleFrame(events, currentTimeMs = 800L, highlightTimeMs = 500L)
+
+        // 異なる key の和音はすべてサークルが生成されること
+        assertEquals(3, frame.approachCircles.size)
+        val keys = frame.approachCircles.map { it.key }.toSet()
+        assertEquals(setOf(1, 5, 12), keys)
+    }
+
+    @Test
+    fun scheduleFrame_twentyOneKeys_handledSafelyWithoutOutOfBounds() {
+        // Sky 15 keys 以外のキーインデックス (key 0 .. 20)
+        val events = listOf(
+            NoteEvent(timeMs = 1000L, key = 0),
+            NoteEvent(timeMs = 1000L, key = 14),
+            NoteEvent(timeMs = 1000L, key = 20)
+        )
+        // 21 keys の場合も例外が発生せず安全に ApproachCircle が返ること
+        val frame = scheduler.scheduleFrame(events, currentTimeMs = 800L, highlightTimeMs = 500L)
+
+        assertEquals(3, frame.approachCircles.size)
+        val keys = frame.approachCircles.map { it.key }.toSet()
+        assertTrue(keys.contains(20))
+    }
+
+    @Test
+    fun scheduleFrame_singleNote_remainingCountIsOne() {
+        val events = listOf(NoteEvent(timeMs = 1000L, key = 5))
+        val frame = scheduler.scheduleFrame(events, currentTimeMs = 800L, highlightTimeMs = 500L)
+
+        assertEquals(1, frame.approachCircles.size)
+        assertEquals(5, frame.approachCircles[0].key)
+        assertEquals(1, frame.approachCircles[0].remainingCount)
+    }
 }

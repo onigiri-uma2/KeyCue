@@ -22,7 +22,8 @@ data class GuideFrame(
     val justKeys: Set<Int> = emptySet(),
     val countdownText: String? = null,
     val leadTimeMs: Long = 700L,
-    val keyHighlightProgress: FloatArray = FloatArray(KEY_COUNT) { -1.0f }
+    val keyHighlightProgress: FloatArray = FloatArray(KEY_COUNT) { -1.0f },
+    val approachCircles: List<ApproachCircle> = emptyList()
 ) {
     companion object {
         const val KEY_COUNT = 15
@@ -41,6 +42,7 @@ data class GuideFrame(
         if (countdownText != other.countdownText) return false
         if (leadTimeMs != other.leadTimeMs) return false
         if (!keyHighlightProgress.contentEquals(other.keyHighlightProgress)) return false
+        if (approachCircles != other.approachCircles) return false
 
         return true
     }
@@ -53,6 +55,21 @@ data class GuideFrame(
         result = 31 * result + (countdownText?.hashCode() ?: 0)
         result = 31 * result + leadTimeMs.hashCode()
         result = 31 * result + keyHighlightProgress.contentHashCode()
+        result = 31 * result + approachCircles.hashCode()
         return result
     }
 }
+
+/**
+ * 音ゲー風アプローチサークル（縮小タイミング円）の1ノーツ分の情報。
+ *
+ * @param key 対象キーインデックス (0..)
+ * @param progress 進行度 (0.0: 開始 〜 1.0: ジャスト打鍵)
+ * @param remainingCount 該当キーの未打鍵連続数（直近ノーツに2以上が設定され、連打バッジ表示に使用）
+ */
+data class ApproachCircle(
+    val key: Int,
+    val progress: Float,
+    val remainingCount: Int = 1
+)
+

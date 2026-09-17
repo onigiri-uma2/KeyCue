@@ -104,6 +104,8 @@ class NoteScheduler {
         val highlightedKeys = HashSet<Int>()
         val justKeys = HashSet<Int>()
         val closestFutureNote = arrayOfNulls<NoteEvent>(GuideFrame.KEY_COUNT)
+        val tempCircles = ArrayList<ApproachCircle>()
+        val seenKeyTimes = HashSet<Long>()
 
         for (note in candidateNotes) {
             val progress = FallingNoteCalculator.calculateProgress(note.timeMs, currentTimeMs, leadTimeMs)
@@ -119,18 +121,38 @@ class NoteScheduler {
                 justKeys.add(note.key)
             }
 
-            // 各キーについて、現在時刻から見て直近未来（ハイライト時間以内）のノートを記録
-            // （音ゲー風アプローチサークルの縮小率計算に使用）
+            // 既存互換: KEY_COUNT (15) 範囲内の直近未来ノートを記録
             if (note.key in 0 until GuideFrame.KEY_COUNT) {
-                if (note.timeMs >= currentTimeMs && note.timeMs <= currentTimeMs + highlightTimeMs) {
+                if (note.timeMs in currentTimeMs..(currentTimeMs + highlightTimeMs)) {
                     if (closestFutureNote[note.key] == null) {
                         closestFutureNote[note.key] = note
                     }
                 }
             }
+
+            // アプローチサークル対象ノーツ (負数でない全キー対象: 15 keys, 21 keys 等)
+            // 同一 key かつ同一 timeMs の重複のみ除外し、同一時刻の異なる key（和音）はすべて残す
+            if (note.key >= 0 && note.timeMs in currentTimeMs..(currentTimeMs + highlightTimeMs)) {
+                val pairKey = (note.timeMs shl 16) or (note.key.toLong() and 0xFFFFL)
+                if (seenKeyTimes.add(pairKey)) {
+                    val remaining = note.timeMs - currentTimeMs
+                    val circleProgress = if (highlightTimeMs > 0L) {
+                        (1f - remaining.toFloat() / highlightTimeMs.toFloat()).coerceIn(0f, 1f)
+                    } else {
+                        1f
+                    }
+                    tempCircles.add(ApproachCircle(key = note.key, progress = circleProgress))
+                }
+            }
         }
 
-        // アプローチサークル（縮小タイミング円）の進行度 (0.0: 開始 〜 1.0: ジャスト打鍵) を算出
+        // キーごとの連続サークル総数を集計
+        val keyRepeatCounts = HashMap<Int, Int>()
+        for (circle in tempCircles) {
+            keyRepeatCounts[circle.key] = (keyRepeatCounts[circle.key] ?: 0) + 1
+        }
+
+        // アプローチサークル（縮小タイミング円）の進行度 (0.0: 開始 〜 1.0: ジャスト打鍵) を算出 (既存互換)
         val keyHighlightProgress = FloatArray(GuideFrame.KEY_COUNT) { -1.0f }
         for (k in 0 until GuideFrame.KEY_COUNT) {
             val note = closestFutureNote[k]
@@ -145,6 +167,35 @@ class NoteScheduler {
             }
         }
 
+        // candidateNotes は時系列昇順（直近ノーツが先、未来ノーツが後）のため、
+        // tempCircles は直近（progress大）から未来（progress小）の順で追加されている。
+        // progress が小さい（遠い未来・大きい円）ものから先に描画し、
+        // progress が大きい（直近・小さい円）ものを最後に描画（最前面に重ねる）するため、
+        // 毎フレームのソートを避け O(N) の逆順配置で順序を決定的に保証する。
+        // 各キーにおける tempCircles 内の最初のインデックス（直近ノーツ）を特定
+        val firstIndexByKey = HashMap<Int, Int>()
+        for (i in 0 until tempCircles.size) {
+            val k = tempCircles[i].key
+            if (!firstIndexByKey.containsKey(k)) {
+                firstIndexByKey[k] = i
+            }
+        }
+
+        val approachCircles = ArrayList<ApproachCircle>(tempCircles.size)
+        for (i in tempCircles.lastIndex downTo 0) {
+            val circle = tempCircles[i]
+            val count = keyRepeatCounts[circle.key] ?: 1
+            val isClosestNoteForKey = firstIndexByKey[circle.key] == i
+            val remainingCount = if (isClosestNoteForKey) count else 1
+            approachCircles.add(
+                ApproachCircle(
+                    key = circle.key,
+                    progress = circle.progress,
+                    remainingCount = remainingCount
+                )
+            )
+        }
+
         return GuideFrame(
             currentTimeMs = currentTimeMs,
             upcomingNotes = upcomingNotes,
@@ -152,7 +203,8 @@ class NoteScheduler {
             justKeys = justKeys,
             countdownText = countdownText,
             leadTimeMs = leadTimeMs,
-            keyHighlightProgress = keyHighlightProgress
+            keyHighlightProgress = keyHighlightProgress,
+            approachCircles = approachCircles
         )
     }
 

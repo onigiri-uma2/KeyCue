@@ -4,6 +4,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.PointF
+import android.graphics.Typeface
 import com.onigiri.keycue.model.FitProfile
 import com.onigiri.keycue.playback.GuideFrame
 import kotlin.math.min
@@ -62,6 +63,21 @@ class TimingEffectRenderer(
     private val approachCirclePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeWidth = 2.5f * density
+    }
+
+    // --- 連打カウントバッジ用 Paint ---
+    private val repeatBadgeFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = Color.argb(220, 20, 20, 20) // 半透明ダーク背景
+    }
+    private val repeatBadgeStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 1.5f * density
+    }
+    private val repeatBadgeTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        textAlign = Paint.Align.CENTER
+        typeface = Typeface.DEFAULT_BOLD
     }
 
     /**
@@ -146,24 +162,63 @@ class TimingEffectRenderer(
         frame: GuideFrame,
         keyPixelCenters: List<PointF>,
         keyRadiusPx: Float,
-        guideColor: Int
+        guideColor: Int,
+        showRepeatCountBadge: Boolean = true
     ) {
-        val count = min(keyPixelCenters.size, frame.keyHighlightProgress.size)
         val gr = Color.red(guideColor)
         val gg = Color.green(guideColor)
         val gb = Color.blue(guideColor)
 
-        for (i in 0 until count) {
-            val progress = frame.keyHighlightProgress[i]
-            if (progress < 0f) continue
+        if (frame.approachCircles.isNotEmpty()) {
+            // NoteScheduler側で progress 昇順（遠い未来・大きい円 -> 直近・小さい円）が保証されているため、
+            // 毎フレームのソートを行わずそのまま順次描画することで、直近の円（太く濃い）が最前面に重なる。
+            // 21 keys等の可変キー数にも対応できるよう keyPixelCenters.indices で安全に範囲チェックを行う。
+            for (circle in frame.approachCircles) {
+                if (circle.key !in keyPixelCenters.indices) continue
+                val progress = circle.progress
+                if (progress < 0f) continue
 
-            val center = keyPixelCenters[i]
-            val approachRadius = keyRadiusPx * (1f + (1f - progress) * 1.5f)
-            val alpha = (35f + progress * 220f).toInt().coerceIn(0, 255)
+                val center = keyPixelCenters[circle.key]
+                val approachRadius = keyRadiusPx * (1f + (1f - progress) * 1.5f)
+                val alpha = (35f + progress * 220f).toInt().coerceIn(0, 255)
 
-            approachCirclePaint.color = Color.argb(alpha, gr, gg, gb)
-            approachCirclePaint.strokeWidth = (2.0f + progress * 1.5f) * density
-            canvas.drawCircle(center.x, center.y, approachRadius, approachCirclePaint)
+                approachCirclePaint.color = Color.argb(alpha, gr, gg, gb)
+                approachCirclePaint.strokeWidth = (2.0f + progress * 1.5f) * density
+                canvas.drawCircle(center.x, center.y, approachRadius, approachCirclePaint)
+
+                // 連続音カウントバッジ（オプション有効時かつ残り打数 2 以上の直近ノーツにのみキー右上に表示）
+                if (showRepeatCountBadge && circle.remainingCount >= 2) {
+                    val badgeRadius = (keyRadiusPx * 0.36f).coerceAtLeast(9f * density)
+                    val badgeCenterX = center.x + keyRadiusPx * 0.72f
+                    val badgeCenterY = center.y - keyRadiusPx * 0.72f
+
+                    repeatBadgeStrokePaint.color = Color.argb(240, gr, gg, gb)
+                    repeatBadgeTextPaint.textSize = badgeRadius * 1.35f
+
+                    // 1. バッジ背景（半透明ダーク）
+                    canvas.drawCircle(badgeCenterX, badgeCenterY, badgeRadius, repeatBadgeFillPaint)
+                    // 2. バッジ枠線（ガイド色）
+                    canvas.drawCircle(badgeCenterX, badgeCenterY, badgeRadius, repeatBadgeStrokePaint)
+                    // 3. バッジ数字（白・太字）
+                    val textY = badgeCenterY - (repeatBadgeTextPaint.descent() + repeatBadgeTextPaint.ascent()) / 2f
+                    canvas.drawText(circle.remainingCount.toString(), badgeCenterX, textY, repeatBadgeTextPaint)
+                }
+            }
+        } else {
+            // 既存互換フォールバック
+            val count = min(keyPixelCenters.size, frame.keyHighlightProgress.size)
+            for (i in 0 until count) {
+                val progress = frame.keyHighlightProgress[i]
+                if (progress < 0f) continue
+
+                val center = keyPixelCenters[i]
+                val approachRadius = keyRadiusPx * (1f + (1f - progress) * 1.5f)
+                val alpha = (35f + progress * 220f).toInt().coerceIn(0, 255)
+
+                approachCirclePaint.color = Color.argb(alpha, gr, gg, gb)
+                approachCirclePaint.strokeWidth = (2.0f + progress * 1.5f) * density
+                canvas.drawCircle(center.x, center.y, approachRadius, approachCirclePaint)
+            }
         }
     }
 }

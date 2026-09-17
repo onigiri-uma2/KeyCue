@@ -227,7 +227,8 @@ class GuideOverlayView(
                 frame = frame,
                 keyPixelCenters = keyPixelCenters,
                 keyRadiusPx = keyRadiusPx,
-                guideColor = visualConfig.guideColor
+                guideColor = visualConfig.guideColor,
+                showRepeatCountBadge = visualConfig.showRepeatCountBadge
             )
         }
 

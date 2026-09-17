@@ -36,6 +36,7 @@ fun VisualConfigContent(
     onShowKeyNumbersChange: (Boolean) -> Unit,
     onShowFallingNotesChange: (Boolean) -> Unit,
     onShowApproachCirclesChange: (Boolean) -> Unit,
+    onShowRepeatCountBadgeChange: (Boolean) -> Unit,
     onShowJustEffectChange: (Boolean) -> Unit,
     onGuideColorChange: (Int) -> Unit,
     onNoteColorTopChange: (Int) -> Unit,
@@ -73,7 +74,7 @@ fun VisualConfigContent(
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
 
-        // スイッチ項目群（ガイド番号、落下ノーツ、タイミングサークル、ジャスト演出）
+        // スイッチ項目群（ガイド番号、落下ノーツ、タイミングサークル、連打バッジ、ジャスト演出）
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             SettingSwitchRow(
                 label = "ガイド番号表示 (0..14)",
@@ -89,6 +90,11 @@ fun VisualConfigContent(
                 label = "タイミングサークル表示 (縮小円)",
                 checked = visualConfig.showApproachCircles,
                 onCheckedChange = onShowApproachCirclesChange
+            )
+            SettingSwitchRow(
+                label = "連打カウントバッジ表示 (残り打数)",
+                checked = visualConfig.showRepeatCountBadge,
+                onCheckedChange = onShowRepeatCountBadgeChange
             )
             SettingSwitchRow(
                 label = "ジャストタイミング演出 (発光)",

@@ -348,6 +348,7 @@ class HomeViewModel(
     fun setShowKeyNumbers(show: Boolean) = updateVisualConfig { it.copy(showKeyNumbers = show) }
     fun setShowFallingNotes(show: Boolean) = updateVisualConfig { it.copy(showFallingNotes = show) }
     fun setShowApproachCircles(show: Boolean) = updateVisualConfig { it.copy(showApproachCircles = show) }
+    fun setShowRepeatCountBadge(show: Boolean) = updateVisualConfig { it.copy(showRepeatCountBadge = show) }
     fun setShowJustEffect(show: Boolean) = updateVisualConfig { it.copy(showJustEffect = show) }
     fun setGuideRadiusRatio(ratio: Float) = updateVisualConfig { it.copy(guideRadiusRatio = ratio) }
     fun setGuideColor(color: Int) = updateVisualConfig { it.copy(guideColor = color) }
