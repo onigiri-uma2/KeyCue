@@ -226,4 +226,53 @@ class GridFitterTest {
         assertEquals(0.50f, trapezoidGrid[7].x, 0.001f)
         assertEquals(0.75f, trapezoidGrid[7].y, 0.001f)
     }
+
+    @Test
+    fun `11 Large tablet high resolution fitting test`() {
+        // 大画面タブレット (2560 x 1600)
+        // 画面が大きい場合、ピクセル値も全体的にスケールアップする
+        val tabletPoints = createIdealPoints(
+            width = 2560,
+            height = 1600,
+            startX = 550f,
+            startY = 900f,
+            dx = 360f,
+            dy = 220f,
+            radius = 70f
+        )
+
+        val result = fitter.fit(tabletPoints, 2560, 1600)
+        assertNotNull("Fitting should succeed on high-res tablet screens", result.profile)
+        assertTrue("Confidence should be high on tablet ideal points", result.confidence >= 0.90f)
+
+        // キー半径比率の妥当性 (70 / 1600 = 0.04375)
+        assertEquals(70f / 1600f, result.profile!!.keyRadiusRatio, 0.01f)
+    }
+
+    @Test
+    fun `12 Screen edge UI noise resilience test`() {
+        // 画面左端にUIアイコン（チャットや戻るボタン等）が複数検出されてもキーボード中央がずれないこと
+        val points = createIdealPoints(
+            width = 2400,
+            height = 1080,
+            startX = 600f,
+            startY = 500f,
+            dx = 300f,
+            dy = 180f
+        ).toMutableList()
+
+        // 画面左側にノイズを4点追加
+        points.add(DetectedPoint(x = 50f, y = 100f, radius = 40f))
+        points.add(DetectedPoint(x = 80f, y = 300f, radius = 40f))
+        points.add(DetectedPoint(x = 120f, y = 700f, radius = 40f))
+        points.add(DetectedPoint(x = 60f, y = 900f, radius = 40f))
+
+        val result = fitter.fit(points, 2400, 1080)
+        assertNotNull("Should fit correctly despite left-edge UI icons", result.profile)
+        assertTrue("Confidence should remain high", result.confidence >= 0.85f)
+
+        // 中央キー（Key 7: 列2, 行1）の正規化X座標が 0.50 (1200 / 2400) に近接していること
+        val centerKey = result.profile!!.keyCenters[7]
+        assertEquals(0.50f, centerKey.x, 0.02f)
+    }
 }

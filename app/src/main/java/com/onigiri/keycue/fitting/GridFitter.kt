@@ -71,7 +71,8 @@ class GridFitter {
         }
 
         // 2. Y座標による3段クラスタリング（上段・中段・下段の推定）
-        val rowClusters = clusterRows(validPoints)
+        val minDimension = min(imageWidth, imageHeight).toFloat()
+        val rowClusters = clusterRows(validPoints, minDimension)
         if (rowClusters == null || rowClusters.size < 2) {
             return FitResult(
                 profile = null,
@@ -90,7 +91,7 @@ class GridFitter {
                 errorMessage = "格子のピッチ・基準位置の推定に失敗しました"
             )
 
-        // 4. 15点のピクセル座標算出と候補点との対応付け（マッチング評価）
+        // 4. 15点の均等格子ピクセル座標算出と候補点との整合度評価
         val (gridPixelPoints, matchedCount, avgDistanceError) = evaluateGrid(
             gridParams,
             validPoints
@@ -123,7 +124,6 @@ class GridFitter {
         }
 
         // 7. 推定キー半径比率の算出（マッチした点の平均半径 / 短辺）
-        val minDimension = min(imageWidth, imageHeight).toFloat()
         val validRadii = validPoints.map { it.radius }.filter { it > 0f && it < minDimension * 0.2f }
         val radiusRatio = if (validRadii.isNotEmpty()) {
             (validRadii.average().toFloat() / minDimension).coerceIn(0.015f, 0.08f)
@@ -198,15 +198,15 @@ class GridFitter {
 
     /**
      * 候補点をY座標の近接性（差分）によりグループ化し、点数の多い上位行（最大3行）を抽出する。
-     * 外れ値ノイズは点数が少ないため自動的に除外される。
+     * 閾値は画面短辺解像度に応じて動的に決定されるため、高解像度端末やタブレットでも行が分断されない。
      */
-    private fun clusterRows(points: List<DetectedPoint>): List<List<DetectedPoint>>? {
+    private fun clusterRows(points: List<DetectedPoint>, minDimension: Float): List<List<DetectedPoint>>? {
         if (points.size < MIN_CANDIDATE_POINTS) return null
 
         val sortedByY = points.sortedBy { it.y }
 
-        // 1. 同一行内のYのばらつき許容幅（通常キーの高さ・ジッター程度: 35px〜50px）
-        val rowMergeThreshold = 45f
+        // 1. 同一行内のYのばらつき許容幅（画面短辺の約4.0%を目安に35px〜150pxの範囲で適応）
+        val rowMergeThreshold = (minDimension * 0.040f).coerceIn(35f, 150f)
 
         val groups = mutableListOf<MutableList<DetectedPoint>>()
         var currentGroup = mutableListOf<DetectedPoint>()
@@ -247,7 +247,7 @@ class GridFitter {
         imageWidth: Int,
         imageHeight: Int
     ): GridParameters? {
-        // 外れ値ノイズに影響されないよう、各クラスタのY座標には平均ではなく中央値 (median) を採用
+        // 各クラスタの代表Y座標（中央値）
         val rowMeansY = rowClusters.map { cluster ->
             val sortedY = cluster.map { it.y }.sorted()
             sortedY[sortedY.size / 2]
@@ -276,7 +276,7 @@ class GridFitter {
             }
         }
 
-        // もし行内差分が少ない場合は全点ソートの差分も考慮
+        // 行内差分が少ない場合は全点ソートの差分も考慮
         if (diffs.isEmpty()) {
             val sortedX = allPoints.map { it.x }.sorted()
             for (i in 0 until sortedX.size - 1) {
@@ -286,15 +286,12 @@ class GridFitter {
         }
 
         if (diffs.isEmpty()) return null
-
-        // 差分リストをソート
         diffs.sort()
 
         // 行内で頻出する最小単位の差分（ピッチ）を特定
-        // 差分のうち、最小側でクラスタを形成している値（最頻値または最小ピーク）を基底 dx とする
         val minDiff = diffs.first()
         val closeToMin = diffs.filter { abs(it - minDiff) <= minDiff * 0.15f }
-        var dx = if (closeToMin.size >= 2) {
+        val dx = if (closeToMin.size >= 2) {
             closeToMin.average().toFloat()
         } else {
             diffs[diffs.size / 2]
@@ -302,26 +299,27 @@ class GridFitter {
 
         if (dx <= 0f || dx > imageWidth * 0.4f) return null
 
-        // X基準位置 (startX) と Y基準位置 (startY) の最適化
-        // 外れ値ノイズに頑健な中央値 (median) を採用
-        val sortedAllX = allPoints.map { it.x }.sorted()
-        val centerX = sortedAllX[sortedAllX.size / 2]
+        // X基準位置 (startX) の初期推定:
+        // 画面全体の端UIノイズ（チャットアイコン等）の影響を排除するため、
+        // キーボード行として特定されたクラスタ内の点群の中央値 (median) を採用
+        val keyboardPoints = rowClusters.flatten()
+        val sortedKbX = keyboardPoints.map { it.x }.sorted()
+        val centerX = sortedKbX[sortedKbX.size / 2]
 
-        // 5列あるので中央列（列2）は centerX に近い
-        // よって startX (列0) = centerX - 2 * dx
+        // 5列あるので中央列（列2）は centerX に近い。よって startX (列0) = centerX - 2 * dx
         val estimatedStartX = centerX - 2f * dx
 
         // Y基準位置 (startY): 上段クラスタの中央値Y
         val startY = rowMeansY[0]
 
-        // startX の微小探索（-dx*0.75〜+dx*0.75の範囲でステップを振って最もマッチする原点を探す）
+        // startX の微小探索（-dx*0.8〜+dx*0.8の範囲でステップを振って最もマッチする原点を探す）
         var bestStartX = estimatedStartX
         var maxMatches = -1
         var minError = Float.MAX_VALUE
 
         val step = max(1f, dx * 0.02f)
-        var testStartX = estimatedStartX - dx * 0.75f
-        val endStartX = estimatedStartX + dx * 0.75f
+        var testStartX = estimatedStartX - dx * 0.80f
+        val endStartX = estimatedStartX + dx * 0.80f
 
         while (testStartX <= endStartX) {
             var matches = 0
@@ -330,10 +328,8 @@ class GridFitter {
                 val py = startY + r * dy
                 for (c in 0 until COLUMNS) {
                     val px = testStartX + c * dx
-                    // 最寄りの候補点を探す
                     val nearest = allPoints.minByOrNull { p ->
-                        val dist2 = (p.x - px) * (p.x - px) + (p.y - py) * (p.y - py)
-                        dist2
+                        (p.x - px) * (p.x - px) + (p.y - py) * (p.y - py)
                     }
                     if (nearest != null) {
                         val dist = sqrt((nearest.x - px) * (nearest.x - px) + (nearest.y - py) * (nearest.y - py))
@@ -362,7 +358,9 @@ class GridFitter {
     }
 
     /**
-     * 推定されたグリッドパラメータで15個のピクセル座標を生成し、候補点との整合度を評価する。
+     * 推定されたグリッドパラメータで15個の均等格子座標を生成し、候補点との整合度を評価する。
+     * ゲーム画面上のキーボードは完全な均等グリッドであるため、個々の検出点に座標をずらすことはせず
+     * 正確な幾何格子座標を維持します。
      */
     private fun evaluateGrid(
         params: GridParameters,
@@ -372,14 +370,14 @@ class GridFitter {
         var matchedCount = 0
         var totalDistanceError = 0f
 
-        val matchThreshold = params.dx * 0.50f
+        val matchThreshold = params.dx * 0.45f
 
         for (r in 0 until ROWS) {
             val y = params.startY + r * params.dy
             for (c in 0 until COLUMNS) {
                 val x = params.startX + c * params.dx
 
-                // 距離閾値内の最寄り候補点を探す
+                // 距離閾値内の最寄り候補点を探して整合度を評価
                 var closestDist = Float.MAX_VALUE
                 for (p in points) {
                     val d = sqrt((p.x - x) * (p.x - x) + (p.y - y) * (p.y - y))
@@ -393,6 +391,7 @@ class GridFitter {
                     totalDistanceError += closestDist
                 }
 
+                // 常に完全な均等グリッド座標を採用
                 gridPoints.add(Pair(x, y))
             }
         }
