@@ -1,5 +1,7 @@
 package com.onigiri.keycue.model
 
+import com.onigiri.keycue.profile.GameProfileRegistry
+
 /**
  * [FitProfile] のシリアライズおよびデシリアライズを行うユーティリティ。
  *
@@ -38,7 +40,7 @@ object FitProfileSerializer {
             val pointRegex = Regex("\\{\\s*\"x\"\\s*:\\s*([0-9.]+)\\s*,\\s*\"y\"\\s*:\\s*([0-9.]+)\\s*\\}")
             val matches = pointRegex.findAll(json).toList()
 
-            val expectedKeyCount = com.onigiri.keycue.profile.GameProfileRegistry.current.keyCount
+            val expectedKeyCount = GameProfileRegistry.current.keyCount
             if (matches.size != expectedKeyCount) {
                 return null
             }

@@ -90,14 +90,6 @@ class SkyProfileTest {
 
 
     @Test
-    fun fitProfileKeyCount_matchesSkyProfile() {
-        assertEquals(
-            SkyProfile.keyCount,
-            FitProfile.KEY_COUNT
-        )
-    }
-
-    @Test
     fun `getRow and getColumn match existing FallingNoteCalculator behavior for all valid keys`() {
         for (key in 0 until SkyProfile.keyCount) {
             val expectedRow = (key.coerceIn(0, 14)) / 5

@@ -5,8 +5,8 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.PointF
 import android.graphics.Typeface
-import com.onigiri.keycue.model.FitProfile
 import com.onigiri.keycue.playback.GuideFrame
+import com.onigiri.keycue.profile.GameProfileRegistry
 import kotlin.math.min
 
 /**
@@ -56,7 +56,7 @@ class TimingEffectRenderer(
     }
 
     // 各キーの直近ジャスト突入時刻 (SystemClock.uptimeMillis) と直前フレーム状態
-    private val keyCount = com.onigiri.keycue.profile.GameProfileRegistry.current.keyCount
+    private val keyCount = GameProfileRegistry.current.keyCount
     private val lastJustTriggerTimes = LongArray(keyCount) { -1L }
     private val wasJustActive = BooleanArray(keyCount) { false }
 
