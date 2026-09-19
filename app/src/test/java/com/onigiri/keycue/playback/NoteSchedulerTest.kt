@@ -528,35 +528,32 @@ class NoteSchedulerTest {
     }
 
     @Test
-    fun scheduleFrame_repeatSequence_independentFromApproachCircleLeadTime() {
+    fun scheduleFrame_repeatSequence_followsApproachCircleLeadTime() {
+        // 前ノート 500ms, 次ノート 750ms (間隔 250ms)
         val events = listOf(
             NoteEvent(timeMs = 500L, key = 1),
-            NoteEvent(timeMs = 900L, key = 1) // 400ms間隔（<= 500ms なので連打系列）
+            NoteEvent(timeMs = 750L, key = 1)
         )
 
-        // circleLeadTime = 100ms
-        val frame100 = scheduler.scheduleFrame(
+        // 1. サークル先読み時間が 200ms の場合:
+        // 間隔 250ms > 200ms なのでサークルは画面上に重ならず、単発サークルとして扱われ showRepeatBadge は false (×1 は出ない)
+        val frame200 = scheduler.scheduleFrame(
             events = events,
-            currentTimeMs = 850L,
-            approachCircleLeadTimeMs = 100L,
-            repeatSequenceMaxIntervalMs = 500L
+            currentTimeMs = 600L,
+            approachCircleLeadTimeMs = 200L
         )
+        assertEquals(1, frame200.approachCircles.size)
+        assertEquals(false, frame200.approachCircles[0].showRepeatBadge)
 
-        // circleLeadTime = 300ms
+        // 2. サークル先読み時間を 300ms に変更した場合:
+        // 設定変更に追従し、間隔 250ms <= 300ms となるため画面上で重なり系列と判定され showRepeatBadge は true (×1)
         val frame300 = scheduler.scheduleFrame(
             events = events,
-            currentTimeMs = 850L,
-            approachCircleLeadTimeMs = 300L,
-            repeatSequenceMaxIntervalMs = 500L
+            currentTimeMs = 600L,
+            approachCircleLeadTimeMs = 300L
         )
-
-        assertEquals(1, frame100.approachCircles.size)
         assertEquals(1, frame300.approachCircles.size)
-
-        // サークル先読み時間が違っても連打系列判定（remainingCount, showRepeatBadge）は不変
-        assertEquals(frame100.approachCircles[0].remainingCount, frame300.approachCircles[0].remainingCount)
-        assertEquals(frame100.approachCircles[0].showRepeatBadge, frame300.approachCircles[0].showRepeatBadge)
-        assertEquals(true, frame100.approachCircles[0].showRepeatBadge)
+        assertEquals(true, frame300.approachCircles[0].showRepeatBadge)
     }
 
     @Test

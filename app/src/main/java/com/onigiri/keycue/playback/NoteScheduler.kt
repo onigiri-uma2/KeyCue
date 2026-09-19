@@ -67,7 +67,7 @@ class NoteScheduler {
      * @param approachCircleLeadTimeMs タイミングサークル先読み時間（ミリ秒、例: 200ms）
      * @param justThresholdMs ジャスト判定幅（ミリ秒、例: 80ms）
      * @param countdownText カウントダウン中テキスト（例: "3", "START" 等）
-     * @param repeatSequenceMaxIntervalMs 同一キー連打系列と判定する最大ノート間隔（ミリ秒、例: 500ms）
+     * @param repeatSequenceMaxIntervalMs 同一キー連打系列と判定する最大ノート間隔（ミリ秒、デフォルト: approachCircleLeadTimeMs に追従）
      * @return 描画に必要な情報を含む [GuideFrame]
      */
     fun scheduleFrame(
@@ -77,7 +77,7 @@ class NoteScheduler {
         approachCircleLeadTimeMs: Long = PlaybackConfig.DEFAULT_APPROACH_CIRCLE_LEAD_TIME_MS,
         justThresholdMs: Long = FallingNoteCalculator.DEFAULT_JUST_THRESHOLD_MS,
         countdownText: String? = null,
-        repeatSequenceMaxIntervalMs: Long = DEFAULT_REPEAT_SEQUENCE_MAX_INTERVAL_MS
+        repeatSequenceMaxIntervalMs: Long = approachCircleLeadTimeMs
     ): GuideFrame {
         if (events.isEmpty()) {
             return GuideFrame(
@@ -282,8 +282,8 @@ class NoteScheduler {
     }
 
     companion object {
-        /** 同一キー連打系列と判定する最大ノート間隔（ミリ秒）。サークル表示時間と独立して譜面判定を行う。 */
-        const val DEFAULT_REPEAT_SEQUENCE_MAX_INTERVAL_MS = 500L
+        /** 同一キー連打系列と判定する最大ノート間隔（ミリ秒）。サークル先読み時間（重なり表示期間）に追従する。 */
+        const val DEFAULT_REPEAT_SEQUENCE_MAX_INTERVAL_MS = PlaybackConfig.DEFAULT_APPROACH_CIRCLE_LEAD_TIME_MS
     }
 
     /**
