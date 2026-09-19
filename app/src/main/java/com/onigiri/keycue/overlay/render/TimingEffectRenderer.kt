@@ -173,7 +173,7 @@ class TimingEffectRenderer(
         if (frame.approachCircles.isNotEmpty()) {
             // NoteScheduler側で progress 昇順（遠い未来・大きい円 -> 直近・小さい円）が保証されているため、
             // 毎フレームのソートを行わずそのまま順次描画することで、直近の円（太く濃い）が最前面に重なる。
-            // 21 keys等の可変キー数にも対応できるよう keyPixelCenters.indices で安全に範囲チェックを行う。
+            // キー数に依存せず keyPixelCenters.indices で安全に範囲チェックを行う。
             for (circle in frame.approachCircles) {
                 if (circle.key !in keyPixelCenters.indices) continue
                 val progress = circle.progress
@@ -187,8 +187,8 @@ class TimingEffectRenderer(
                 approachCirclePaint.strokeWidth = (2.0f + progress * 1.5f) * density
                 canvas.drawCircle(center.x, center.y, approachRadius, approachCirclePaint)
 
-                // 連続音カウントバッジ（オプション有効時かつ残り打数 2 以上の直近ノーツにのみキー右上に表示）
-                if (showRepeatCountBadge && circle.remainingCount >= 2) {
+                // 連続音カウントバッジ（オプション有効時かつ showRepeatBadge が有効な直近ノーツにのみキー右上に表示）
+                if (showRepeatCountBadge && circle.showRepeatBadge) {
                     val badgeRadius = (keyRadiusPx * 0.36f).coerceAtLeast(9f * density)
                     val badgeCenterX = center.x + keyRadiusPx * 0.72f
                     val badgeCenterY = center.y - keyRadiusPx * 0.72f

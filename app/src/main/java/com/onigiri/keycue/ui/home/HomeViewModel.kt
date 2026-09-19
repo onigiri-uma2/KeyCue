@@ -355,6 +355,8 @@ class HomeViewModel(
     fun setNoteColorTop(color: Int) = updateVisualConfig { it.copy(noteColorTop = color) }
     fun setNoteColorMiddle(color: Int) = updateVisualConfig { it.copy(noteColorMiddle = color) }
     fun setNoteColorBottom(color: Int) = updateVisualConfig { it.copy(noteColorBottom = color) }
+    fun setShowChordLinks(show: Boolean) = updateVisualConfig { it.copy(showChordLinks = show) }
+    fun setShowChordHalos(show: Boolean) = updateVisualConfig { it.copy(showChordHalos = show) }
 
     companion object {
         fun provideFactory(context: Context): ViewModelProvider.Factory =

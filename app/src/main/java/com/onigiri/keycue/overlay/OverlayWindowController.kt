@@ -262,7 +262,7 @@ class OverlayWindowController(
         durationMs: Long,
         speed: Float,
         songTitle: String?,
-        leadTimeMs: Long = 700L
+        leadTimeMs: Long = com.onigiri.keycue.model.PlaybackConfig.DEFAULT_LEAD_TIME_MS
     ) {
         controlOverlayView?.updatePlaybackStatus(
             isPlaying = isPlaying,

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.HorizontalDivider
@@ -37,6 +38,8 @@ fun VisualConfigContent(
     onShowFallingNotesChange: (Boolean) -> Unit,
     onShowApproachCirclesChange: (Boolean) -> Unit,
     onShowRepeatCountBadgeChange: (Boolean) -> Unit,
+    onShowChordLinksChange: (Boolean) -> Unit = {},
+    onShowChordHalosChange: (Boolean) -> Unit = {},
     onShowJustEffectChange: (Boolean) -> Unit,
     onGuideColorChange: (Int) -> Unit,
     onNoteColorTopChange: (Int) -> Unit,
@@ -74,7 +77,7 @@ fun VisualConfigContent(
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
 
-        // スイッチ項目群（ガイド番号、落下ノーツ、タイミングサークル、連打バッジ、ジャスト演出）
+        // スイッチ項目群（ガイド番号、落下ノーツ、タイミングサークル、連打バッジ、和音リンク、和音ハロー、ジャスト演出）
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             SettingSwitchRow(
                 label = "ガイド番号表示 (0..14)",
@@ -95,6 +98,18 @@ fun VisualConfigContent(
                 label = "連打カウントバッジ表示 (残り打数)",
                 checked = visualConfig.showRepeatCountBadge,
                 onCheckedChange = onShowRepeatCountBadgeChange
+            )
+            SettingSwitchRow(
+                label = "和音リンク",
+                description = "同時に押すキーを線でつなぎます",
+                checked = visualConfig.showChordLinks,
+                onCheckedChange = onShowChordLinksChange
+            )
+            SettingSwitchRow(
+                label = "和音ハロー",
+                description = "同時押しのキー全体を薄い枠で囲みます",
+                checked = visualConfig.showChordHalos,
+                onCheckedChange = onShowChordHalosChange
             )
             SettingSwitchRow(
                 label = "ジャストタイミング演出 (発光)",
@@ -178,18 +193,32 @@ fun VisualConfigContent(
 fun SettingSwitchRow(
     label: String,
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
+    onCheckedChange: (Boolean) -> Unit,
+    description: String? = null
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface
-        )
+        Column(
+            modifier = Modifier
+                .weight(1f, fill = false)
+                .padding(end = 8.dp)
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            if (description != null) {
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange

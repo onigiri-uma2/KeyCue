@@ -10,8 +10,8 @@ package com.onigiri.keycue.model
  */
 data class PlaybackConfig(
     val speed: Float = 1.0f,
-    val leadTimeMs: Long = 700L,
-    val highlightTimeMs: Long = 500L,
+    val leadTimeMs: Long = DEFAULT_LEAD_TIME_MS,
+    val highlightTimeMs: Long = DEFAULT_HIGHLIGHT_TIME_MS,
     val countdownMs: Long = 3000L
 ) {
     fun normalized(): PlaybackConfig = copy(
@@ -22,6 +22,9 @@ data class PlaybackConfig(
     )
 
     companion object {
+        const val DEFAULT_LEAD_TIME_MS = 300L
+        const val DEFAULT_HIGHLIGHT_TIME_MS = 200L
+
         const val MIN_SPEED = 0.25f
         const val MAX_SPEED = 2.0f
         const val MIN_LEAD_TIME_MS = 300L

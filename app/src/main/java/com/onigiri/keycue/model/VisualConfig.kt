@@ -26,7 +26,9 @@ data class VisualConfig(
     val guideColor: Int = DEFAULT_GUIDE_COLOR,
     val noteColorTop: Int = DEFAULT_NOTE_COLOR_TOP,
     val noteColorMiddle: Int = DEFAULT_NOTE_COLOR_MIDDLE,
-    val noteColorBottom: Int = DEFAULT_NOTE_COLOR_BOTTOM
+    val noteColorBottom: Int = DEFAULT_NOTE_COLOR_BOTTOM,
+    val showChordLinks: Boolean = DEFAULT_SHOW_CHORD_LINKS,
+    val showChordHalos: Boolean = DEFAULT_SHOW_CHORD_HALOS
 ) {
     init {
         require(guideRadiusRatio in MIN_GUIDE_RADIUS_RATIO..MAX_GUIDE_RADIUS_RATIO) {
@@ -43,6 +45,8 @@ data class VisualConfig(
         const val DEFAULT_SHOW_APPROACH_CIRCLES = true
         const val DEFAULT_SHOW_REPEAT_COUNT_BADGE = true
         const val DEFAULT_SHOW_JUST_EFFECT = false
+        const val DEFAULT_SHOW_CHORD_LINKS = false
+        const val DEFAULT_SHOW_CHORD_HALOS = true
 
         const val DEFAULT_GUIDE_RADIUS_RATIO = 0.04f
 
@@ -78,7 +82,9 @@ data class VisualConfig(
             guideColor: Int = DEFAULT_GUIDE_COLOR,
             noteColorTop: Int = DEFAULT_NOTE_COLOR_TOP,
             noteColorMiddle: Int = DEFAULT_NOTE_COLOR_MIDDLE,
-            noteColorBottom: Int = DEFAULT_NOTE_COLOR_BOTTOM
+            noteColorBottom: Int = DEFAULT_NOTE_COLOR_BOTTOM,
+            showChordLinks: Boolean = DEFAULT_SHOW_CHORD_LINKS,
+            showChordHalos: Boolean = DEFAULT_SHOW_CHORD_HALOS
         ): VisualConfig {
             return VisualConfig(
                 showKeyNumbers = showKeyNumbers,
@@ -90,7 +96,9 @@ data class VisualConfig(
                 guideColor = guideColor,
                 noteColorTop = noteColorTop,
                 noteColorMiddle = noteColorMiddle,
-                noteColorBottom = noteColorBottom
+                noteColorBottom = noteColorBottom,
+                showChordLinks = showChordLinks,
+                showChordHalos = showChordHalos
             )
         }
     }

@@ -347,5 +347,216 @@ class NoteSchedulerTest {
         assertEquals(1, frame.approachCircles.size)
         assertEquals(5, frame.approachCircles[0].key)
         assertEquals(1, frame.approachCircles[0].remainingCount)
+        assertEquals(false, frame.approachCircles[0].showRepeatBadge)
+    }
+
+    // --- 和音 (ChordGroup) テスト ---
+
+    @Test
+    fun scheduleFrame_singleNote_noChordGroups() {
+        val events = listOf(NoteEvent(timeMs = 1000L, key = 3))
+        val frame = scheduler.scheduleFrame(events, currentTimeMs = 800L, highlightTimeMs = 500L)
+        assertTrue(frame.chordGroups.isEmpty())
+    }
+
+    @Test
+    fun scheduleFrame_twoNotesAtSameTime_oneChordGroup() {
+        val events = listOf(
+            NoteEvent(timeMs = 1000L, key = 2),
+            NoteEvent(timeMs = 1000L, key = 7)
+        )
+        val frame = scheduler.scheduleFrame(events, currentTimeMs = 800L, highlightTimeMs = 500L)
+        assertEquals(1, frame.chordGroups.size)
+        assertEquals(1000L, frame.chordGroups[0].timeMs)
+        assertEquals(listOf(2, 7), frame.chordGroups[0].keys)
+    }
+
+    @Test
+    fun scheduleFrame_threeNotesAtSameTime_oneChordGroupWithSortedKeys() {
+        val events = listOf(
+            NoteEvent(timeMs = 1000L, key = 7),
+            NoteEvent(timeMs = 1000L, key = 0),
+            NoteEvent(timeMs = 1000L, key = 4)
+        )
+        val frame = scheduler.scheduleFrame(events, currentTimeMs = 800L, highlightTimeMs = 500L)
+        assertEquals(1, frame.chordGroups.size)
+        assertEquals(1000L, frame.chordGroups[0].timeMs)
+        assertEquals(listOf(0, 4, 7), frame.chordGroups[0].keys)
+    }
+
+    @Test
+    fun scheduleFrame_differentTimes_twoSeparateChordGroups() {
+        val events = listOf(
+            NoteEvent(timeMs = 1000L, key = 0),
+            NoteEvent(timeMs = 1000L, key = 4),
+            NoteEvent(timeMs = 1050L, key = 1),
+            NoteEvent(timeMs = 1050L, key = 5)
+        )
+        val frame = scheduler.scheduleFrame(events, currentTimeMs = 800L, highlightTimeMs = 500L)
+        assertEquals(2, frame.chordGroups.size)
+        // timeMs 降順（遠い未来が先）
+        assertEquals(1050L, frame.chordGroups[0].timeMs)
+        assertEquals(listOf(1, 5), frame.chordGroups[0].keys)
+
+        assertEquals(1000L, frame.chordGroups[1].timeMs)
+        assertEquals(listOf(0, 4), frame.chordGroups[1].keys)
+    }
+
+    @Test
+    fun scheduleFrame_duplicateNoteAtSameTime_treatedAsSingleKeyInChord() {
+        val events = listOf(
+            NoteEvent(timeMs = 1000L, key = 2),
+            NoteEvent(timeMs = 1000L, key = 2),
+            NoteEvent(timeMs = 1000L, key = 5)
+        )
+        val frame = scheduler.scheduleFrame(events, currentTimeMs = 800L, highlightTimeMs = 500L)
+        assertEquals(1, frame.chordGroups.size)
+        assertEquals(listOf(2, 5), frame.chordGroups[0].keys)
+    }
+
+    @Test
+    fun scheduleFrame_leadTimeGreaterThanHighlightTime_chordGroupsIncludeFarFuture() {
+        val events = listOf(
+            NoteEvent(timeMs = 1000L, key = 0),
+            NoteEvent(timeMs = 1000L, key = 4),
+            NoteEvent(timeMs = 1400L, key = 2),
+            NoteEvent(timeMs = 1400L, key = 6)
+        )
+        // currentTime = 800, highlightTime = 500 (800..1300), leadTime = 1000 (800..1800)
+        // 1400ms は highlight 範囲外だが leadTime 範囲内
+        val frame = scheduler.scheduleFrame(
+            events,
+            currentTimeMs = 800L,
+            leadTimeMs = 1000L,
+            highlightTimeMs = 500L
+        )
+        // 1400ms の和音も chordGroups に含まれること
+        assertEquals(2, frame.chordGroups.size)
+        assertEquals(1400L, frame.chordGroups[0].timeMs)
+        assertEquals(listOf(2, 6), frame.chordGroups[0].keys)
+        assertEquals(1000L, frame.chordGroups[1].timeMs)
+        assertEquals(listOf(0, 4), frame.chordGroups[1].keys)
+
+        // 一方で ApproachCircle は highlight 範囲内の 1000ms のみ（key 0, 4）
+        assertEquals(2, frame.approachCircles.size)
+        val circleKeys = frame.approachCircles.map { it.key }.toSet()
+        assertEquals(setOf(0, 4), circleKeys)
+    }
+
+    // --- 連打バッジ (showRepeatBadge / ×1) 判定テスト ---
+
+    @Test
+    fun scheduleFrame_threeRepeatSequence_fullTransitionAndFutureCircleFalse() {
+        val events = listOf(
+            NoteEvent(timeMs = 1000L, key = 3),
+            NoteEvent(timeMs = 1100L, key = 3),
+            NoteEvent(timeMs = 1200L, key = 3)
+        )
+        val hlTime = 500L
+
+        // 1. 開始時 (800ms): 3個すべて表示
+        val frame1 = scheduler.scheduleFrame(events, currentTimeMs = 800L, highlightTimeMs = hlTime)
+        assertEquals(3, frame1.approachCircles.size)
+        // 未来側Circleは showRepeatBadge = false
+        assertEquals(false, frame1.approachCircles[0].showRepeatBadge)
+        assertEquals(1, frame1.approachCircles[0].remainingCount)
+        assertEquals(false, frame1.approachCircles[1].showRepeatBadge)
+        assertEquals(1, frame1.approachCircles[1].remainingCount)
+        // 直近Circleは残り3回かつ showRepeatBadge = true (×3)
+        assertEquals(true, frame1.approachCircles[2].showRepeatBadge)
+        assertEquals(3, frame1.approachCircles[2].remainingCount)
+
+        // 2. 1回目終了後 (1050ms): 1100ms と 1200ms が残る
+        val frame2 = scheduler.scheduleFrame(events, currentTimeMs = 1050L, highlightTimeMs = hlTime)
+        assertEquals(2, frame2.approachCircles.size)
+        assertEquals(false, frame2.approachCircles[0].showRepeatBadge) // 未来側 (1200ms)
+        assertEquals(1, frame2.approachCircles[0].remainingCount)
+        assertEquals(true, frame2.approachCircles[1].showRepeatBadge) // 直近 (1100ms)
+        assertEquals(2, frame2.approachCircles[1].remainingCount) // ×2
+
+        // 3. 2回目終了後 (1150ms): 1200ms のみ残る（連打系列の最後の1回）
+        val frame3 = scheduler.scheduleFrame(events, currentTimeMs = 1150L, highlightTimeMs = hlTime)
+        assertEquals(1, frame3.approachCircles.size)
+        // 直前ノート 1100ms との間隔は 1200 - 1100 = 100ms <= 500ms なので showRepeatBadge = true (×1)
+        assertEquals(1, frame3.approachCircles[0].remainingCount)
+        assertEquals(true, frame3.approachCircles[0].showRepeatBadge)
+
+        // 4. 3回目終了後 (1250ms): すべて終了し非表示
+        val frame4 = scheduler.scheduleFrame(events, currentTimeMs = 1250L, highlightTimeMs = hlTime)
+        assertTrue(frame4.approachCircles.isEmpty())
+    }
+
+    @Test
+    fun scheduleFrame_repeatBadge_falsePositivePrevention_differentInterNoteInterval() {
+        // 前回ノート 0ms, 現在時刻 400ms, 次のノート 900ms, highlightTimeMs = 500ms
+        // 現在時刻400msから見ると 0ms は過去500ms以内にあるが、次ノート(900ms)と前ノート(0ms)の間隔は 900ms > 500ms
+        val events = listOf(
+            NoteEvent(timeMs = 0L, key = 5),
+            NoteEvent(timeMs = 900L, key = 5)
+        )
+        val frame = scheduler.scheduleFrame(events, currentTimeMs = 400L, highlightTimeMs = 500L)
+        assertEquals(1, frame.approachCircles.size)
+        assertEquals(5, frame.approachCircles[0].key)
+        assertEquals(1, frame.approachCircles[0].remainingCount)
+        // 元々同じウィンドウに入り得ない別個のノートなので showRepeatBadge は false (×1 は表示しない)
+        assertEquals(false, frame.approachCircles[0].showRepeatBadge)
+    }
+
+    @Test
+    fun scheduleFrame_repeatBadge_boundaryConditions() {
+        val hlTime = 500L
+
+        // 境界値1: 間隔がちょうど 500ms (prev = 500ms, next = 1000ms, current = 600ms)
+        val eventsExact = listOf(
+            NoteEvent(timeMs = 500L, key = 1),
+            NoteEvent(timeMs = 1000L, key = 1)
+        )
+        val frameExact = scheduler.scheduleFrame(eventsExact, currentTimeMs = 600L, highlightTimeMs = hlTime)
+        assertEquals(1, frameExact.approachCircles.size)
+        assertEquals(1, frameExact.approachCircles[0].remainingCount)
+        assertEquals(true, frameExact.approachCircles[0].showRepeatBadge) // ちょうど500ms差は連打として扱う (×1)
+
+        // 境界値2: 間隔が 501ms (prev = 500ms, next = 1001ms, current = 600ms)
+        val eventsExceeded = listOf(
+            NoteEvent(timeMs = 500L, key = 1),
+            NoteEvent(timeMs = 1001L, key = 1)
+        )
+        val frameExceeded = scheduler.scheduleFrame(eventsExceeded, currentTimeMs = 600L, highlightTimeMs = hlTime)
+        assertEquals(1, frameExceeded.approachCircles.size)
+        assertEquals(1, frameExceeded.approachCircles[0].remainingCount)
+        assertEquals(false, frameExceeded.approachCircles[0].showRepeatBadge) // 501ms差は通常単音 (×1 なし)
+    }
+
+    @Test
+    fun guideFrame_equalsAndHashCode_includesChordGroupsAndHighlightTime() {
+        val base = GuideFrame(
+            currentTimeMs = 1000L,
+            highlightTimeMs = 500L,
+            chordGroups = listOf(ChordGroup(timeMs = 1000L, keys = listOf(0, 4)))
+        )
+        val identical = GuideFrame(
+            currentTimeMs = 1000L,
+            highlightTimeMs = 500L,
+            chordGroups = listOf(ChordGroup(timeMs = 1000L, keys = listOf(0, 4)))
+        )
+        val differentChords = GuideFrame(
+            currentTimeMs = 1000L,
+            highlightTimeMs = 500L,
+            chordGroups = listOf(ChordGroup(timeMs = 1000L, keys = listOf(1, 5)))
+        )
+        val differentHighlight = GuideFrame(
+            currentTimeMs = 1000L,
+            highlightTimeMs = 600L,
+            chordGroups = listOf(ChordGroup(timeMs = 1000L, keys = listOf(0, 4)))
+        )
+
+        assertEquals(base, identical)
+        assertEquals(base.hashCode(), identical.hashCode())
+
+        assertTrue(base != differentChords)
+        assertTrue(base.hashCode() != differentChords.hashCode())
+
+        assertTrue(base != differentHighlight)
+        assertTrue(base.hashCode() != differentHighlight.hashCode())
     }
 }

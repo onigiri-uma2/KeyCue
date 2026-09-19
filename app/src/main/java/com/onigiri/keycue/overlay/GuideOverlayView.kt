@@ -10,6 +10,7 @@ import android.graphics.Typeface
 import android.view.View
 import com.onigiri.keycue.model.FitProfile
 import com.onigiri.keycue.model.VisualConfig
+import com.onigiri.keycue.overlay.render.ChordVisualRenderer
 import com.onigiri.keycue.overlay.render.FallingNotesRenderer
 import com.onigiri.keycue.overlay.render.TimingEffectRenderer
 import com.onigiri.keycue.playback.GuideFrame
@@ -21,7 +22,7 @@ import kotlin.math.min
  * 設計方針:
  * - **タッチ完全透過**: 演奏操作を妨げないようタッチイベントは一切処理せず、背後のゲームアプリへ透過させます。
  * - **単一責任（描画専用）**: 再生時計やサービスを直接参照せず、[GuideFrame] および [VisualConfig] を受け取って画面を描画します。
- * - **レンダラー委譲**: 落下ノーツ描画は [FallingNotesRenderer]、ジャスト演出等は [TimingEffectRenderer] に委譲し保守性を確保しています。
+ * - **レンダラー委譲**: 落下ノーツ描画は [FallingNotesRenderer]、ジャスト演出等は [TimingEffectRenderer]、和音リンク/ハローは [ChordVisualRenderer] に委譲し保守性を確保しています。
  * - **ゼロアロケーション描画**: 60fps以上の滑らかな描画を維持するため、Paint等の描画オブジェクトは事前に確保し、onDraw 内でのメモリアロケーションを完全に回避しています。
  */
 @SuppressLint("ViewConstructor")
@@ -36,6 +37,7 @@ class GuideOverlayView(
     // --- 専用レンダラー ---
     private val fallingNotesRenderer = FallingNotesRenderer(density)
     private val timingEffectRenderer = TimingEffectRenderer(density)
+    private val chordVisualRenderer = ChordVisualRenderer(context)
 
     // --- キー基本描画用 Paint ---
     private val circleStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -220,7 +222,23 @@ class GuideOverlayView(
             postInvalidateOnAnimation()
         }
 
-        // 2. 音ゲー風アプローチサークル（縮小タイミング円）描画（レンダラーへ委譲）
+        // 2. 和音リンク & 和音ハロー描画（レンダラーへ委譲、Approach Circle / Falling Notes の背面）
+        if ((visualConfig.showChordLinks || visualConfig.showChordHalos) && frame != null) {
+            chordVisualRenderer.drawChords(
+                canvas = canvas,
+                frame = frame,
+                keyPixelCenters = keyPixelCenters,
+                keyRadiusPx = keyRadiusPx,
+                guideColor = visualConfig.guideColor,
+                showChordLinks = visualConfig.showChordLinks,
+                showChordHalos = visualConfig.showChordHalos,
+                showFallingNotes = visualConfig.showFallingNotes,
+                viewHeight = height,
+                highlightTimeMs = frame.highlightTimeMs
+            )
+        }
+
+        // 3. 音ゲー風アプローチサークル（縮小タイミング円）描画（レンダラーへ委譲）
         if (visualConfig.showApproachCircles && frame != null) {
             timingEffectRenderer.drawApproachCircles(
                 canvas = canvas,

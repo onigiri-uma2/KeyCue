@@ -69,6 +69,8 @@ interface SettingsRepository {
     suspend fun saveNoteColorTop(color: Int) = updateVisualConfig { it.copy(noteColorTop = color) }
     suspend fun saveNoteColorMiddle(color: Int) = updateVisualConfig { it.copy(noteColorMiddle = color) }
     suspend fun saveNoteColorBottom(color: Int) = updateVisualConfig { it.copy(noteColorBottom = color) }
+    suspend fun saveShowChordLinks(show: Boolean) = updateVisualConfig { it.copy(showChordLinks = show) }
+    suspend fun saveShowChordHalos(show: Boolean) = updateVisualConfig { it.copy(showChordHalos = show) }
 
     /** MIDIキーマッピング設定 (MidiMappingSettings) */
     val midiMappingSettings: StateFlow<com.onigiri.keycue.model.MidiMappingSettings>
@@ -118,6 +120,8 @@ class SharedPreferencesSettingsRepository(
         private const val KEY_NOTE_COLOR_TOP = "note_color_top"
         private const val KEY_NOTE_COLOR_MIDDLE = "note_color_middle"
         private const val KEY_NOTE_COLOR_BOTTOM = "note_color_bottom"
+        private const val KEY_SHOW_CHORD_LINKS = "show_chord_links"
+        private const val KEY_SHOW_CHORD_HALOS = "show_chord_halos"
         private const val KEY_MIDI_MAPPING_MODE = "midi_mapping_mode"
         private const val KEY_MIDI_MANUAL_ROOT = "midi_manual_root"
         private const val KEY_MIDI_MANUAL_SCALE = "midi_manual_scale"
@@ -139,10 +143,10 @@ class SharedPreferencesSettingsRepository(
     private val _speed = MutableStateFlow(prefs.getFloat(KEY_SPEED, 1.0f).coerceIn(0.25f, 2.0f))
     override val speed: StateFlow<Float> = _speed.asStateFlow()
 
-    private val _leadTimeMs = MutableStateFlow(prefs.getLong(KEY_LEAD_TIME, 700L).coerceIn(300L, 2000L))
+    private val _leadTimeMs = MutableStateFlow(prefs.getLong(KEY_LEAD_TIME, PlaybackConfig.DEFAULT_LEAD_TIME_MS).coerceIn(300L, 2000L))
     override val leadTimeMs: StateFlow<Long> = _leadTimeMs.asStateFlow()
 
-    private val _highlightTimeMs = MutableStateFlow(prefs.getLong(KEY_HIGHLIGHT_TIME, 500L).coerceIn(100L, 1000L))
+    private val _highlightTimeMs = MutableStateFlow(prefs.getLong(KEY_HIGHLIGHT_TIME, PlaybackConfig.DEFAULT_HIGHLIGHT_TIME_MS).coerceIn(100L, 1000L))
     override val highlightTimeMs: StateFlow<Long> = _highlightTimeMs.asStateFlow()
 
     private val _countdownMs = MutableStateFlow(prefs.getLong(KEY_COUNTDOWN, 3000L).coerceIn(0L, 5000L))
@@ -194,7 +198,9 @@ class SharedPreferencesSettingsRepository(
             guideColor = prefs.getInt(KEY_GUIDE_COLOR, com.onigiri.keycue.model.VisualConfig.DEFAULT_GUIDE_COLOR),
             noteColorTop = prefs.getInt(KEY_NOTE_COLOR_TOP, com.onigiri.keycue.model.VisualConfig.DEFAULT_NOTE_COLOR_TOP),
             noteColorMiddle = prefs.getInt(KEY_NOTE_COLOR_MIDDLE, com.onigiri.keycue.model.VisualConfig.DEFAULT_NOTE_COLOR_MIDDLE),
-            noteColorBottom = prefs.getInt(KEY_NOTE_COLOR_BOTTOM, com.onigiri.keycue.model.VisualConfig.DEFAULT_NOTE_COLOR_BOTTOM)
+            noteColorBottom = prefs.getInt(KEY_NOTE_COLOR_BOTTOM, com.onigiri.keycue.model.VisualConfig.DEFAULT_NOTE_COLOR_BOTTOM),
+            showChordLinks = prefs.getBoolean(KEY_SHOW_CHORD_LINKS, com.onigiri.keycue.model.VisualConfig.DEFAULT_SHOW_CHORD_LINKS),
+            showChordHalos = prefs.getBoolean(KEY_SHOW_CHORD_HALOS, com.onigiri.keycue.model.VisualConfig.DEFAULT_SHOW_CHORD_HALOS)
         )
     )
     override val visualConfig: StateFlow<com.onigiri.keycue.model.VisualConfig> = _visualConfig.asStateFlow()
@@ -300,7 +306,9 @@ class SharedPreferencesSettingsRepository(
             guideColor = config.guideColor,
             noteColorTop = config.noteColorTop,
             noteColorMiddle = config.noteColorMiddle,
-            noteColorBottom = config.noteColorBottom
+            noteColorBottom = config.noteColorBottom,
+            showChordLinks = config.showChordLinks,
+            showChordHalos = config.showChordHalos
         )
         _visualConfig.value = safeConfig
         prefs.edit()
@@ -314,6 +322,8 @@ class SharedPreferencesSettingsRepository(
             .putInt(KEY_NOTE_COLOR_TOP, safeConfig.noteColorTop)
             .putInt(KEY_NOTE_COLOR_MIDDLE, safeConfig.noteColorMiddle)
             .putInt(KEY_NOTE_COLOR_BOTTOM, safeConfig.noteColorBottom)
+            .putBoolean(KEY_SHOW_CHORD_LINKS, safeConfig.showChordLinks)
+            .putBoolean(KEY_SHOW_CHORD_HALOS, safeConfig.showChordHalos)
             .apply()
     }
 
@@ -349,8 +359,8 @@ class InMemorySettingsRepository(
     initialOverlayNormalized: NormalizedPoint? = null,
     initialFitProfile: com.onigiri.keycue.model.FitProfile? = null,
     initialSpeed: Float = 1.0f,
-    initialLeadTimeMs: Long = 700L,
-    initialHighlightTimeMs: Long = 500L,
+    initialLeadTimeMs: Long = PlaybackConfig.DEFAULT_LEAD_TIME_MS,
+    initialHighlightTimeMs: Long = PlaybackConfig.DEFAULT_HIGHLIGHT_TIME_MS,
     initialCountdownMs: Long = 3000L,
     initialVisualConfig: com.onigiri.keycue.model.VisualConfig = com.onigiri.keycue.model.VisualConfig(),
     initialMidiMappingSettings: com.onigiri.keycue.model.MidiMappingSettings = com.onigiri.keycue.model.MidiMappingSettings()
@@ -450,7 +460,9 @@ class InMemorySettingsRepository(
             guideColor = config.guideColor,
             noteColorTop = config.noteColorTop,
             noteColorMiddle = config.noteColorMiddle,
-            noteColorBottom = config.noteColorBottom
+            noteColorBottom = config.noteColorBottom,
+            showChordLinks = config.showChordLinks,
+            showChordHalos = config.showChordHalos
         )
     }
 

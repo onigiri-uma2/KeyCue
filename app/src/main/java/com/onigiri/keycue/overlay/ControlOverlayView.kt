@@ -90,10 +90,10 @@ class ControlOverlayView(
 
     // 再生速度・先読み時間の設定候補
     private val speedPresets = listOf(0.50f, 0.75f, 1.00f, 1.25f, 1.50f)
-    private val leadTimePresets = listOf(400L, 500L, 700L, 1000L, 1500L)
+    private val leadTimePresets = listOf(300L, 400L, 500L, 700L, 1000L, 1500L)
 
     private var currentSpeed: Float = 1.0f
-    private var currentLeadTimeMs: Long = 700L
+    private var currentLeadTimeMs: Long = 300L
     private var isPlayingState: Boolean = false
 
     // UIコンポーネント

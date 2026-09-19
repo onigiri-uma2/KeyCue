@@ -30,8 +30,8 @@ class HomeViewModelTest {
         assertNull(state.songTitle)
         assertEquals(0L, state.durationMs)
         assertEquals(1.0f, state.speed, 0.001f)
-        assertEquals(700L, state.leadTimeMs)
-        assertEquals(500L, state.highlightTimeMs)
+        assertEquals(300L, state.leadTimeMs)
+        assertEquals(200L, state.highlightTimeMs)
         assertEquals(3000L, state.countdownMs)
         assertFalse(state.fitConfigured)
         assertFalse(state.overlayPermissionGranted)
@@ -167,10 +167,10 @@ class HomeViewModelTest {
     @Test
     fun adjustLeadTime_increasesAndDecreasesWithinRange() {
         viewModel.adjustLeadTime(100L)
-        assertEquals(800L, viewModel.uiState.value.leadTimeMs)
+        assertEquals(400L, viewModel.uiState.value.leadTimeMs)
 
-        viewModel.adjustLeadTime(-200L)
-        assertEquals(600L, viewModel.uiState.value.leadTimeMs)
+        viewModel.adjustLeadTime(-50L)
+        assertEquals(350L, viewModel.uiState.value.leadTimeMs)
 
         // 下限クランプ (300ms)
         viewModel.adjustLeadTime(-1000L)
@@ -184,7 +184,7 @@ class HomeViewModelTest {
     @Test
     fun adjustHighlightTime_and_setCountdownMs_updateState() {
         viewModel.adjustHighlightTime(50L)
-        assertEquals(550L, viewModel.uiState.value.highlightTimeMs)
+        assertEquals(250L, viewModel.uiState.value.highlightTimeMs)
 
         viewModel.adjustHighlightTime(-500L)
         assertEquals(100L, viewModel.uiState.value.highlightTimeMs) // 下限 100ms
@@ -231,7 +231,7 @@ class HomeViewModelTest {
         val config = PlaybackConfig(speed = 1.25f, leadTimeMs = 500L)
         assertEquals(1.25f, config.speed, 0.001f)
         assertEquals(500L, config.leadTimeMs)
-        assertEquals(500L, config.highlightTimeMs)
+        assertEquals(200L, config.highlightTimeMs)
         assertEquals(3000L, config.countdownMs)
     }
 

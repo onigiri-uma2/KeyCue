@@ -29,6 +29,21 @@ class SettingsRepositoryTest {
     }
 
     @Test
+    fun `InMemorySettingsRepository holds default values`() {
+        val repo = InMemorySettingsRepository()
+
+        assertNull(repo.lastSongUri.value)
+        assertEquals(1.0f, repo.speed.value, 0.001f)
+        assertEquals(300L, repo.leadTimeMs.value)
+        assertEquals(200L, repo.highlightTimeMs.value)
+        assertEquals(3000L, repo.countdownMs.value)
+        assertEquals(300L, repo.playbackConfig.value.leadTimeMs)
+        assertEquals(200L, repo.playbackConfig.value.highlightTimeMs)
+        assertEquals(false, repo.visualConfig.value.showChordLinks)
+        assertEquals(true, repo.visualConfig.value.showChordHalos)
+    }
+
+    @Test
     fun `saveSpeed clamps invalid values`() = runBlocking {
         val repo = InMemorySettingsRepository()
 
@@ -157,6 +172,8 @@ class SettingsRepositoryTest {
         assertEquals(0xFF4CAF50.toInt(), defaultConfig.noteColorTop)
         assertEquals(0xFF2196F3.toInt(), defaultConfig.noteColorMiddle)
         assertEquals(0xFFE91E63.toInt(), defaultConfig.noteColorBottom)
+        assertEquals(false, defaultConfig.showChordLinks)
+        assertEquals(true, defaultConfig.showChordHalos)
 
         // 2. 各フィールドの更新
         repo.saveShowKeyNumbers(true)
@@ -170,6 +187,12 @@ class SettingsRepositoryTest {
 
         repo.saveShowJustEffect(true)
         assertEquals(true, repo.visualConfig.value.showJustEffect)
+
+        repo.saveShowChordLinks(true)
+        assertEquals(true, repo.visualConfig.value.showChordLinks)
+
+        repo.saveShowChordHalos(false)
+        assertEquals(false, repo.visualConfig.value.showChordHalos)
 
         repo.saveGuideColor(0xFF00E5FF.toInt())
         assertEquals(0xFF00E5FF.toInt(), repo.visualConfig.value.guideColor)
@@ -192,6 +215,11 @@ class SettingsRepositoryTest {
 
         repo.saveGuideRadiusRatio(0.05f)
         assertEquals(0.05f, repo.visualConfig.value.guideRadiusRatio, 0.001f)
+
+        // 4. VisualConfig.safe() によるプロパティ保持テスト
+        val safeCfg = com.onigiri.keycue.model.VisualConfig.safe(showChordLinks = false, showChordHalos = true)
+        assertEquals(false, safeCfg.showChordLinks)
+        assertEquals(true, safeCfg.showChordHalos)
     }
 
     @Test

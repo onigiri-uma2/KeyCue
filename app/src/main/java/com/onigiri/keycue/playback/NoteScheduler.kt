@@ -1,6 +1,7 @@
 package com.onigiri.keycue.playback
 
 import com.onigiri.keycue.model.NoteEvent
+import com.onigiri.keycue.model.PlaybackConfig
 
 /**
  * 現在時刻に基づいて表示・発光すべきノートを判定するスケジューラ。
@@ -22,7 +23,7 @@ class NoteScheduler {
     fun schedule(
         events: List<NoteEvent>,
         currentTimeMs: Long,
-        leadTimeMs: Long = 700L,
+        leadTimeMs: Long = PlaybackConfig.DEFAULT_LEAD_TIME_MS,
         highlightTimeMs: Long = 100L
     ): ScheduledNotes {
         if (events.isEmpty()) {
@@ -62,8 +63,8 @@ class NoteScheduler {
      *
      * @param events 演奏イベント一覧（timeMs昇順）
      * @param currentTimeMs 現在の楽曲再生位置（ミリ秒）。カウントダウン中は負の値（例: -1500ms）を取り得る。
-     * @param leadTimeMs 先読み時間（ミリ秒、例: 700ms）
-     * @param highlightTimeMs 事前ハイライト時間（ミリ秒、例: 500ms）
+     * @param leadTimeMs 先読み時間（ミリ秒、例: 300ms）
+     * @param highlightTimeMs 事前ハイライト時間（ミリ秒、例: 200ms）
      * @param justThresholdMs ジャスト判定幅（ミリ秒、例: 80ms）
      * @param countdownText カウントダウン中テキスト（例: "3", "START" 等）
      * @return 描画に必要な情報を含む [GuideFrame]
@@ -71,8 +72,8 @@ class NoteScheduler {
     fun scheduleFrame(
         events: List<NoteEvent>,
         currentTimeMs: Long,
-        leadTimeMs: Long = 700L,
-        highlightTimeMs: Long = 500L,
+        leadTimeMs: Long = PlaybackConfig.DEFAULT_LEAD_TIME_MS,
+        highlightTimeMs: Long = PlaybackConfig.DEFAULT_HIGHLIGHT_TIME_MS,
         justThresholdMs: Long = FallingNoteCalculator.DEFAULT_JUST_THRESHOLD_MS,
         countdownText: String? = null
     ): GuideFrame {
@@ -83,7 +84,8 @@ class NoteScheduler {
                 highlightedKeys = emptySet(),
                 justKeys = emptySet(),
                 countdownText = countdownText,
-                leadTimeMs = leadTimeMs
+                leadTimeMs = leadTimeMs,
+                highlightTimeMs = highlightTimeMs
             )
         }
 
@@ -91,7 +93,8 @@ class NoteScheduler {
         // わずかに過去 (-5% leadTime、最低50ms) から未来の出現境界 (+leadTime) までを対象とする
         val pastMargin = (leadTimeMs * 0.05f).toLong().coerceAtLeast(50L)
         val startTimeMs = (currentTimeMs - pastMargin).coerceAtLeast(0L)
-        val endTimeMs = currentTimeMs + leadTimeMs
+        val lookaheadMs = maxOf(leadTimeMs, highlightTimeMs)
+        val endTimeMs = currentTimeMs + lookaheadMs
 
         // 全イベントの総当たりを避け、二分探索でO(log N)の範囲抽出
         val candidateNotes = if (endTimeMs >= 0L) {
@@ -106,6 +109,10 @@ class NoteScheduler {
         val closestFutureNote = arrayOfNulls<NoteEvent>(GuideFrame.KEY_COUNT)
         val tempCircles = ArrayList<ApproachCircle>()
         val seenKeyTimes = HashSet<Long>()
+
+        // 和音グループ (ChordGroup) 収集用: leadTimeMs 範囲内のノーツから同一 timeMs のユニークキーを集計
+        val chordKeysByTime = LinkedHashMap<Long, MutableList<Int>>()
+        val seenChordKeyTimes = HashSet<Long>()
 
         for (note in candidateNotes) {
             val progress = FallingNoteCalculator.calculateProgress(note.timeMs, currentTimeMs, leadTimeMs)
@@ -130,7 +137,17 @@ class NoteScheduler {
                 }
             }
 
-            // アプローチサークル対象ノーツ (負数でない全キー対象: 15 keys, 21 keys 等)
+            // 和音グループ対象ノーツ (leadTimeMs 範囲内、負数でない全キー対象)
+            // 同一 (key, timeMs) の重複を除去し、同一時刻のキーを集約
+            if (note.key >= 0 && note.timeMs in currentTimeMs..(currentTimeMs + leadTimeMs)) {
+                val chordPairKey = (note.timeMs shl 16) or (note.key.toLong() and 0xFFFFL)
+                if (seenChordKeyTimes.add(chordPairKey)) {
+                    val keyList = chordKeysByTime.getOrPut(note.timeMs) { ArrayList() }
+                    keyList.add(note.key)
+                }
+            }
+
+            // アプローチサークル対象ノーツ (highlightTimeMs 範囲内)
             // 同一 key かつ同一 timeMs の重複のみ除外し、同一時刻の異なる key（和音）はすべて残す
             if (note.key >= 0 && note.timeMs in currentTimeMs..(currentTimeMs + highlightTimeMs)) {
                 val pairKey = (note.timeMs shl 16) or (note.key.toLong() and 0xFFFFL)
@@ -146,10 +163,50 @@ class NoteScheduler {
             }
         }
 
+        // キー数が2以上の和音グループのみ抽出し、timeMs 降順（遠い未来 -> 直近）でソート
+        val chordGroups = ArrayList<ChordGroup>()
+        for ((timeMs, keys) in chordKeysByTime) {
+            if (keys.size >= 2) {
+                keys.sort()
+                chordGroups.add(ChordGroup(timeMs = timeMs, keys = keys))
+            }
+        }
+        chordGroups.sortByDescending { it.timeMs }
+
         // キーごとの連続サークル総数を集計
         val keyRepeatCounts = HashMap<Int, Int>()
         for (circle in tempCircles) {
             keyRepeatCounts[circle.key] = (keyRepeatCounts[circle.key] ?: 0) + 1
+        }
+
+        // 各キーにおける直近未来ノートの timeMs と tempCircles 内の最初のインデックスを特定
+        val firstIndexByKey = HashMap<Int, Int>()
+        val firstFutureTimeByKey = HashMap<Int, Long>()
+        for (note in candidateNotes) {
+            if (note.key >= 0 && note.timeMs in currentTimeMs..(currentTimeMs + highlightTimeMs)) {
+                if (!firstFutureTimeByKey.containsKey(note.key)) {
+                    firstFutureTimeByKey[note.key] = note.timeMs
+                }
+            }
+        }
+        for (i in 0 until tempCircles.size) {
+            val k = tempCircles[i].key
+            if (!firstIndexByKey.containsKey(k)) {
+                firstIndexByKey[k] = i
+            }
+        }
+
+        // 過去 highlight 範囲のイベントから各キーの最後のノート時刻を取得（現在時刻ちょうどを含めない）
+        val lastPastTimeByKey = HashMap<Int, Long>()
+        val pastRangeEnd = currentTimeMs - 1L
+        val pastRangeStart = (currentTimeMs - highlightTimeMs).coerceAtLeast(0L)
+        if (pastRangeEnd >= pastRangeStart) {
+            val pastEvents = findEventsInRange(events, pastRangeStart, pastRangeEnd)
+            for (pNote in pastEvents) {
+                if (pNote.key >= 0) {
+                    lastPastTimeByKey[pNote.key] = pNote.timeMs
+                }
+            }
         }
 
         // アプローチサークル（縮小タイミング円）の進行度 (0.0: 開始 〜 1.0: ジャスト打鍵) を算出 (既存互換)
@@ -172,26 +229,37 @@ class NoteScheduler {
         // progress が小さい（遠い未来・大きい円）ものから先に描画し、
         // progress が大きい（直近・小さい円）ものを最後に描画（最前面に重ねる）するため、
         // 毎フレームのソートを避け O(N) の逆順配置で順序を決定的に保証する。
-        // 各キーにおける tempCircles 内の最初のインデックス（直近ノーツ）を特定
-        val firstIndexByKey = HashMap<Int, Int>()
-        for (i in 0 until tempCircles.size) {
-            val k = tempCircles[i].key
-            if (!firstIndexByKey.containsKey(k)) {
-                firstIndexByKey[k] = i
-            }
-        }
-
         val approachCircles = ArrayList<ApproachCircle>(tempCircles.size)
         for (i in tempCircles.lastIndex downTo 0) {
             val circle = tempCircles[i]
-            val count = keyRepeatCounts[circle.key] ?: 1
             val isClosestNoteForKey = firstIndexByKey[circle.key] == i
-            val remainingCount = if (isClosestNoteForKey) count else 1
+
+            val remainingCount: Int
+            val showRepeatBadge: Boolean
+
+            if (isClosestNoteForKey) {
+                val count = keyRepeatCounts[circle.key] ?: 1
+                if (count >= 2) {
+                    remainingCount = count
+                    showRepeatBadge = true
+                } else {
+                    remainingCount = 1
+                    val prevTime = lastPastTimeByKey[circle.key]
+                    val futureTime = firstFutureTimeByKey[circle.key]
+                    showRepeatBadge = prevTime != null && futureTime != null &&
+                            (futureTime - prevTime <= highlightTimeMs)
+                }
+            } else {
+                remainingCount = 1
+                showRepeatBadge = false
+            }
+
             approachCircles.add(
                 ApproachCircle(
                     key = circle.key,
                     progress = circle.progress,
-                    remainingCount = remainingCount
+                    remainingCount = remainingCount,
+                    showRepeatBadge = showRepeatBadge
                 )
             )
         }
@@ -203,8 +271,10 @@ class NoteScheduler {
             justKeys = justKeys,
             countdownText = countdownText,
             leadTimeMs = leadTimeMs,
+            highlightTimeMs = highlightTimeMs,
             keyHighlightProgress = keyHighlightProgress,
-            approachCircles = approachCircles
+            approachCircles = approachCircles,
+            chordGroups = chordGroups
         )
     }
 

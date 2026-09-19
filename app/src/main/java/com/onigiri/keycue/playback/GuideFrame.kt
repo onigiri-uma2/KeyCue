@@ -21,9 +21,11 @@ data class GuideFrame(
     val highlightedKeys: Set<Int> = emptySet(),
     val justKeys: Set<Int> = emptySet(),
     val countdownText: String? = null,
-    val leadTimeMs: Long = 700L,
+    val leadTimeMs: Long = 300L,
+    val highlightTimeMs: Long = 200L,
     val keyHighlightProgress: FloatArray = FloatArray(KEY_COUNT) { -1.0f },
-    val approachCircles: List<ApproachCircle> = emptyList()
+    val approachCircles: List<ApproachCircle> = emptyList(),
+    val chordGroups: List<ChordGroup> = emptyList()
 ) {
     companion object {
         // Legacy compatibility constant.
@@ -42,8 +44,10 @@ data class GuideFrame(
         if (justKeys != other.justKeys) return false
         if (countdownText != other.countdownText) return false
         if (leadTimeMs != other.leadTimeMs) return false
+        if (highlightTimeMs != other.highlightTimeMs) return false
         if (!keyHighlightProgress.contentEquals(other.keyHighlightProgress)) return false
         if (approachCircles != other.approachCircles) return false
+        if (chordGroups != other.chordGroups) return false
 
         return true
     }
@@ -55,8 +59,10 @@ data class GuideFrame(
         result = 31 * result + justKeys.hashCode()
         result = 31 * result + (countdownText?.hashCode() ?: 0)
         result = 31 * result + leadTimeMs.hashCode()
+        result = 31 * result + highlightTimeMs.hashCode()
         result = 31 * result + keyHighlightProgress.contentHashCode()
         result = 31 * result + approachCircles.hashCode()
+        result = 31 * result + chordGroups.hashCode()
         return result
     }
 }
@@ -67,10 +73,23 @@ data class GuideFrame(
  * @param key 対象キーインデックス (0..)
  * @param progress 進行度 (0.0: 開始 〜 1.0: ジャスト打鍵)
  * @param remainingCount 該当キーの未打鍵連続数（直近ノーツに2以上が設定され、連打バッジ表示に使用）
+ * @param showRepeatBadge このCircleに連打バッジ (×N) を表示すべきかどうか
  */
 data class ApproachCircle(
     val key: Int,
     val progress: Float,
-    val remainingCount: Int = 1
+    val remainingCount: Int = 1,
+    val showRepeatBadge: Boolean = false
+)
+
+/**
+ * 同一時刻に複数の異なるキーを押す和音グループの情報。
+ *
+ * @param timeMs 和音の発生時刻（ミリ秒）
+ * @param keys 構成するユニークなキーインデックスのリスト（昇順）
+ */
+data class ChordGroup(
+    val timeMs: Long,
+    val keys: List<Int>
 )
 

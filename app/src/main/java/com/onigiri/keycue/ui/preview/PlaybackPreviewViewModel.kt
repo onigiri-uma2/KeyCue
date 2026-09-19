@@ -30,8 +30,8 @@ data class PlaybackPreviewUiState(
     val durationMs: Long = 0L,
     val noteCount: Int = 0,
     val speed: Float = 1.0f,
-    val leadTimeMs: Long = 700L,
-    val highlightTimeMs: Long = 100L,
+    val leadTimeMs: Long = com.onigiri.keycue.model.PlaybackConfig.DEFAULT_LEAD_TIME_MS,
+    val highlightTimeMs: Long = com.onigiri.keycue.model.PlaybackConfig.DEFAULT_HIGHLIGHT_TIME_MS,
     val hasSong: Boolean = false
 )
 
