@@ -94,7 +94,10 @@ class ControlOverlayView(
 
     private var currentSpeed: Float = 1.0f
     private var currentNoteLeadTimeMs: Long = 300L
-    private var isPlayingState: Boolean = false
+    private var currentIsPlaying: Boolean = false
+    private var currentSongTitle: String? = null
+    private var currentPositionMs: Long = 0L
+    private var currentDurationMs: Long = 0L
 
     // UIコンポーネント
     private val collapsedView: TextView
@@ -521,11 +524,15 @@ class ControlOverlayView(
         songTitle: String?,
         noteLeadTimeMs: Long = currentNoteLeadTimeMs
     ) {
-        isPlayingState = isPlaying
+        // 折りたたみ中・展開中に関わらず最新状態を常に保持
+        currentIsPlaying = isPlaying
+        currentPositionMs = positionMs
+        currentDurationMs = durationMs
         currentSpeed = speed
+        currentSongTitle = songTitle
         currentNoteLeadTimeMs = noteLeadTimeMs
 
-        // 1. 再生状態の変更（Play / Pause）は即時反映
+        // 1. 再生状態の変更（Play / Pause）は折りたたみ中でも即時反映
         if (lastIsPlaying != isPlaying) {
             lastIsPlaying = isPlaying
             playPauseButton.text = if (isPlaying) "⏸" else "▶"
@@ -536,27 +543,38 @@ class ControlOverlayView(
 
         // 2. パネル展開時のみ詳細情報を更新（折りたたみ中は不要な TextView.setText による requestLayout を抑制）
         if (isExpanded) {
-            if (songTitle != lastSongTitle && !songTitle.isNullOrEmpty()) {
-                lastSongTitle = songTitle
-                songTitleText.text = songTitle
-            }
+            refreshExpandedPlaybackStatus(force = false)
+        }
+    }
 
-            if (lastPositionMs != positionMs || lastDurationMs != durationMs) {
-                lastPositionMs = positionMs
-                lastDurationMs = durationMs
-                timeText.text = TimeFormatter.formatDurationPair(positionMs, durationMs)
-            }
+    /**
+     * 展開中UIに最新の再生状態・楽曲情報を描画する。
+     * @param force true の場合、直前キャッシュ値に関わらず確実に全UIを再描画する。
+     */
+    private fun refreshExpandedPlaybackStatus(force: Boolean = false) {
+        if (!isExpanded) return
 
-            if (lastSpeed != speed) {
-                lastSpeed = speed
-                val percent = (speed * 100).toInt()
-                speedValueText.text = "$percent%"
-            }
+        val displayTitle = currentSongTitle?.takeIf { it.isNotBlank() } ?: "未選択"
+        if (force || displayTitle != lastSongTitle) {
+            lastSongTitle = displayTitle
+            songTitleText.text = displayTitle
+        }
 
-            if (lastNoteLeadTimeMs != noteLeadTimeMs) {
-                lastNoteLeadTimeMs = noteLeadTimeMs
-                noteLeadTimeValueText.text = "${noteLeadTimeMs}ms"
-            }
+        if (force || lastPositionMs != currentPositionMs || lastDurationMs != currentDurationMs) {
+            lastPositionMs = currentPositionMs
+            lastDurationMs = currentDurationMs
+            timeText.text = TimeFormatter.formatDurationPair(currentPositionMs, currentDurationMs)
+        }
+
+        if (force || lastSpeed != currentSpeed) {
+            lastSpeed = currentSpeed
+            val percent = (currentSpeed * 100).toInt()
+            speedValueText.text = "$percent%"
+        }
+
+        if (force || lastNoteLeadTimeMs != currentNoteLeadTimeMs) {
+            lastNoteLeadTimeMs = currentNoteLeadTimeMs
+            noteLeadTimeValueText.text = "${currentNoteLeadTimeMs}ms"
         }
     }
 
@@ -615,11 +633,8 @@ class ControlOverlayView(
         updateGuideButtonText(callbacks.isGuideShowing())
         collapsedView.visibility = View.GONE
         expandedView.visibility = View.VISIBLE
-        // 展開直後に確実に最新情報を反映させるため直前キャッシュ値をリセット
-        lastSongTitle = null
-        lastPositionMs = -1L
-        lastSpeed = -1f
-        lastNoteLeadTimeMs = -1L
+        // 展開した瞬間に、保持済みの最新状態をUIへ強制描画
+        refreshExpandedPlaybackStatus(force = true)
         post { clampPosition() }
     }
 
