@@ -39,12 +39,26 @@ class ChordVisualRenderer(context: Context) {
         strokeJoin = Paint.Join.ROUND
     }
 
-    // 再利用 Path
-    private val haloPath = Path()
+    // 和音幾何キャッシュ (OFF用 と ON用 を完全分離)
+    private val staticGeometryCache = HashMap<List<Int>, CachedChordGeometry>()
+    private val fallingGeometryCache = HashMap<List<Int>, CachedChordGeometry>()
 
-    // 再利用 scratch buffer
-    private val tempChordPoints = ArrayList<ChordPoint>()
-    private val tempCenterPoints = ArrayList<GeometryPoint>()
+    /**
+     * キャッシュされた和音幾何情報（基準キー座標における Convex Hull Path および MST 描画線）。
+     */
+    class CachedChordGeometry(
+        val haloPath: Path,
+        val linkLines: FloatArray
+    )
+
+    /**
+     * 幾何キャッシュを一括破棄する。
+     * キー座標や半径、レイアウトが変更された際に呼び出します。
+     */
+    fun clearCache() {
+        staticGeometryCache.clear()
+        fallingGeometryCache.clear()
+    }
 
     companion object {
         // Chord Link のアルファ値（控えめかつ視認性のある半透明ライン）
@@ -53,10 +67,20 @@ class ChordVisualRenderer(context: Context) {
         private const val HALO_ALPHA = 90
 
         /**
+         * 和音を構成するキーのリストを正規化し、immutable な不変キャッシュキーを生成する純粋関数。
+         * 重複キーを排除し、昇順に整列された不変リストを返します。
+         */
+        fun canonicalizeKey(keys: List<Int>): List<Int> {
+            return keys.distinct().sorted()
+        }
+
+        /**
          * Falling Notes OFF 時において、和音（Chord Link / Chord Halo）が未来側表示開始範囲にあるかを判定する。
          *
-         * Falling Notes OFF 時は、Chord Link / Halo はキー上の Approach Circle を視覚的にグループ化する補助表示となる。
-         * そのため未来側の表示開始時間は approachCircleLeadTimeMs に従う。
+         * Falling Notes OFF 時は、Chord Link / Halo はキー上に表示する直近の和音ガイドとなるため、
+         * タイミングサークル（Approach Circle）と同じ approachCircleLeadTimeMs を表示開始時間の基準として使用する。
+         * Approach Circle 自体の表示 ON/OFF には依存しない。
+         *
          * この関数は未来側の表示開始境界のみを判定し、打鍵後の表示終了仕様は変更しない。
          *
          * @param chordTimeMs 和音の打鍵目標時刻（ミリ秒）
@@ -72,6 +96,66 @@ class ChordVisualRenderer(context: Context) {
             val remainingTimeMs = chordTimeMs - currentTimeMs
             return remainingTimeMs <= approachCircleLeadTimeMs
         }
+    }
+
+    /**
+     * 指定されたキー構成と幾何モードに対応する幾何キャッシュを取得、未生成なら生成してキャッシュする。
+     */
+    private fun getOrCreateGeometry(
+        keys: List<Int>,
+        isFalling: Boolean,
+        keyPixelCenters: List<PointF>,
+        keyRadiusPx: Float,
+        haloMarginPx: Float
+    ): CachedChordGeometry? {
+        val cache = if (isFalling) fallingGeometryCache else staticGeometryCache
+        val canonicalKey = canonicalizeKey(keys)
+        val existing = cache[canonicalKey]
+        if (existing != null) return existing
+
+        val validPoints = ArrayList<ChordPoint>()
+        val validCenters = ArrayList<GeometryPoint>()
+        for (k in canonicalKey) {
+            if (k in keyPixelCenters.indices) {
+                val center = keyPixelCenters[k]
+                validPoints.add(ChordPoint(key = k, x = center.x, y = center.y))
+                validCenters.add(GeometryPoint(x = center.x, y = center.y))
+            }
+        }
+        if (validPoints.size < 2) return null
+
+        val visualRadius = if (isFalling) {
+            keyRadiusPx * 0.65f + haloMarginPx
+        } else {
+            keyRadiusPx + haloMarginPx
+        }
+
+        // 1. Chord Halo 用 Convex Hull Path 構築
+        val supportPoints = ChordGeometry.generateSupportPoints(validCenters, visualRadius)
+        val hull = ChordGeometry.buildConvexHull(supportPoints)
+        val path = Path()
+        if (hull.size >= 2) {
+            path.moveTo(hull[0].x, hull[0].y)
+            for (i in 1 until hull.size) {
+                path.lineTo(hull[i].x, hull[i].y)
+            }
+            path.close()
+        }
+
+        // 2. Chord Link 用 MST 線分配列 (drawLines 用 FloatArray) 構築
+        val edges = ChordGeometry.buildMinimumSpanningTree(validPoints)
+        val lines = FloatArray(edges.size * 4)
+        var idx = 0
+        for (edge in edges) {
+            lines[idx++] = edge.fromPoint.x
+            lines[idx++] = edge.fromPoint.y
+            lines[idx++] = edge.toPoint.x
+            lines[idx++] = edge.toPoint.y
+        }
+
+        val geometry = CachedChordGeometry(haloPath = path, linkLines = lines)
+        cache[canonicalKey] = geometry
+        return geometry
     }
 
     /**
@@ -112,8 +196,8 @@ class ChordVisualRenderer(context: Context) {
         // frame.chordGroups は NoteScheduler 側で timeMs 降順（遠い未来 -> 直近）にソート済み。
         // そのまま順次描画することで、遠い未来が背面に、直近が最前面に重なる。
         for (chord in frame.chordGroups) {
-            // Falling Notes OFF 時は、キー上の Approach Circle を視覚的にグループ化するため、
-            // approachCircleLeadTimeMs を基準として表示判定する（テストと共通の純粋判定関数を使用）。
+            // Falling Notes OFF 時はキー上の直近和音ガイドとして表示するため、
+            // タイミングサークルと共通の時間基準 approachCircleLeadTimeMs を使用する。
             if (!showFallingNotes) {
                 if (!isChordVisibleWhenFallingNotesOff(
                         chordTimeMs = chord.timeMs,
@@ -123,14 +207,22 @@ class ChordVisualRenderer(context: Context) {
                 ) {
                     continue
                 }
-            }
 
-            tempChordPoints.clear()
-            tempCenterPoints.clear()
+                val geometry = getOrCreateGeometry(
+                    keys = chord.keys,
+                    isFalling = false,
+                    keyPixelCenters = keyPixelCenters,
+                    keyRadiusPx = keyRadiusPx,
+                    haloMarginPx = haloMarginPx
+                ) ?: continue
 
-            val visualRadius: Float
-
-            if (showFallingNotes) {
+                if (showChordHalos && !geometry.haloPath.isEmpty) {
+                    canvas.drawPath(geometry.haloPath, haloPaint)
+                }
+                if (showChordLinks && geometry.linkLines.isNotEmpty()) {
+                    canvas.drawLines(geometry.linkLines, linkPaint)
+                }
+            } else {
                 // Falling Notes ON: 落下中ノートの現在座標に追従
                 val fallingProgress = FallingNoteCalculator.calculateProgress(
                     eventTimeMs = chord.timeMs,
@@ -139,61 +231,27 @@ class ChordVisualRenderer(context: Context) {
                 )
                 if (!FallingNoteCalculator.shouldDraw(fallingProgress)) continue
 
-                // 落下ノートの半径
-                visualRadius = keyRadiusPx * 0.65f + haloMarginPx
+                val geometry = getOrCreateGeometry(
+                    keys = chord.keys,
+                    isFalling = true,
+                    keyPixelCenters = keyPixelCenters,
+                    keyRadiusPx = keyRadiusPx,
+                    haloMarginPx = haloMarginPx
+                ) ?: continue
 
-                for (key in chord.keys) {
-                    if (key !in keyPixelCenters.indices) continue
-                    val target = keyPixelCenters[key]
-                    val currentX = target.x
-                    val currentY = FallingNoteCalculator.calculateY(target.y, fallDistancePx, fallingProgress)
+                val dY = -fallDistancePx * (1.0f - fallingProgress)
 
-                    tempChordPoints.add(ChordPoint(key = key, x = currentX, y = currentY))
-                    tempCenterPoints.add(GeometryPoint(x = currentX, y = currentY))
+                canvas.save()
+                canvas.translate(0f, dY)
+
+                if (showChordHalos && !geometry.haloPath.isEmpty) {
+                    canvas.drawPath(geometry.haloPath, haloPaint)
                 }
-            } else {
-                // Falling Notes OFF: FitProfile のキー中心座標に固定
-                visualRadius = keyRadiusPx + haloMarginPx
-
-                for (key in chord.keys) {
-                    if (key !in keyPixelCenters.indices) continue
-                    val center = keyPixelCenters[key]
-
-                    tempChordPoints.add(ChordPoint(key = key, x = center.x, y = center.y))
-                    tempCenterPoints.add(GeometryPoint(x = center.x, y = center.y))
+                if (showChordLinks && geometry.linkLines.isNotEmpty()) {
+                    canvas.drawLines(geometry.linkLines, linkPaint)
                 }
-            }
 
-            // 描画可能な有効座標が2点以上ある場合のみ描画
-            if (tempChordPoints.size < 2) continue
-
-            // 1. Chord Halo 描画（最背面）
-            if (showChordHalos) {
-                val supportPoints = ChordGeometry.generateSupportPoints(tempCenterPoints, visualRadius)
-                val hull = ChordGeometry.buildConvexHull(supportPoints)
-                if (hull.size >= 2) {
-                    haloPath.reset()
-                    haloPath.moveTo(hull[0].x, hull[0].y)
-                    for (i in 1 until hull.size) {
-                        haloPath.lineTo(hull[i].x, hull[i].y)
-                    }
-                    haloPath.close()
-                    canvas.drawPath(haloPath, haloPaint)
-                }
-            }
-
-            // 2. Chord Link 描画（Halo の上、Circle/Falling Note の下）
-            if (showChordLinks) {
-                val edges = ChordGeometry.buildMinimumSpanningTree(tempChordPoints)
-                for (edge in edges) {
-                    canvas.drawLine(
-                        edge.fromPoint.x,
-                        edge.fromPoint.y,
-                        edge.toPoint.x,
-                        edge.toPoint.y,
-                        linkPaint
-                    )
-                }
+                canvas.restore()
             }
         }
     }

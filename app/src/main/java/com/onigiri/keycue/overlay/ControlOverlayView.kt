@@ -489,6 +489,27 @@ class ControlOverlayView(
         callbacks.onNoteLeadTimeChange(target)
     }
 
+    // 再生/一時停止ボタン用キャッシュ Drawable
+    private val playBackgroundPlaying by lazy {
+        createRoundedDrawable(
+            cornerRadiusDp = 6f,
+            fillColor = Color.parseColor("#F57F17")
+        )
+    }
+    private val playBackgroundPaused by lazy {
+        createRoundedDrawable(
+            cornerRadiusDp = 6f,
+            fillColor = Color.parseColor("#2E7D32")
+        )
+    }
+
+    private var lastIsPlaying: Boolean? = null
+    private var lastPositionMs: Long = -1L
+    private var lastDurationMs: Long = -1L
+    private var lastSpeed: Float = -1f
+    private var lastSongTitle: String? = null
+    private var lastNoteLeadTimeMs: Long = -1L
+
     /**
      * 再生状態や曲情報をControlパネルに反映する。
      */
@@ -504,23 +525,39 @@ class ControlOverlayView(
         currentSpeed = speed
         currentNoteLeadTimeMs = noteLeadTimeMs
 
-        if (!songTitle.isNullOrEmpty()) {
-            songTitleText.text = songTitle
+        // 1. 再生状態の変更（Play / Pause）は即時反映
+        if (lastIsPlaying != isPlaying) {
+            lastIsPlaying = isPlaying
+            playPauseButton.text = if (isPlaying) "⏸" else "▶"
+            playPauseButton.background = if (isPlaying) playBackgroundPlaying else playBackgroundPaused
+            // 最小化ボタンのアイコン表示更新（再生中: ⏸, 一時停止/停止: ♪）
+            collapsedView.text = if (isPlaying) "⏸" else "♪"
         }
-        timeText.text = TimeFormatter.formatDurationPair(positionMs, durationMs)
 
-        playPauseButton.text = if (isPlaying) "⏸" else "▶"
-        playPauseButton.background = createRoundedDrawable(
-            cornerRadiusDp = 6f,
-            fillColor = if (isPlaying) Color.parseColor("#F57F17") else Color.parseColor("#2E7D32")
-        )
+        // 2. パネル展開時のみ詳細情報を更新（折りたたみ中は不要な TextView.setText による requestLayout を抑制）
+        if (isExpanded) {
+            if (songTitle != lastSongTitle && !songTitle.isNullOrEmpty()) {
+                lastSongTitle = songTitle
+                songTitleText.text = songTitle
+            }
 
-        // 最小化ボタンのアイコン表示更新（再生中: ⏸, 一時停止/停止: ♪）
-        collapsedView.text = if (isPlaying) "⏸" else "♪"
+            if (lastPositionMs != positionMs || lastDurationMs != durationMs) {
+                lastPositionMs = positionMs
+                lastDurationMs = durationMs
+                timeText.text = TimeFormatter.formatDurationPair(positionMs, durationMs)
+            }
 
-        val percent = (speed * 100).toInt()
-        speedValueText.text = "$percent%"
-        noteLeadTimeValueText.text = "${noteLeadTimeMs}ms"
+            if (lastSpeed != speed) {
+                lastSpeed = speed
+                val percent = (speed * 100).toInt()
+                speedValueText.text = "$percent%"
+            }
+
+            if (lastNoteLeadTimeMs != noteLeadTimeMs) {
+                lastNoteLeadTimeMs = noteLeadTimeMs
+                noteLeadTimeValueText.text = "${noteLeadTimeMs}ms"
+            }
+        }
     }
 
     private fun createMiniButton(text: String, bgColor: Int, onClick: () -> Unit): Button {
@@ -578,6 +615,11 @@ class ControlOverlayView(
         updateGuideButtonText(callbacks.isGuideShowing())
         collapsedView.visibility = View.GONE
         expandedView.visibility = View.VISIBLE
+        // 展開直後に確実に最新情報を反映させるため直前キャッシュ値をリセット
+        lastSongTitle = null
+        lastPositionMs = -1L
+        lastSpeed = -1f
+        lastNoteLeadTimeMs = -1L
         post { clampPosition() }
     }
 

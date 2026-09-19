@@ -146,6 +146,7 @@ class GuideOverlayView(
     }
 
     private fun recalculateKeyPositions(viewWidth: Int, viewHeight: Int) {
+        chordVisualRenderer.clearCache()
         keyPixelCenters.clear()
         if (viewWidth <= 0 || viewHeight <= 0) return
 

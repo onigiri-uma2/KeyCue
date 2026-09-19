@@ -645,4 +645,70 @@ class NoteSchedulerTest {
         )
         assertTrue(frame301.chordGroups.isEmpty())
     }
+
+    @Test
+    fun prepare_duplicatesInSameKeyAndTime_correctlyDeduplicated() {
+        // 同一 timeMs (1000ms) に同一キー (key=2) が複数重複、かつ和音キー (key=5) が存在
+        val events = listOf(
+            NoteEvent(timeMs = 1000L, key = 2),
+            NoteEvent(timeMs = 1000L, key = 2),
+            NoteEvent(timeMs = 1000L, key = 5),
+            NoteEvent(timeMs = 1000L, key = 5)
+        )
+        scheduler.prepare(events)
+
+        val frame = scheduler.scheduleFrame(
+            events = events,
+            currentTimeMs = 800L,
+            noteLeadTimeMs = 300L,
+            approachCircleLeadTimeMs = 200L
+        )
+
+        // 重複が除去され、和音グループは keys=[2, 5] の 1 つであること
+        assertEquals(1, frame.chordGroups.size)
+        assertEquals(listOf(2, 5), frame.chordGroups[0].keys)
+        // サークルも key=2 と key=5 の 2 つのみ生成されること
+        assertEquals(2, frame.approachCircles.size)
+    }
+
+    @Test
+    fun repeatBadge_exactBoundary_200MsAnd201Ms() {
+        // 過去ノート: 800ms (key=3)
+        // 直近未来ノート: 1000ms (key=3)
+        // ノート間隔: 200ms
+        // approachCircleLeadTimeMs = 200ms (repeatBadgeGroupingWindowMs = 200ms)
+        val events = listOf(
+            NoteEvent(timeMs = 800L, key = 3),
+            NoteEvent(timeMs = 1000L, key = 3)
+        )
+        scheduler.prepare(events)
+
+        // currentTime = 850ms:
+        // 800ms は過去(50ms前)、1000ms は未来(150ms後)
+        // futureTime - prevTime = 200ms <= 200ms -> 「×1」バッジが表示されること
+        val frameAt850 = scheduler.scheduleFrame(
+            events = events,
+            currentTimeMs = 850L,
+            noteLeadTimeMs = 500L,
+            approachCircleLeadTimeMs = 200L
+        )
+        assertEquals(1, frameAt850.approachCircles.size)
+        assertTrue("間隔200msかつwindow内ならshowRepeatBadge=true", frameAt850.approachCircles[0].showRepeatBadge)
+
+        // 次に、過去ノートを 799ms に変更 (間隔 201ms)
+        val events201 = listOf(
+            NoteEvent(timeMs = 799L, key = 3),
+            NoteEvent(timeMs = 1000L, key = 3)
+        )
+        scheduler.prepare(events201)
+
+        val frameAt850_201 = scheduler.scheduleFrame(
+            events = events201,
+            currentTimeMs = 850L,
+            noteLeadTimeMs = 500L,
+            approachCircleLeadTimeMs = 200L
+        )
+        assertEquals(1, frameAt850_201.approachCircles.size)
+        assertFalse("間隔201ms (window=200ms超過) の場合はshowRepeatBadge=false", frameAt850_201.approachCircles[0].showRepeatBadge)
+    }
 }

@@ -11,6 +11,77 @@ import com.onigiri.keycue.model.PlaybackConfig
  */
 class NoteScheduler {
 
+    private var cachedEventsRef: List<NoteEvent>? = null
+    private var precomputedChordGroups: List<ChordGroup> = emptyList()
+    private var precomputedKeyTimes: Array<LongArray> = Array(GuideFrame.KEY_COUNT) { LongArray(0) }
+
+    /**
+     * 楽曲の全演奏イベントを受け取り、和音グループおよび連打判定用の静的情報を事前計算する。
+     *
+     * 【入力契約】
+     * - [events] は timeMs 昇順にソートされていること。
+     * - [events] の内容は楽曲再生中に変更されないこと。
+     *
+     * 楽曲ロード時（OverlayService や PlaybackEngine）に呼び出すことで、
+     * 毎フレームの scheduleFrame() での Map/Set 生成や O(N) 探索を排除し、O(log N) の抽出を実現します。
+     *
+     * @param events 演奏イベント一覧（timeMs昇順）
+     */
+    fun prepare(events: List<NoteEvent>) {
+        cachedEventsRef = events
+        if (events.isEmpty()) {
+            precomputedChordGroups = emptyList()
+            precomputedKeyTimes = Array(GuideFrame.KEY_COUNT) { LongArray(0) }
+            return
+        }
+
+        val maxEventKey = events.maxOfOrNull { it.key } ?: 0
+        val numKeys = maxOf(GuideFrame.KEY_COUNT, maxEventKey + 1)
+
+        // 1. 和音グループ (ChordGroup) の事前計算
+        // 同一 timeMs のユニークキーを集約し、2キー以上のものを ChordGroup として昇順保持
+        val chordGroupsList = ArrayList<ChordGroup>()
+        val keyTimesList = Array(numKeys) { ArrayList<Long>() }
+
+        var i = 0
+        val n = events.size
+        while (i < n) {
+            val t = events[i].timeMs
+            var j = i
+            // 同一 timeMs の範囲を特定
+            while (j < n && events[j].timeMs == t) {
+                j++
+            }
+
+            // 同一 timeMs のユニークキーを抽出
+            val uniqueKeys = ArrayList<Int>()
+            for (k in i until j) {
+                val key = events[k].key
+                if (key >= 0) {
+                    if (!uniqueKeys.contains(key)) {
+                        uniqueKeys.add(key)
+                    }
+                    if (key < numKeys) {
+                        val times = keyTimesList[key]
+                        if (times.isEmpty() || times[times.lastIndex] != t) {
+                            times.add(t)
+                        }
+                    }
+                }
+            }
+
+            if (uniqueKeys.size >= 2) {
+                uniqueKeys.sort()
+                chordGroupsList.add(ChordGroup(timeMs = t, keys = uniqueKeys))
+            }
+
+            i = j
+        }
+
+        precomputedChordGroups = chordGroupsList
+        precomputedKeyTimes = Array(numKeys) { k -> keyTimesList[k].toLongArray() }
+    }
+
     /**
      * 現在時刻に基づいて、発光対象ノートおよび先読みノートを抽出する。
      *
@@ -89,6 +160,11 @@ class NoteScheduler {
             )
         }
 
+        // 安全フォールバック: prepare が未実行または異なるイベント列の場合は自動で準備
+        if (events !== cachedEventsRef) {
+            prepare(events)
+        }
+
         // 描画対象ノート範囲: 判定線を通過した直後のノートに描画の余韻を残すため、
         // わずかに過去 (-5% noteLeadTime、最低50ms) から未来の出現境界までを対象とする。
         // Schedulerが生成する各視覚要素のうち、最も長い先読み時間までイベントを探索する。
@@ -104,18 +180,15 @@ class NoteScheduler {
             emptyList()
         }
 
-        val upcomingNotes = ArrayList<NoteEvent>()
+        val numKeys = precomputedKeyTimes.size
+        val upcomingNotes = ArrayList<NoteEvent>(candidateNotes.size)
         val highlightedKeys = HashSet<Int>()
         val justKeys = HashSet<Int>()
         val closestFutureNote = arrayOfNulls<NoteEvent>(GuideFrame.KEY_COUNT)
         val tempCircles = ArrayList<ApproachCircle>()
-        val seenKeyTimes = HashSet<Long>()
 
-        // 和音グループ (ChordGroup) 収集用:
-        // どのキーを同時に押すかを先読みする目的であり、Falling Note が画面上に存在する期間（noteLeadTimeMs）を基準とする。
-        // （同一キーの Approach Circle 重なりを補助する連打バッジの approachCircleLeadTimeMs とは責務を分離）
-        val chordKeysByTime = LinkedHashMap<Long, MutableList<Int>>()
-        val seenChordKeyTimes = HashSet<Long>()
+        var lastCircleTimeMs = -1L
+        var circleKeyMask = 0L
 
         for (note in candidateNotes) {
             val progress = FallingNoteCalculator.calculateProgress(note.timeMs, currentTimeMs, noteLeadTimeMs)
@@ -140,21 +213,22 @@ class NoteScheduler {
                 }
             }
 
-            // 和音グループ対象ノート (noteLeadTimeMs 範囲内、負数でない全キー対象)
-            // 同一 (key, timeMs) の重複を除去し、同一時刻のキーを集約
-            if (note.key >= 0 && note.timeMs in currentTimeMs..(currentTimeMs + noteLeadTimeMs)) {
-                val chordPairKey = (note.timeMs shl 16) or (note.key.toLong() and 0xFFFFL)
-                if (seenChordKeyTimes.add(chordPairKey)) {
-                    val keyList = chordKeysByTime.getOrPut(note.timeMs) { ArrayList() }
-                    keyList.add(note.key)
-                }
-            }
-
-            // アプローチサークル対象ノート (approachCircleLeadTimeMs 範囲内)
+            // タイミングサークル対象ノート (approachCircleLeadTimeMs 範囲内、負数でない全キー対象)
             // 同一 key かつ同一 timeMs の重複のみ除外し、同一時刻の異なる key（和音）はすべて残す
             if (note.key >= 0 && note.timeMs in currentTimeMs..(currentTimeMs + approachCircleLeadTimeMs)) {
-                val pairKey = (note.timeMs shl 16) or (note.key.toLong() and 0xFFFFL)
-                if (seenKeyTimes.add(pairKey)) {
+                if (note.timeMs != lastCircleTimeMs) {
+                    lastCircleTimeMs = note.timeMs
+                    circleKeyMask = 0L
+                }
+                val isDuplicate = if (note.key < 64) {
+                    val bit = 1L shl note.key
+                    val dup = (circleKeyMask and bit) != 0L
+                    if (!dup) circleKeyMask = circleKeyMask or bit
+                    dup
+                } else {
+                    false
+                }
+                if (!isDuplicate) {
                     val remaining = note.timeMs - currentTimeMs
                     val circleProgress = if (approachCircleLeadTimeMs > 0L) {
                         (1f - remaining.toFloat() / approachCircleLeadTimeMs.toFloat()).coerceIn(0f, 1f)
@@ -166,55 +240,47 @@ class NoteScheduler {
             }
         }
 
-        // キー数が2以上の和音グループのみ抽出し、timeMs 降順（遠い未来 -> 直近）でソート
-        val chordGroups = ArrayList<ChordGroup>()
-        for ((timeMs, keys) in chordKeysByTime) {
-            if (keys.size >= 2) {
-                keys.sort()
-                chordGroups.add(ChordGroup(timeMs = timeMs, keys = keys))
-            }
-        }
-        chordGroups.sortByDescending { it.timeMs }
-
-        // キーごとの連続サークル総数を集計
-        val keyRepeatCounts = HashMap<Int, Int>()
-        for (circle in tempCircles) {
-            keyRepeatCounts[circle.key] = (keyRepeatCounts[circle.key] ?: 0) + 1
+        // 事前計算済み ChordGroup から [currentTimeMs, currentTimeMs + noteLeadTimeMs] 範囲を二分探索で抽出
+        // 既存仕様に従い timeMs 降順（遠い未来 -> 直近）で格納
+        val chordStart = lowerBoundChord(precomputedChordGroups, currentTimeMs)
+        val chordEnd = upperBoundChord(precomputedChordGroups, currentTimeMs + noteLeadTimeMs)
+        val chordCount = (chordEnd - chordStart).coerceAtLeast(0)
+        val chordGroups = ArrayList<ChordGroup>(chordCount)
+        for (idx in chordEnd - 1 downTo chordStart) {
+            chordGroups.add(precomputedChordGroups[idx])
         }
 
-        // 各キーにおける直近未来ノートの timeMs と tempCircles 内の最初のインデックスを特定
-        val firstIndexByKey = HashMap<Int, Int>()
-        val firstFutureTimeByKey = HashMap<Int, Long>()
-        for (note in candidateNotes) {
-            if (note.key >= 0 && note.timeMs in currentTimeMs..(currentTimeMs + approachCircleLeadTimeMs)) {
-                if (!firstFutureTimeByKey.containsKey(note.key)) {
-                    firstFutureTimeByKey[note.key] = note.timeMs
+        // キーごとの連続サークル総数を集計 & tempCircles 内の最初の出現インデックス特定
+        val keyRepeatCounts = IntArray(numKeys)
+        val firstIndexByKey = IntArray(numKeys) { -1 }
+        for (i in 0 until tempCircles.size) {
+            val k = tempCircles[i].key
+            if (k in 0 until numKeys) {
+                keyRepeatCounts[k]++
+                if (firstIndexByKey[k] == -1) {
+                    firstIndexByKey[k] = i
                 }
             }
         }
-        for (i in 0 until tempCircles.size) {
-            val k = tempCircles[i].key
-            if (!firstIndexByKey.containsKey(k)) {
-                firstIndexByKey[k] = i
-            }
-        }
 
-        // --- 連打バッジのグルーピング時間幅 ---
-        // 連打バッジは譜面上の長期的な連打系列を予告する機能ではない。
-        // 同一キーの Approach Circle が時間的に重なって表示され、視認しづらくなる場合に、
-        // それらをまとめて示す UI 補助である。
-        // そのため、連打バッジのグルーピング時間幅は Approach Circle の表示期間（approachCircleLeadTimeMs）に従う。
+        // --- 連打バッジのグルーピング時間幅と直前ノート判定 ---
+        // 連打バッジは同一キーの Approach Circle が重なる場合の UI 補助であり、approachCircleLeadTimeMs に従う。
+        // 事前計算済み precomputedKeyTimes から二分探索で過去ノート関係を O(1)〜O(log N) で解決
         val repeatBadgeGroupingWindowMs = approachCircleLeadTimeMs
-
-        // 過去 repeatBadgeGroupingWindowMs 範囲のイベントから各キーの最後のノート時刻を取得（現在時刻ちょうどを含めない）
-        val lastPastTimeByKey = HashMap<Int, Long>()
-        val pastRangeEnd = currentTimeMs - 1L
-        val pastRangeStart = (currentTimeMs - repeatBadgeGroupingWindowMs).coerceAtLeast(0L)
-        if (pastRangeEnd >= pastRangeStart) {
-            val pastEvents = findEventsInRange(events, pastRangeStart, pastRangeEnd)
-            for (pNote in pastEvents) {
-                if (pNote.key >= 0) {
-                    lastPastTimeByKey[pNote.key] = pNote.timeMs
+        val hasValidRepeatPrevNote = BooleanArray(numKeys)
+        for (k in 0 until numKeys) {
+            val times = precomputedKeyTimes[k]
+            if (times.isEmpty()) continue
+            val sIdx = lowerBoundLong(times, currentTimeMs)
+            if (sIdx in times.indices && times[sIdx] <= currentTimeMs + approachCircleLeadTimeMs) {
+                if (sIdx > 0) {
+                    val prevTime = times[sIdx - 1]
+                    val futureTime = times[sIdx]
+                    if (prevTime >= currentTimeMs - repeatBadgeGroupingWindowMs &&
+                        futureTime - prevTime <= repeatBadgeGroupingWindowMs
+                    ) {
+                        hasValidRepeatPrevNote[k] = true
+                    }
                 }
             }
         }
@@ -242,25 +308,20 @@ class NoteScheduler {
         val approachCircles = ArrayList<ApproachCircle>(tempCircles.size)
         for (i in tempCircles.lastIndex downTo 0) {
             val circle = tempCircles[i]
-            val isClosestNoteForKey = firstIndexByKey[circle.key] == i
+            val k = circle.key
+            val isClosestNoteForKey = (k in 0 until numKeys && firstIndexByKey[k] == i)
 
             val remainingCount: Int
             val showRepeatBadge: Boolean
 
             if (isClosestNoteForKey) {
-                val count = keyRepeatCounts[circle.key] ?: 1
+                val count = keyRepeatCounts[k]
                 if (count >= 2) {
                     remainingCount = count
                     showRepeatBadge = true
                 } else {
                     remainingCount = 1
-                    // 「×1」は遠い未来に連打が終了することを予告するための表示ではなく、
-                    // Approach Circle が重なって見える連打グループの中で、
-                    // 現在表示されている系列の最後の1回であることを視覚的に示すためのもの。
-                    val prevTime = lastPastTimeByKey[circle.key]
-                    val futureTime = firstFutureTimeByKey[circle.key]
-                    showRepeatBadge = prevTime != null && futureTime != null &&
-                            (futureTime - prevTime <= repeatBadgeGroupingWindowMs)
+                    showRepeatBadge = hasValidRepeatPrevNote[k]
                 }
             } else {
                 remainingCount = 1
@@ -291,6 +352,47 @@ class NoteScheduler {
         )
     }
 
+    private fun lowerBoundChord(chords: List<ChordGroup>, targetTimeMs: Long): Int {
+        var low = 0
+        var high = chords.size
+        while (low < high) {
+            val mid = (low + high) ushr 1
+            if (chords[mid].timeMs >= targetTimeMs) {
+                high = mid
+            } else {
+                low = mid + 1
+            }
+        }
+        return low
+    }
+
+    private fun upperBoundChord(chords: List<ChordGroup>, targetTimeMs: Long): Int {
+        var low = 0
+        var high = chords.size
+        while (low < high) {
+            val mid = (low + high) ushr 1
+            if (chords[mid].timeMs > targetTimeMs) {
+                high = mid
+            } else {
+                low = mid + 1
+            }
+        }
+        return low
+    }
+
+    private fun lowerBoundLong(array: LongArray, target: Long): Int {
+        var low = 0
+        var high = array.size
+        while (low < high) {
+            val mid = (low + high) ushr 1
+            if (array[mid] >= target) {
+                high = mid
+            } else {
+                low = mid + 1
+            }
+        }
+        return low
+    }
 
     /**
      * 二分探索を用いて [startTimeMs, endTimeMs] の範囲に含まれるイベントのリストを抽出する。

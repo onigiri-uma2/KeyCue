@@ -177,6 +177,7 @@ class OverlayService : Service() {
         if (song == null || song === loadedSong) return
         playbackEngine.stop()
         playbackEngine.setSong(song)
+        noteScheduler.prepare(song.events)
         loadedSong = song
     }
 
@@ -196,7 +197,7 @@ class OverlayService : Service() {
 
     private fun handleStop() {
         playbackEngine.stop()
-        renderCurrentFrame()
+        renderCurrentFrame(forceControlUpdate = true)
     }
 
     private fun handleRestart() {
@@ -205,12 +206,12 @@ class OverlayService : Service() {
 
     private fun handleSeekBack() {
         playbackEngine.seekBack(10_000L)
-        renderCurrentFrame()
+        renderCurrentFrame(forceControlUpdate = true)
     }
 
     private fun handleSeekForward() {
         playbackEngine.seekForward(10_000L)
-        renderCurrentFrame()
+        renderCurrentFrame(forceControlUpdate = true)
     }
 
     private fun observePlaybackState() {
@@ -338,7 +339,13 @@ class OverlayService : Service() {
         android.view.Choreographer.getInstance().removeFrameCallback(frameCallback)
     }
 
-    private fun renderCurrentFrame() {
+    private var lastControlUpdateTimestamp = 0L
+    private var lastControlPlayingState: Boolean? = null
+    private var lastControlSongTitle: String? = null
+    private var lastControlSpeed: Float = -1f
+    private var lastControlLeadTimeMs: Long = -1L
+
+    private fun renderCurrentFrame(forceControlUpdate: Boolean = false) {
         val session = sessionRepository.currentSession.value
         val song = session?.song ?: playbackEngine.songData
         val config = settingsRepository.playbackConfig.value
@@ -379,14 +386,34 @@ class OverlayService : Service() {
         }
 
         windowController?.renderGuideFrame(frame)
-        windowController?.updateControlStatus(
-            isPlaying = state is PlaybackState.Playing,
-            positionMs = if (currentPos < 0L) 0L else currentPos,
-            durationMs = song?.durationMs ?: 0L,
-            speed = config.speed,
-            songTitle = song?.title,
-            noteLeadTimeMs = config.noteLeadTimeMs
-        )
+
+        // Control Overlay の更新頻度分離:
+        // 再生状態の変更（isPlaying）や曲の変更・停止・速度・先読み設定変更等の主要イベントは即時反映。
+        // 連続的な positionMs 更新のみ 100ms (10Hz) 間隔で間引く。
+        val isPlaying = state is PlaybackState.Playing
+        val now = android.os.SystemClock.uptimeMillis()
+        val isMajorStateChanged = (lastControlPlayingState != isPlaying) ||
+                (lastControlSongTitle != song?.title) ||
+                (lastControlSpeed != config.speed) ||
+                (lastControlLeadTimeMs != config.noteLeadTimeMs)
+        val isTimeIntervalElapsed = (now - lastControlUpdateTimestamp >= 100L)
+
+        if (forceControlUpdate || isMajorStateChanged || isTimeIntervalElapsed) {
+            lastControlPlayingState = isPlaying
+            lastControlSongTitle = song?.title
+            lastControlSpeed = config.speed
+            lastControlLeadTimeMs = config.noteLeadTimeMs
+            lastControlUpdateTimestamp = now
+
+            windowController?.updateControlStatus(
+                isPlaying = isPlaying,
+                positionMs = if (currentPos < 0L) 0L else currentPos,
+                durationMs = song?.durationMs ?: 0L,
+                speed = config.speed,
+                songTitle = song?.title,
+                noteLeadTimeMs = config.noteLeadTimeMs
+            )
+        }
     }
 
     private fun startAsForeground() {
