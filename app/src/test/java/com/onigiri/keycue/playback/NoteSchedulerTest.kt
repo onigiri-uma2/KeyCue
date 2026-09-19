@@ -777,4 +777,157 @@ class NoteSchedulerTest {
         assertEquals(1, frame.approachCircles.size)
         assertEquals(5, frame.approachCircles[0].key)
     }
+
+    // --- 和音判定許容幅 (CHORD_TIME_TOLERANCE_MS = 30ms) テスト ---
+
+    @Test
+    fun chordTolerance_skyrimTheme15MsDifference_detectedAsChord() {
+        // Skyrim テーマ等の実データ: 1853ms (key=5) と 1868ms (key=7) の 15ms ズレ
+        val events = listOf(
+            NoteEvent(timeMs = 1853L, key = 5),
+            NoteEvent(timeMs = 1868L, key = 7)
+        )
+        scheduler.prepare(events)
+        val frame = scheduler.scheduleFrame(events, currentTimeMs = 1500L, noteLeadTimeMs = 500L)
+
+        assertEquals(1, frame.chordGroups.size)
+        assertEquals(1853L, frame.chordGroups[0].timeMs)
+        assertEquals(listOf(5, 7), frame.chordGroups[0].keys)
+    }
+
+    @Test
+    fun chordTolerance_23MsDifference_detectedAsChord() {
+        // 23ms のズレも 30ms 許容範囲内として同一 Chord にまとめられること
+        val events = listOf(
+            NoteEvent(timeMs = 1000L, key = 9),
+            NoteEvent(timeMs = 1023L, key = 11)
+        )
+        scheduler.prepare(events)
+        val frame = scheduler.scheduleFrame(events, currentTimeMs = 800L, noteLeadTimeMs = 500L)
+
+        assertEquals(1, frame.chordGroups.size)
+        assertEquals(1000L, frame.chordGroups[0].timeMs)
+        assertEquals(listOf(9, 11), frame.chordGroups[0].keys)
+    }
+
+    @Test
+    fun chordTolerance_boundary30Ms_detectedAsChord() {
+        // 30ms ちょうど（境界値 inclusive）は同一 Chord として検出されること
+        val events = listOf(
+            NoteEvent(timeMs = 1000L, key = 1),
+            NoteEvent(timeMs = 1030L, key = 2)
+        )
+        scheduler.prepare(events)
+        val frame = scheduler.scheduleFrame(events, currentTimeMs = 800L, noteLeadTimeMs = 500L)
+
+        assertEquals(1, frame.chordGroups.size)
+        assertEquals(1000L, frame.chordGroups[0].timeMs)
+        assertEquals(listOf(1, 2), frame.chordGroups[0].keys)
+    }
+
+    @Test
+    fun chordTolerance_boundary31Ms_notDetectedAsChord() {
+        // 31ms 差（境界値超過）は ChordGroup として検出されないこと
+        val events = listOf(
+            NoteEvent(timeMs = 1000L, key = 1),
+            NoteEvent(timeMs = 1031L, key = 2)
+        )
+        scheduler.prepare(events)
+        val frame = scheduler.scheduleFrame(events, currentTimeMs = 800L, noteLeadTimeMs = 500L)
+
+        assertTrue("31ms差はChordGroupを生成しない", frame.chordGroups.isEmpty())
+    }
+
+    @Test
+    fun chordTolerance_chainingPrevention_onlyFirstPairGrouped() {
+        // 直前ノートとの差ではなく「Chordグループ先頭時刻との差」で判定されているかの検証
+        // 1000ms Key1, 1028ms Key2 (差28ms <= 30ms) -> 同一Chord
+        // 1056ms Key3 (1028からの差は28msだが、先頭1000からの差は56ms > 30ms) -> Chordに含まれない
+        val events = listOf(
+            NoteEvent(timeMs = 1000L, key = 1),
+            NoteEvent(timeMs = 1028L, key = 2),
+            NoteEvent(timeMs = 1056L, key = 3)
+        )
+        scheduler.prepare(events)
+        val frame = scheduler.scheduleFrame(events, currentTimeMs = 800L, noteLeadTimeMs = 500L)
+
+        assertEquals(1, frame.chordGroups.size)
+        assertEquals(1000L, frame.chordGroups[0].timeMs)
+        assertEquals(listOf(1, 2), frame.chordGroups[0].keys)
+    }
+
+    @Test
+    fun chordTolerance_threeNoteChordWithinTolerance_allIncluded() {
+        // 30ms以内の3音和音がすべて単一ChordGroupにまとめられること
+        val events = listOf(
+            NoteEvent(timeMs = 1000L, key = 1),
+            NoteEvent(timeMs = 1012L, key = 4),
+            NoteEvent(timeMs = 1027L, key = 7)
+        )
+        scheduler.prepare(events)
+        val frame = scheduler.scheduleFrame(events, currentTimeMs = 800L, noteLeadTimeMs = 500L)
+
+        assertEquals(1, frame.chordGroups.size)
+        assertEquals(1000L, frame.chordGroups[0].timeMs)
+        assertEquals(listOf(1, 4, 7), frame.chordGroups[0].keys)
+    }
+
+    @Test
+    fun chordTolerance_sameKeyRapidPressWithinTolerance_doesNotCreateChordGroup() {
+        // 同一キーの連打 (1000ms Key5, 1020ms Key5) はユニークキー数が1個のためChordGroupを生成しないこと
+        val events = listOf(
+            NoteEvent(timeMs = 1000L, key = 5),
+            NoteEvent(timeMs = 1020L, key = 5)
+        )
+        scheduler.prepare(events)
+        val frame = scheduler.scheduleFrame(events, currentTimeMs = 800L, noteLeadTimeMs = 500L)
+
+        assertTrue(frame.chordGroups.isEmpty())
+    }
+
+    @Test
+    fun chordTolerance_duplicateKeyMixedWithOtherKey_uniqueSortedKeys() {
+        // 同一キー重複と別キーが混在する場合、ユニークキーがソートされて抽出されること
+        val events = listOf(
+            NoteEvent(timeMs = 1000L, key = 1),
+            NoteEvent(timeMs = 1010L, key = 1),
+            NoteEvent(timeMs = 1020L, key = 3)
+        )
+        scheduler.prepare(events)
+        val frame = scheduler.scheduleFrame(events, currentTimeMs = 800L, noteLeadTimeMs = 500L)
+
+        assertEquals(1, frame.chordGroups.size)
+        assertEquals(1000L, frame.chordGroups[0].timeMs)
+        assertEquals(listOf(1, 3), frame.chordGroups[0].keys)
+    }
+
+    @Test
+    fun chordTolerance_exactSameTimeNotes_operatesNormally() {
+        // 従来の完全同時刻の和音も正しく抽出されること
+        val events = listOf(
+            NoteEvent(timeMs = 1000L, key = 1),
+            NoteEvent(timeMs = 1000L, key = 3),
+            NoteEvent(timeMs = 1000L, key = 5)
+        )
+        scheduler.prepare(events)
+        val frame = scheduler.scheduleFrame(events, currentTimeMs = 800L, noteLeadTimeMs = 500L)
+
+        assertEquals(1, frame.chordGroups.size)
+        assertEquals(1000L, frame.chordGroups[0].timeMs)
+        assertEquals(listOf(1, 3, 5), frame.chordGroups[0].keys)
+    }
+
+    @Test
+    fun chordTolerance_regularMelodySequence_noChordGroupCreated() {
+        // 通常の連続メロディ (30msを超える間隔) はChordGroupを生成しないこと
+        val events = listOf(
+            NoteEvent(timeMs = 1000L, key = 1),
+            NoteEvent(timeMs = 1050L, key = 2),
+            NoteEvent(timeMs = 1100L, key = 3)
+        )
+        scheduler.prepare(events)
+        val frame = scheduler.scheduleFrame(events, currentTimeMs = 800L, noteLeadTimeMs = 500L)
+
+        assertTrue(frame.chordGroups.isEmpty())
+    }
 }

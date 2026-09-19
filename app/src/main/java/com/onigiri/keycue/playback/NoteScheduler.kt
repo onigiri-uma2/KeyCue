@@ -11,6 +11,17 @@ import com.onigiri.keycue.model.PlaybackConfig
  */
 class NoteScheduler {
 
+    companion object {
+        /**
+         * Human-played chord notes may have small onset differences.
+         * Notes starting within this window from the first note of a chord
+         * are treated as simultaneous for chord visualization.
+         *
+         * 前ノートとの差ではなく、Chord先頭時刻との差で判定する。
+         */
+        private const val CHORD_TIME_TOLERANCE_MS = 30L
+    }
+
     private var cachedEventsRef: List<NoteEvent>? = null
     private var precomputedChordGroups: List<ChordGroup> = emptyList()
     private var precomputedKeyTimes: Array<LongArray> = Array(GuideFrame.KEY_COUNT) { LongArray(0) }
@@ -39,43 +50,51 @@ class NoteScheduler {
         val numKeys = maxOf(GuideFrame.KEY_COUNT, maxEventKey + 1)
 
         // 1. 和音グループ (ChordGroup) の事前計算
-        // 同一 timeMs のユニークキーを集約し、2キー以上のものを ChordGroup として昇順保持
+        // グループ先頭の時刻から CHORD_TIME_TOLERANCE_MS (30ms) 以内のノートを集約し、
+        // 異なるキーが2つ以上ある場合のみ ChordGroup として昇順保持する。
+        // （直前ノートとの差ではなく、グループ先頭時刻との差で判定して連鎖を防ぐ）
         val chordGroupsList = ArrayList<ChordGroup>()
-        val keyTimesList = Array(numKeys) { ArrayList<Long>() }
 
         var i = 0
         val n = events.size
         while (i < n) {
-            val t = events[i].timeMs
-            var j = i
-            // 同一 timeMs の範囲を特定
-            while (j < n && events[j].timeMs == t) {
+            val chordStartTime = events[i].timeMs
+            var j = i + 1
+            // 直前ノートとの差ではなく、グループ先頭時刻との差で判定する
+            while (j < n && events[j].timeMs - chordStartTime <= CHORD_TIME_TOLERANCE_MS) {
                 j++
             }
 
-            // 同一 timeMs のユニークキーを抽出
+            // 同一Chord候補内のユニークキーを抽出
             val uniqueKeys = ArrayList<Int>()
             for (k in i until j) {
                 val key = events[k].key
-                if (key >= 0) {
-                    if (!uniqueKeys.contains(key)) {
-                        uniqueKeys.add(key)
-                    }
-                    if (key < numKeys) {
-                        val times = keyTimesList[key]
-                        if (times.isEmpty() || times[times.lastIndex] != t) {
-                            times.add(t)
-                        }
-                    }
+                if (key >= 0 && !uniqueKeys.contains(key)) {
+                    uniqueKeys.add(key)
                 }
             }
 
+            // 異なるキーが2つ以上ある場合のみChordGroupを生成（同一キー連打は除外）
             if (uniqueKeys.size >= 2) {
                 uniqueKeys.sort()
-                chordGroupsList.add(ChordGroup(timeMs = t, keys = uniqueKeys.toList()))
+                chordGroupsList.add(ChordGroup(timeMs = chordStartTime, keys = uniqueKeys.toList()))
             }
 
             i = j
+        }
+
+        // 2. キーごとの打鍵時刻一覧 (連打バッジ判定用)
+        // 既存仕様 (repeatBadgeGroupingWindowMs = approachCircleLeadTimeMs) に従い、
+        // Chord判定の許容幅には流用せず、各イベント本来の timeMs をキーごとに保持する。
+        val keyTimesList = Array(numKeys) { ArrayList<Long>() }
+        for (event in events) {
+            val key = event.key
+            if (key in 0 until numKeys) {
+                val times = keyTimesList[key]
+                if (times.isEmpty() || times[times.lastIndex] != event.timeMs) {
+                    times.add(event.timeMs)
+                }
+            }
         }
 
         precomputedChordGroups = chordGroupsList
