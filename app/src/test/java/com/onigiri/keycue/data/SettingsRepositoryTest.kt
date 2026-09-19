@@ -41,6 +41,9 @@ class SettingsRepositoryTest {
         assertEquals(200L, repo.playbackConfig.value.approachCircleLeadTimeMs)
         assertEquals(false, repo.visualConfig.value.showChordLinks)
         assertEquals(true, repo.visualConfig.value.showChordHalos)
+        assertEquals(2.0f, repo.visualConfig.value.chordStrokeWidthDp, 0.001f)
+        assertEquals(60, repo.visualConfig.value.chordStrokeAlphaPercent)
+        assertEquals(10, repo.visualConfig.value.chordHaloFillAlphaPercent)
     }
 
     @Test
@@ -186,6 +189,9 @@ class SettingsRepositoryTest {
         assertEquals(0xFFE91E63.toInt(), defaultConfig.noteColorBottom)
         assertEquals(false, defaultConfig.showChordLinks)
         assertEquals(true, defaultConfig.showChordHalos)
+        assertEquals(2.0f, defaultConfig.chordStrokeWidthDp, 0.001f)
+        assertEquals(60, defaultConfig.chordStrokeAlphaPercent)
+        assertEquals(10, defaultConfig.chordHaloFillAlphaPercent)
 
         // 2. 各フィールドの更新
         repo.saveShowGuideLabels(true)
@@ -205,6 +211,15 @@ class SettingsRepositoryTest {
 
         repo.saveShowChordHalos(false)
         assertEquals(false, repo.visualConfig.value.showChordHalos)
+
+        repo.saveChordStrokeWidthDp(3.5f)
+        assertEquals(3.5f, repo.visualConfig.value.chordStrokeWidthDp, 0.001f)
+
+        repo.saveChordStrokeAlphaPercent(85)
+        assertEquals(85, repo.visualConfig.value.chordStrokeAlphaPercent)
+
+        repo.saveChordHaloFillAlphaPercent(35)
+        assertEquals(35, repo.visualConfig.value.chordHaloFillAlphaPercent)
 
         repo.saveGuideColor(0xFF00E5FF.toInt())
         assertEquals(0xFF00E5FF.toInt(), repo.visualConfig.value.guideColor)
@@ -228,10 +243,40 @@ class SettingsRepositoryTest {
         repo.saveGuideRadiusRatio(0.05f)
         assertEquals(0.05f, repo.visualConfig.value.guideRadiusRatio, 0.001f)
 
-        // 4. VisualConfig.safe() によるプロパティ保持テスト
-        val safeCfg = com.onigiri.keycue.model.VisualConfig.safe(showChordLinks = false, showChordHalos = true)
+        // 4. chordStrokeWidthDp の clamp テスト (0.5f .. 6.0f)
+        repo.saveChordStrokeWidthDp(0.1f)
+        assertEquals(0.5f, repo.visualConfig.value.chordStrokeWidthDp, 0.001f)
+
+        repo.saveChordStrokeWidthDp(10.0f)
+        assertEquals(6.0f, repo.visualConfig.value.chordStrokeWidthDp, 0.001f)
+
+        // 5. chordStrokeAlphaPercent の clamp テスト (20 .. 100)
+        repo.saveChordStrokeAlphaPercent(10)
+        assertEquals(20, repo.visualConfig.value.chordStrokeAlphaPercent)
+
+        repo.saveChordStrokeAlphaPercent(150)
+        assertEquals(100, repo.visualConfig.value.chordStrokeAlphaPercent)
+
+        // 6. chordHaloFillAlphaPercent の clamp テスト (10 .. 50)
+        repo.saveChordHaloFillAlphaPercent(5)
+        assertEquals(10, repo.visualConfig.value.chordHaloFillAlphaPercent)
+
+        repo.saveChordHaloFillAlphaPercent(80)
+        assertEquals(50, repo.visualConfig.value.chordHaloFillAlphaPercent)
+
+        // 7. VisualConfig.safe() によるプロパティ保持テスト
+        val safeCfg = com.onigiri.keycue.model.VisualConfig.safe(
+            showChordLinks = false,
+            showChordHalos = true,
+            chordStrokeWidthDp = 4.0f,
+            chordStrokeAlphaPercent = 75,
+            chordHaloFillAlphaPercent = 25
+        )
         assertEquals(false, safeCfg.showChordLinks)
         assertEquals(true, safeCfg.showChordHalos)
+        assertEquals(4.0f, safeCfg.chordStrokeWidthDp, 0.001f)
+        assertEquals(75, safeCfg.chordStrokeAlphaPercent)
+        assertEquals(25, safeCfg.chordHaloFillAlphaPercent)
     }
 
     @Test
@@ -321,12 +366,36 @@ class SettingsRepositoryTest {
         assertEquals(PlaybackConfig.DEFAULT_APPROACH_CIRCLE_LEAD_TIME_MS, repo.approachCircleLeadTimeMs.value)
     }
 
+    @Test
+    fun `SharedPreferences persists chordHaloFillAlphaPercent across instances`() = runBlocking {
+        val prefs = createFakePrefs(emptyMap())
+        val repo1 = SharedPreferencesSettingsRepository(prefs)
+
+        // 初期値は 10%
+        assertEquals(10, repo1.visualConfig.value.chordHaloFillAlphaPercent)
+
+        // 35% に変更して保存
+        repo1.saveChordHaloFillAlphaPercent(35)
+        assertEquals(35, repo1.visualConfig.value.chordHaloFillAlphaPercent)
+
+        // アプリ再起動を模して同一 prefs から新しいリポジトリインスタンスを生成
+        val repo2 = SharedPreferencesSettingsRepository(prefs)
+        assertEquals(35, repo2.visualConfig.value.chordHaloFillAlphaPercent)
+
+        // clamp の永続化 (上限超え 60% -> 50%)
+        repo2.saveChordHaloFillAlphaPercent(60)
+        assertEquals(50, repo2.visualConfig.value.chordHaloFillAlphaPercent)
+
+        val repo3 = SharedPreferencesSettingsRepository(prefs)
+        assertEquals(50, repo3.visualConfig.value.chordHaloFillAlphaPercent)
+    }
+
     private fun createFakePrefs(initialData: Map<String, Any>): android.content.SharedPreferences {
         val map = HashMap<String, Any>(initialData)
         return java.lang.reflect.Proxy.newProxyInstance(
             android.content.SharedPreferences::class.java.classLoader,
             arrayOf(android.content.SharedPreferences::class.java)
-        ) { _, method, args ->
+        ) { proxy, method, args ->
             when (method.name) {
                 "getLong" -> {
                     val key = args[0] as String
@@ -356,9 +425,78 @@ class SettingsRepositoryTest {
                 "contains" -> {
                     map.containsKey(args[0] as String)
                 }
+                "edit" -> {
+                    createFakeEditor(map)
+                }
                 "registerOnSharedPreferenceChangeListener", "unregisterOnSharedPreferenceChangeListener" -> null
                 else -> null
             }
         } as android.content.SharedPreferences
     }
+
+    private fun createFakeEditor(map: HashMap<String, Any>): android.content.SharedPreferences.Editor {
+        val tempMap = HashMap<String, Any>()
+        val removedKeys = HashSet<String>()
+        var shouldClear = false
+
+        return java.lang.reflect.Proxy.newProxyInstance(
+            android.content.SharedPreferences.Editor::class.java.classLoader,
+            arrayOf(android.content.SharedPreferences.Editor::class.java)
+        ) { editorProxy, method, args ->
+            when (method.name) {
+                "putBoolean" -> {
+                    tempMap[args[0] as String] = args[1] as Boolean
+                    removedKeys.remove(args[0] as String)
+                    editorProxy
+                }
+                "putInt" -> {
+                    tempMap[args[0] as String] = args[1] as Int
+                    removedKeys.remove(args[0] as String)
+                    editorProxy
+                }
+                "putFloat" -> {
+                    tempMap[args[0] as String] = args[1] as Float
+                    removedKeys.remove(args[0] as String)
+                    editorProxy
+                }
+                "putLong" -> {
+                    tempMap[args[0] as String] = args[1] as Long
+                    removedKeys.remove(args[0] as String)
+                    editorProxy
+                }
+                "putString" -> {
+                    if (args[1] != null) {
+                        tempMap[args[0] as String] = args[1] as String
+                        removedKeys.remove(args[0] as String)
+                    } else {
+                        removedKeys.add(args[0] as String)
+                        tempMap.remove(args[0] as String)
+                    }
+                    editorProxy
+                }
+                "remove" -> {
+                    removedKeys.add(args[0] as String)
+                    tempMap.remove(args[0] as String)
+                    editorProxy
+                }
+                "clear" -> {
+                    shouldClear = true
+                    tempMap.clear()
+                    editorProxy
+                }
+                "apply", "commit" -> {
+                    if (shouldClear) {
+                        map.clear()
+                    }
+                    for (k in removedKeys) {
+                        map.remove(k)
+                    }
+                    map.putAll(tempMap)
+                    if (method.name == "commit") true else null
+                }
+                else -> editorProxy
+            }
+        } as android.content.SharedPreferences.Editor
+    }
 }
+

@@ -186,4 +186,38 @@ class ChordVisualRendererTest {
         )
         assertFalse("Falling Notes OFF: Approach Circle 未出現の250ms前はChordも非表示", visibleOff250)
     }
+
+    @Test
+    fun strokeWidthDpToPx_calculatesCorrectPxForVariousDensities() {
+        // 2.0 dp
+        assertEquals(2.0f, ChordVisualRenderer.strokeWidthDpToPx(2.0f, 1.0f), 0.001f)
+        assertEquals(4.0f, ChordVisualRenderer.strokeWidthDpToPx(2.0f, 2.0f), 0.001f)
+        assertEquals(6.0f, ChordVisualRenderer.strokeWidthDpToPx(2.0f, 3.0f), 0.001f)
+        assertEquals(8.0f, ChordVisualRenderer.strokeWidthDpToPx(2.0f, 4.0f), 0.001f)
+
+        // 0.5 dp
+        assertEquals(1.5f, ChordVisualRenderer.strokeWidthDpToPx(0.5f, 3.0f), 0.001f)
+
+        // 6.0 dp
+        assertEquals(18.0f, ChordVisualRenderer.strokeWidthDpToPx(6.0f, 3.0f), 0.001f)
+    }
+
+    @Test
+    fun alphaPercentToAlpha_convertsPercentTo0To255Correctly() {
+        // 10% (Halo Fill デフォルト) -> round(10 * 255 / 100) = round(25.5) = 26 (従来の HALO_FILL_ALPHA=26 と同等)
+        assertEquals(26, ChordVisualRenderer.alphaPercentToAlpha(10))
+
+        // 20% -> round(20 * 255 / 100) = round(51.0) = 51
+        assertEquals(51, ChordVisualRenderer.alphaPercentToAlpha(20))
+
+        // 50% (Halo Fill 上限) -> round(50 * 255 / 100) = round(127.5) = 128
+        assertEquals(128, ChordVisualRenderer.alphaPercentToAlpha(50))
+
+        // 60% (Stroke デフォルト) -> round(60 * 255 / 100) = round(153.0) = 153
+        assertEquals(153, ChordVisualRenderer.alphaPercentToAlpha(60))
+
+        // 100% -> round(100 * 255 / 100) = 255
+        assertEquals(255, ChordVisualRenderer.alphaPercentToAlpha(100))
+    }
 }
+

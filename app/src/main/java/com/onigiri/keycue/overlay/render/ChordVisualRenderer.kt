@@ -8,6 +8,7 @@ import android.graphics.Path
 import android.graphics.PointF
 import com.onigiri.keycue.playback.FallingNoteCalculator
 import com.onigiri.keycue.playback.GuideFrame
+import kotlin.math.roundToInt
 
 /**
  * 和音・同時押しキーの視覚的グルーピング（Chord Link および Chord Halo）の描画を担当するレンダラー。
@@ -27,20 +28,27 @@ class ChordVisualRenderer(context: Context) {
     private val linkPaint = Paint().apply {
         style = Paint.Style.STROKE
         isAntiAlias = true
-        strokeWidth = 2.0f * density
         strokeCap = Paint.Cap.ROUND
     }
 
     private val haloPaint = Paint().apply {
         style = Paint.Style.STROKE
         isAntiAlias = true
-        strokeWidth = 1.5f * density
         strokeCap = Paint.Cap.ROUND
         strokeJoin = Paint.Join.ROUND
     }
 
     private val haloFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
+    }
+
+    init {
+        updateStyle(
+            strokeWidthDp = com.onigiri.keycue.model.VisualConfig.DEFAULT_CHORD_STROKE_WIDTH_DP,
+            strokeAlphaPercent = com.onigiri.keycue.model.VisualConfig.DEFAULT_CHORD_STROKE_ALPHA_PERCENT,
+            haloFillAlphaPercent = com.onigiri.keycue.model.VisualConfig.DEFAULT_CHORD_HALO_FILL_ALPHA_PERCENT,
+            guideColor = com.onigiri.keycue.model.VisualConfig.DEFAULT_GUIDE_COLOR
+        )
     }
 
     // 和音幾何キャッシュ (OFF用 と ON用 を完全分離)
@@ -58,6 +66,7 @@ class ChordVisualRenderer(context: Context) {
     /**
      * 幾何キャッシュを一括破棄する。
      * キー座標や半径、レイアウトが変更された際に呼び出します。
+     * （線幅や濃さのスタイル変更時には呼び出さないこと）
      */
     fun clearCache() {
         staticGeometryCache.clear()
@@ -66,15 +75,44 @@ class ChordVisualRenderer(context: Context) {
         cacheMissCount = 0L
     }
 
-    companion object {
-        // Chord Link のアルファ値（控えめかつ視認性のある半透明ライン）
-        private const val LINK_ALPHA = 150
-        // Chord Halo のアルファ値（Chord Link より目立たない薄い外周線）
-        private const val HALO_ALPHA = 90
-        // Chord Halo 内部 Fill のアルファ値（薄い面 + 外周線として表現するための最終 alpha ≒ 10%）
-        // 初期値: 26 (26/255 ≒ 10%)。実機確認により 20〜38 程度で微調整可能。
-        private const val HALO_FILL_ALPHA = 26
+    /**
+     * 和音リンク・ハローの描画スタイル（線幅、アルファ、基本色）を更新する。
+     * 設定変更時や初期化時のみ呼び出し、Paintへ事前反映することで
+     * onDraw Hot Path 内での計算・代入オーバーヘッドを排除します。
+     */
+    fun updateStyle(
+        strokeWidthDp: Float,
+        strokeAlphaPercent: Int,
+        haloFillAlphaPercent: Int,
+        guideColor: Int
+    ) {
+        val widthPx = strokeWidthDpToPx(strokeWidthDp, density)
+        val strokeAlpha = alphaPercentToAlpha(strokeAlphaPercent)
+        val fillAlpha = alphaPercentToAlpha(haloFillAlphaPercent)
 
+        linkPaint.strokeWidth = widthPx
+        haloPaint.strokeWidth = widthPx
+
+        val gr = Color.red(guideColor)
+        val gg = Color.green(guideColor)
+        val gb = Color.blue(guideColor)
+
+        linkPaint.color = Color.argb(strokeAlpha, gr, gg, gb)
+        haloPaint.color = Color.argb(strokeAlpha, gr, gg, gb)
+        haloFillPaint.color = Color.argb(fillAlpha, gr, gg, gb)
+    }
+
+    companion object {
+        /**
+         * dp単位の線幅をdensityに基づいてpxへ変換する純粋関数。
+         */
+        fun strokeWidthDpToPx(strokeWidthDp: Float, density: Float): Float = strokeWidthDp * density
+
+        /**
+         * パーセント表記(10..100)の濃さを0..255のアルファ値へ変換する純粋関数。
+         */
+        fun alphaPercentToAlpha(alphaPercent: Int): Int =
+            (alphaPercent * 255f / 100f).roundToInt().coerceIn(0, 255)
 
         /**
          * Falling Notes OFF 時において、和音（Chord Link / Chord Halo）が未来側表示開始範囲にあるかを判定する。
@@ -179,13 +217,13 @@ class ChordVisualRenderer(context: Context) {
      *
      * 描画レイヤー順序に従い、ノートや Approach Circle の背面に描画します。
      * 遠い未来の ChordGroup から先に描画し、直近が前面に来るよう timeMs 降順で描画します。
+     * Paintの色・線幅・alphaは [updateStyle] で事前設定済みのため、Hot Path内での色計算は行いません。
      */
     fun drawChords(
         canvas: Canvas,
         frame: GuideFrame,
         keyPixelCenters: List<PointF>,
         keyRadiusPx: Float,
-        guideColor: Int,
         showChordLinks: Boolean,
         showChordHalos: Boolean,
         showFallingNotes: Boolean,
@@ -193,19 +231,6 @@ class ChordVisualRenderer(context: Context) {
     ) {
         if (!showChordLinks && !showChordHalos) return
         if (frame.chordGroups.isEmpty()) return
-
-        // ガイド色から RGB を抽出し、Chord 専用の alpha を適用
-        val gr = Color.red(guideColor)
-        val gg = Color.green(guideColor)
-        val gb = Color.blue(guideColor)
-
-        if (showChordLinks) {
-            linkPaint.color = Color.argb(LINK_ALPHA, gr, gg, gb)
-        }
-        if (showChordHalos) {
-            haloPaint.color = Color.argb(HALO_ALPHA, gr, gg, gb)
-            haloFillPaint.color = Color.argb(HALO_FILL_ALPHA, gr, gg, gb)
-        }
 
         val fallDistancePx = viewHeight * FallingNoteCalculator.DEFAULT_FALL_DISTANCE_RATIO
         val haloMarginPx = 4.0f * density

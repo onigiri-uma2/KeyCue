@@ -28,11 +28,23 @@ data class VisualConfig(
     val noteColorMiddle: Int = DEFAULT_NOTE_COLOR_MIDDLE,
     val noteColorBottom: Int = DEFAULT_NOTE_COLOR_BOTTOM,
     val showChordLinks: Boolean = DEFAULT_SHOW_CHORD_LINKS,
-    val showChordHalos: Boolean = DEFAULT_SHOW_CHORD_HALOS
+    val showChordHalos: Boolean = DEFAULT_SHOW_CHORD_HALOS,
+    val chordStrokeWidthDp: Float = DEFAULT_CHORD_STROKE_WIDTH_DP,
+    val chordStrokeAlphaPercent: Int = DEFAULT_CHORD_STROKE_ALPHA_PERCENT,
+    val chordHaloFillAlphaPercent: Int = DEFAULT_CHORD_HALO_FILL_ALPHA_PERCENT
 ) {
     init {
         require(guideRadiusRatio in MIN_GUIDE_RADIUS_RATIO..MAX_GUIDE_RADIUS_RATIO) {
             "guideRadiusRatio must be between $MIN_GUIDE_RADIUS_RATIO and $MAX_GUIDE_RADIUS_RATIO, but was $guideRadiusRatio"
+        }
+        require(chordStrokeWidthDp in MIN_CHORD_STROKE_WIDTH_DP..MAX_CHORD_STROKE_WIDTH_DP) {
+            "chordStrokeWidthDp must be between $MIN_CHORD_STROKE_WIDTH_DP and $MAX_CHORD_STROKE_WIDTH_DP, but was $chordStrokeWidthDp"
+        }
+        require(chordStrokeAlphaPercent in MIN_CHORD_STROKE_ALPHA_PERCENT..MAX_CHORD_STROKE_ALPHA_PERCENT) {
+            "chordStrokeAlphaPercent must be between $MIN_CHORD_STROKE_ALPHA_PERCENT and $MAX_CHORD_STROKE_ALPHA_PERCENT, but was $chordStrokeAlphaPercent"
+        }
+        require(chordHaloFillAlphaPercent in MIN_CHORD_HALO_FILL_ALPHA_PERCENT..MAX_CHORD_HALO_FILL_ALPHA_PERCENT) {
+            "chordHaloFillAlphaPercent must be between $MIN_CHORD_HALO_FILL_ALPHA_PERCENT and $MAX_CHORD_HALO_FILL_ALPHA_PERCENT, but was $chordHaloFillAlphaPercent"
         }
     }
 
@@ -47,6 +59,18 @@ data class VisualConfig(
         const val DEFAULT_SHOW_JUST_EFFECT = false
         const val DEFAULT_SHOW_CHORD_LINKS = false
         const val DEFAULT_SHOW_CHORD_HALOS = true
+
+        const val MIN_CHORD_STROKE_WIDTH_DP = 0.5f
+        const val MAX_CHORD_STROKE_WIDTH_DP = 6.0f
+        const val DEFAULT_CHORD_STROKE_WIDTH_DP = 2.0f
+
+        const val MIN_CHORD_STROKE_ALPHA_PERCENT = 20
+        const val MAX_CHORD_STROKE_ALPHA_PERCENT = 100
+        const val DEFAULT_CHORD_STROKE_ALPHA_PERCENT = 60
+
+        const val MIN_CHORD_HALO_FILL_ALPHA_PERCENT = 10
+        const val MAX_CHORD_HALO_FILL_ALPHA_PERCENT = 50
+        const val DEFAULT_CHORD_HALO_FILL_ALPHA_PERCENT = 10
 
         const val DEFAULT_GUIDE_RADIUS_RATIO = 0.04f
 
@@ -70,7 +94,7 @@ data class VisualConfig(
         )
 
         /**
-         * 半径比率を安全な範囲にclampして新しいインスタンスを生成する。
+         * 半径比率およびChord描画スタイル設定を安全な範囲にclampして新しいインスタンスを生成する。
          */
         fun safe(
             showGuideLabels: Boolean = DEFAULT_SHOW_GUIDE_LABELS,
@@ -84,7 +108,10 @@ data class VisualConfig(
             noteColorMiddle: Int = DEFAULT_NOTE_COLOR_MIDDLE,
             noteColorBottom: Int = DEFAULT_NOTE_COLOR_BOTTOM,
             showChordLinks: Boolean = DEFAULT_SHOW_CHORD_LINKS,
-            showChordHalos: Boolean = DEFAULT_SHOW_CHORD_HALOS
+            showChordHalos: Boolean = DEFAULT_SHOW_CHORD_HALOS,
+            chordStrokeWidthDp: Float = DEFAULT_CHORD_STROKE_WIDTH_DP,
+            chordStrokeAlphaPercent: Int = DEFAULT_CHORD_STROKE_ALPHA_PERCENT,
+            chordHaloFillAlphaPercent: Int = DEFAULT_CHORD_HALO_FILL_ALPHA_PERCENT
         ): VisualConfig {
             return VisualConfig(
                 showGuideLabels = showGuideLabels,
@@ -98,7 +125,10 @@ data class VisualConfig(
                 noteColorMiddle = noteColorMiddle,
                 noteColorBottom = noteColorBottom,
                 showChordLinks = showChordLinks,
-                showChordHalos = showChordHalos
+                showChordHalos = showChordHalos,
+                chordStrokeWidthDp = chordStrokeWidthDp.coerceIn(MIN_CHORD_STROKE_WIDTH_DP, MAX_CHORD_STROKE_WIDTH_DP),
+                chordStrokeAlphaPercent = chordStrokeAlphaPercent.coerceIn(MIN_CHORD_STROKE_ALPHA_PERCENT, MAX_CHORD_STROKE_ALPHA_PERCENT),
+                chordHaloFillAlphaPercent = chordHaloFillAlphaPercent.coerceIn(MIN_CHORD_HALO_FILL_ALPHA_PERCENT, MAX_CHORD_HALO_FILL_ALPHA_PERCENT)
             )
         }
     }

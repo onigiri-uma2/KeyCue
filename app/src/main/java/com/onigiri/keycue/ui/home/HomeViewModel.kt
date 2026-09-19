@@ -370,6 +370,30 @@ class HomeViewModel(
     fun setNoteColorBottom(color: Int) = updateVisualConfig { it.copy(noteColorBottom = color) }
     fun setShowChordLinks(show: Boolean) = updateVisualConfig { it.copy(showChordLinks = show) }
     fun setShowChordHalos(show: Boolean) = updateVisualConfig { it.copy(showChordHalos = show) }
+    fun setChordStrokeWidthDp(widthDp: Float) = updateVisualConfig {
+        it.copy(
+            chordStrokeWidthDp = widthDp.coerceIn(
+                com.onigiri.keycue.model.VisualConfig.MIN_CHORD_STROKE_WIDTH_DP,
+                com.onigiri.keycue.model.VisualConfig.MAX_CHORD_STROKE_WIDTH_DP
+            )
+        )
+    }
+    fun setChordStrokeAlphaPercent(percent: Int) = updateVisualConfig {
+        it.copy(
+            chordStrokeAlphaPercent = percent.coerceIn(
+                com.onigiri.keycue.model.VisualConfig.MIN_CHORD_STROKE_ALPHA_PERCENT,
+                com.onigiri.keycue.model.VisualConfig.MAX_CHORD_STROKE_ALPHA_PERCENT
+            )
+        )
+    }
+    fun setChordHaloFillAlphaPercent(percent: Int) = updateVisualConfig {
+        it.copy(
+            chordHaloFillAlphaPercent = percent.coerceIn(
+                com.onigiri.keycue.model.VisualConfig.MIN_CHORD_HALO_FILL_ALPHA_PERCENT,
+                com.onigiri.keycue.model.VisualConfig.MAX_CHORD_HALO_FILL_ALPHA_PERCENT
+            )
+        )
+    }
 
     companion object {
         fun provideFactory(context: Context): ViewModelProvider.Factory =

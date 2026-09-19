@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import com.onigiri.keycue.model.VisualConfig
 import com.onigiri.keycue.ui.home.CheckMarkIcon
 import java.util.Locale
+import kotlin.math.roundToInt
 
 /**
  * ガイド円サイズ、各種表示スイッチ、カラーパレット選択の設定コンテンツ。
@@ -40,6 +41,9 @@ fun VisualConfigContent(
     onShowRepeatCountBadgeChange: (Boolean) -> Unit,
     onShowChordLinksChange: (Boolean) -> Unit = {},
     onShowChordHalosChange: (Boolean) -> Unit = {},
+    onChordStrokeWidthChange: (Float) -> Unit = {},
+    onChordStrokeAlphaChange: (Int) -> Unit = {},
+    onChordHaloFillAlphaChange: (Int) -> Unit = {},
     onShowJustEffectChange: (Boolean) -> Unit,
     onGuideColorChange: (Int) -> Unit,
     onNoteColorTopChange: (Int) -> Unit,
@@ -112,6 +116,128 @@ fun VisualConfigContent(
                 checked = visualConfig.showChordHalos,
                 onCheckedChange = onShowChordHalosChange
             )
+
+            // 和音線の太さスライダー (0.5 dp 〜 6.0 dp、0.5dp刻み)
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "線の太さ",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "Chord Link / Halo の線の太さを調整します",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        )
+                    }
+                    val widthStr = String.format(Locale.US, "%.1f dp", visualConfig.chordStrokeWidthDp)
+                    Text(
+                        text = widthStr,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Slider(
+                    value = visualConfig.chordStrokeWidthDp,
+                    onValueChange = {
+                        val rounded = ((it * 2f).roundToInt() / 2f).coerceIn(
+                            VisualConfig.MIN_CHORD_STROKE_WIDTH_DP,
+                            VisualConfig.MAX_CHORD_STROKE_WIDTH_DP
+                        )
+                        onChordStrokeWidthChange(rounded)
+                    },
+                    valueRange = VisualConfig.MIN_CHORD_STROKE_WIDTH_DP..VisualConfig.MAX_CHORD_STROKE_WIDTH_DP,
+                    steps = 10
+                )
+            }
+
+            // 和音線の濃さスライダー (20 % 〜 100 %、5%刻み)
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "線の濃さ",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "Chord Link / Halo の線の濃さを調整します",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        )
+                    }
+                    Text(
+                        text = "${visualConfig.chordStrokeAlphaPercent} %",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Slider(
+                    value = visualConfig.chordStrokeAlphaPercent.toFloat(),
+                    onValueChange = {
+                        val rounded = ((it / 5f).roundToInt() * 5).coerceIn(
+                            VisualConfig.MIN_CHORD_STROKE_ALPHA_PERCENT,
+                            VisualConfig.MAX_CHORD_STROKE_ALPHA_PERCENT
+                        )
+                        onChordStrokeAlphaChange(rounded)
+                    },
+                    valueRange = VisualConfig.MIN_CHORD_STROKE_ALPHA_PERCENT.toFloat()..VisualConfig.MAX_CHORD_STROKE_ALPHA_PERCENT.toFloat(),
+                    steps = 15
+                )
+            }
+
+            // 和音ハロー塗りの濃さスライダー (10 % 〜 50 %、5%刻み)
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "塗りの濃さ",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "和音ハロー内側の塗りの濃さを調整します",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        )
+                    }
+                    Text(
+                        text = "${visualConfig.chordHaloFillAlphaPercent} %",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Slider(
+                    value = visualConfig.chordHaloFillAlphaPercent.toFloat(),
+                    onValueChange = {
+                        val rounded = ((it / 5f).roundToInt() * 5).coerceIn(
+                            VisualConfig.MIN_CHORD_HALO_FILL_ALPHA_PERCENT,
+                            VisualConfig.MAX_CHORD_HALO_FILL_ALPHA_PERCENT
+                        )
+                        onChordHaloFillAlphaChange(rounded)
+                    },
+                    valueRange = VisualConfig.MIN_CHORD_HALO_FILL_ALPHA_PERCENT.toFloat()..VisualConfig.MAX_CHORD_HALO_FILL_ALPHA_PERCENT.toFloat(),
+                    steps = 7
+                )
+            }
+
             SettingSwitchRow(
                 label = "ジャストタイミング演出 (発光)",
                 checked = visualConfig.showJustEffect,

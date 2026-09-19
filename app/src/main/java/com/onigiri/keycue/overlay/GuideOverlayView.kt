@@ -107,6 +107,8 @@ class GuideOverlayView(
 
     /**
      * FitProfileを更新し、再計算・再描画を行う。
+     * キー配置や座標構成が変更されるため、[recalculateKeyPositions] を通して
+     * 従来どおり必ず [ChordVisualRenderer] の幾何キャッシュ（Geometry Cache）を破棄します。
      */
     fun updateFitProfile(newProfile: FitProfile) {
         fitProfile = newProfile
@@ -116,11 +118,20 @@ class GuideOverlayView(
 
     /**
      * VisualConfig（見た目設定）を更新し、再描画を行う。
+     *
+     * 【Geometry Cache 最適化】
+     * キー半径比率 [VisualConfig.guideRadiusRatio] が変更された場合のみ幾何形状が変わるため
+     * [recalculateKeyPositions]（幾何キャッシュ破棄を含む）を呼び出します。
+     * 線幅（chordStrokeWidthDp）や濃さ（chordStrokeAlphaPercent）等の Paint スタイル変更のみの場合は
+     * 幾何キャッシュを破棄せず維持し、Paint更新と [invalidate] のみで高速に再描画します。
      */
     fun updateVisualConfig(newConfig: VisualConfig) {
+        val radiusChanged = visualConfig.guideRadiusRatio != newConfig.guideRadiusRatio
         visualConfig = newConfig
         applyVisualConfigPaints()
-        recalculateKeyPositions(width, height)
+        if (radiusChanged) {
+            recalculateKeyPositions(width, height)
+        }
         invalidate()
     }
 
@@ -154,10 +165,19 @@ class GuideOverlayView(
             middleColor = visualConfig.noteColorMiddle,
             bottomColor = visualConfig.noteColorBottom
         )
+
+        chordVisualRenderer.updateStyle(
+            strokeWidthDp = visualConfig.chordStrokeWidthDp,
+            strokeAlphaPercent = visualConfig.chordStrokeAlphaPercent,
+            haloFillAlphaPercent = visualConfig.chordHaloFillAlphaPercent,
+            guideColor = visualConfig.guideColor
+        )
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
+        // 画面・Viewサイズ変更時はキーのピクセル座標や半径が変化するため、
+        // 従来どおり必ず recalculateKeyPositions() を通して幾何キャッシュを破棄・再計算する。
         recalculateKeyPositions(w, h)
     }
 
@@ -251,7 +271,6 @@ class GuideOverlayView(
                 frame = frame,
                 keyPixelCenters = keyPixelCenters,
                 keyRadiusPx = keyRadiusPx,
-                guideColor = visualConfig.guideColor,
                 showChordLinks = visualConfig.showChordLinks,
                 showChordHalos = visualConfig.showChordHalos,
                 showFallingNotes = visualConfig.showFallingNotes,

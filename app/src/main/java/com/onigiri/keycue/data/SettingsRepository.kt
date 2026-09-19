@@ -71,6 +71,30 @@ interface SettingsRepository {
     suspend fun saveNoteColorBottom(color: Int) = updateVisualConfig { it.copy(noteColorBottom = color) }
     suspend fun saveShowChordLinks(show: Boolean) = updateVisualConfig { it.copy(showChordLinks = show) }
     suspend fun saveShowChordHalos(show: Boolean) = updateVisualConfig { it.copy(showChordHalos = show) }
+    suspend fun saveChordStrokeWidthDp(widthDp: Float) = updateVisualConfig {
+        it.copy(
+            chordStrokeWidthDp = widthDp.coerceIn(
+                com.onigiri.keycue.model.VisualConfig.MIN_CHORD_STROKE_WIDTH_DP,
+                com.onigiri.keycue.model.VisualConfig.MAX_CHORD_STROKE_WIDTH_DP
+            )
+        )
+    }
+    suspend fun saveChordStrokeAlphaPercent(percent: Int) = updateVisualConfig {
+        it.copy(
+            chordStrokeAlphaPercent = percent.coerceIn(
+                com.onigiri.keycue.model.VisualConfig.MIN_CHORD_STROKE_ALPHA_PERCENT,
+                com.onigiri.keycue.model.VisualConfig.MAX_CHORD_STROKE_ALPHA_PERCENT
+            )
+        )
+    }
+    suspend fun saveChordHaloFillAlphaPercent(percent: Int) = updateVisualConfig {
+        it.copy(
+            chordHaloFillAlphaPercent = percent.coerceIn(
+                com.onigiri.keycue.model.VisualConfig.MIN_CHORD_HALO_FILL_ALPHA_PERCENT,
+                com.onigiri.keycue.model.VisualConfig.MAX_CHORD_HALO_FILL_ALPHA_PERCENT
+            )
+        )
+    }
 
     /** MIDIキーマッピング設定 (MidiMappingSettings) */
     val midiMappingSettings: StateFlow<com.onigiri.keycue.model.MidiMappingSettings>
@@ -123,6 +147,9 @@ class SharedPreferencesSettingsRepository internal constructor(
         private const val KEY_NOTE_COLOR_BOTTOM = "note_color_bottom"
         private const val KEY_SHOW_CHORD_LINKS = "show_chord_links"
         private const val KEY_SHOW_CHORD_HALOS = "show_chord_halos"
+        private const val KEY_CHORD_STROKE_WIDTH_DP = "chord_stroke_width_dp"
+        private const val KEY_CHORD_STROKE_ALPHA_PERCENT = "chord_stroke_alpha_percent"
+        private const val KEY_CHORD_HALO_FILL_ALPHA_PERCENT = "chord_halo_fill_alpha_percent"
         private const val KEY_MIDI_MAPPING_MODE = "midi_mapping_mode"
         private const val KEY_MIDI_MANUAL_ROOT = "midi_manual_root"
         private const val KEY_MIDI_MANUAL_SCALE = "midi_manual_scale"
@@ -201,7 +228,10 @@ class SharedPreferencesSettingsRepository internal constructor(
             noteColorMiddle = prefs.getInt(KEY_NOTE_COLOR_MIDDLE, com.onigiri.keycue.model.VisualConfig.DEFAULT_NOTE_COLOR_MIDDLE),
             noteColorBottom = prefs.getInt(KEY_NOTE_COLOR_BOTTOM, com.onigiri.keycue.model.VisualConfig.DEFAULT_NOTE_COLOR_BOTTOM),
             showChordLinks = prefs.getBoolean(KEY_SHOW_CHORD_LINKS, com.onigiri.keycue.model.VisualConfig.DEFAULT_SHOW_CHORD_LINKS),
-            showChordHalos = prefs.getBoolean(KEY_SHOW_CHORD_HALOS, com.onigiri.keycue.model.VisualConfig.DEFAULT_SHOW_CHORD_HALOS)
+            showChordHalos = prefs.getBoolean(KEY_SHOW_CHORD_HALOS, com.onigiri.keycue.model.VisualConfig.DEFAULT_SHOW_CHORD_HALOS),
+            chordStrokeWidthDp = prefs.getFloat(KEY_CHORD_STROKE_WIDTH_DP, com.onigiri.keycue.model.VisualConfig.DEFAULT_CHORD_STROKE_WIDTH_DP),
+            chordStrokeAlphaPercent = prefs.getInt(KEY_CHORD_STROKE_ALPHA_PERCENT, com.onigiri.keycue.model.VisualConfig.DEFAULT_CHORD_STROKE_ALPHA_PERCENT),
+            chordHaloFillAlphaPercent = prefs.getInt(KEY_CHORD_HALO_FILL_ALPHA_PERCENT, com.onigiri.keycue.model.VisualConfig.DEFAULT_CHORD_HALO_FILL_ALPHA_PERCENT)
         )
     )
     override val visualConfig: StateFlow<com.onigiri.keycue.model.VisualConfig> = _visualConfig.asStateFlow()
@@ -309,7 +339,10 @@ class SharedPreferencesSettingsRepository internal constructor(
             noteColorMiddle = config.noteColorMiddle,
             noteColorBottom = config.noteColorBottom,
             showChordLinks = config.showChordLinks,
-            showChordHalos = config.showChordHalos
+            showChordHalos = config.showChordHalos,
+            chordStrokeWidthDp = config.chordStrokeWidthDp,
+            chordStrokeAlphaPercent = config.chordStrokeAlphaPercent,
+            chordHaloFillAlphaPercent = config.chordHaloFillAlphaPercent
         )
         _visualConfig.value = safeConfig
         prefs.edit()
@@ -325,6 +358,9 @@ class SharedPreferencesSettingsRepository internal constructor(
             .putInt(KEY_NOTE_COLOR_BOTTOM, safeConfig.noteColorBottom)
             .putBoolean(KEY_SHOW_CHORD_LINKS, safeConfig.showChordLinks)
             .putBoolean(KEY_SHOW_CHORD_HALOS, safeConfig.showChordHalos)
+            .putFloat(KEY_CHORD_STROKE_WIDTH_DP, safeConfig.chordStrokeWidthDp)
+            .putInt(KEY_CHORD_STROKE_ALPHA_PERCENT, safeConfig.chordStrokeAlphaPercent)
+            .putInt(KEY_CHORD_HALO_FILL_ALPHA_PERCENT, safeConfig.chordHaloFillAlphaPercent)
             .apply()
     }
 
@@ -448,17 +484,22 @@ class InMemorySettingsRepository(
     }
 
     override suspend fun saveVisualConfig(config: com.onigiri.keycue.model.VisualConfig) {
-        _visualConfig.value = config.copy(
-            guideRadiusRatio = config.guideRadiusRatio.coerceIn(
-                com.onigiri.keycue.model.VisualConfig.MIN_GUIDE_RADIUS_RATIO,
-                com.onigiri.keycue.model.VisualConfig.MAX_GUIDE_RADIUS_RATIO
-            ),
+        _visualConfig.value = com.onigiri.keycue.model.VisualConfig.safe(
+            showGuideLabels = config.showGuideLabels,
+            showFallingNotes = config.showFallingNotes,
+            showApproachCircles = config.showApproachCircles,
+            showRepeatCountBadge = config.showRepeatCountBadge,
+            showJustEffect = config.showJustEffect,
+            guideRadiusRatio = config.guideRadiusRatio,
             guideColor = config.guideColor,
             noteColorTop = config.noteColorTop,
             noteColorMiddle = config.noteColorMiddle,
             noteColorBottom = config.noteColorBottom,
             showChordLinks = config.showChordLinks,
-            showChordHalos = config.showChordHalos
+            showChordHalos = config.showChordHalos,
+            chordStrokeWidthDp = config.chordStrokeWidthDp,
+            chordStrokeAlphaPercent = config.chordStrokeAlphaPercent,
+            chordHaloFillAlphaPercent = config.chordHaloFillAlphaPercent
         )
     }
 
