@@ -35,7 +35,8 @@ class HomeViewModel(
     private val settingsRepository: SettingsRepository = InMemorySettingsRepository(),
     private val sessionRepository: PlaybackSessionRepository = InMemoryPlaybackSessionRepository(),
     private val songSelectionCoordinator: SongSelectionCoordinator? = null,
-    externalScope: kotlinx.coroutines.CoroutineScope? = null
+    externalScope: kotlinx.coroutines.CoroutineScope? = null,
+    private val uriParser: (String) -> Uri? = { Uri.parse(it) }
 ) : ViewModel() {
 
     private val scope: kotlinx.coroutines.CoroutineScope = externalScope ?: viewModelScope
@@ -101,14 +102,17 @@ class HomeViewModel(
 
     /**
      * アプリ起動時等に、前回選択されていた楽曲URIの自動読み込み・復元を試行する。
+     * 前回設定されていた手動マッピング値を維持し、AUTO結果による初期化は行わない。
      */
     fun tryRestoreLastSong() {
         val uriStr = settingsRepository.lastSongUri.value ?: return
         if (_uiState.value.songData != null || sessionRepository.currentSession.value != null) return
 
         val uri = try {
-            Uri.parse(uriStr)
+            uriParser(uriStr)
         } catch (_: Exception) {
+            null
+        } ?: run {
             scope.launch { settingsRepository.saveLastSongUri(null) }
             return
         }
@@ -116,7 +120,7 @@ class HomeViewModel(
         val coordinator = songSelectionCoordinator ?: return
         scope.launch(kotlinx.coroutines.Dispatchers.IO) {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-            val result = coordinator.select(uri)
+            val result = coordinator.select(uri, initializeManualFromAuto = false)
             if (result.isSuccess) {
                 _uiState.update { it.copy(isLoading = false, errorMessage = null) }
             } else {
@@ -133,6 +137,7 @@ class HomeViewModel(
 
     /**
      * ファイルが選択された際の処理。
+     * ユーザーによる明示的な新規選択として、MIDIファイルの場合はAUTO解析結果を手動設定の初期値へ反映する。
      * SongSelectionCoordinator を介して楽曲解析およびセッション更新を行う。
      */
     fun onFileSelected(uri: Uri?) {
@@ -141,7 +146,7 @@ class HomeViewModel(
         val coordinator = songSelectionCoordinator ?: return
         scope.launch(kotlinx.coroutines.Dispatchers.IO) {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-            val result = coordinator.select(uri)
+            val result = coordinator.select(uri, initializeManualFromAuto = true)
             if (result.isSuccess) {
                 _uiState.update { it.copy(isLoading = false, errorMessage = null) }
             } else {

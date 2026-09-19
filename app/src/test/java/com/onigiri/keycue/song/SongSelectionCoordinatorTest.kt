@@ -15,6 +15,7 @@ import com.onigiri.keycue.model.SongData
 import com.onigiri.keycue.model.SongFormat
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -75,7 +76,8 @@ class SongSelectionCoordinatorTest {
             override suspend fun loadSong(
                 contentResolver: ContentResolver,
                 uri: Uri,
-                midiMappingSettings: com.onigiri.keycue.model.MidiMappingSettings?
+                midiMappingSettings: com.onigiri.keycue.model.MidiMappingSettings?,
+                initializeManualFromAuto: Boolean
             ): SongLoadResult {
                 return SongLoadResult.Success(sampleSongData, sampleMetadata)
             }
@@ -120,7 +122,8 @@ class SongSelectionCoordinatorTest {
             override suspend fun loadSong(
                 contentResolver: ContentResolver,
                 uri: Uri,
-                midiMappingSettings: com.onigiri.keycue.model.MidiMappingSettings?
+                midiMappingSettings: com.onigiri.keycue.model.MidiMappingSettings?,
+                initializeManualFromAuto: Boolean
             ): SongLoadResult {
                 return SongLoadResult.Success(sampleSongData, sampleMetadata)
             }
@@ -155,7 +158,8 @@ class SongSelectionCoordinatorTest {
             override suspend fun loadSong(
                 contentResolver: ContentResolver,
                 uri: Uri,
-                midiMappingSettings: com.onigiri.keycue.model.MidiMappingSettings?
+                midiMappingSettings: com.onigiri.keycue.model.MidiMappingSettings?,
+                initializeManualFromAuto: Boolean
             ): SongLoadResult {
                 return SongLoadResult.Failure.UnsupportedFormat("invalid.foo", "application/octet-stream")
             }
@@ -188,7 +192,8 @@ class SongSelectionCoordinatorTest {
             override suspend fun loadSong(
                 contentResolver: ContentResolver,
                 uri: Uri,
-                midiMappingSettings: com.onigiri.keycue.model.MidiMappingSettings?
+                midiMappingSettings: com.onigiri.keycue.model.MidiMappingSettings?,
+                initializeManualFromAuto: Boolean
             ): SongLoadResult {
                 return SongLoadResult.Success(sampleSongData, sampleMetadata)
             }
@@ -207,5 +212,162 @@ class SongSelectionCoordinatorTest {
         assertTrue(result.isSuccess)
         assertEquals(sampleSongData, result.getOrNull())
         assertEquals(sampleSongData, sessionRepository.currentSession.value?.song)
+    }
+
+    @Test
+    fun select_withInitializeManualFromAuto_updatesManualSettingsAndPreservesMode() = runBlocking {
+        // 前状態: MANUALモードで D / Minor / 3
+        val initialSettings = com.onigiri.keycue.model.MidiMappingSettings(
+            mode = com.onigiri.keycue.model.MidiMappingMode.MANUAL,
+            manualRoot = com.onigiri.keycue.model.PitchClass.D,
+            manualScale = com.onigiri.keycue.model.ScaleType.NATURAL_MINOR,
+            manualBaseOctave = 3
+        )
+        settingsRepository.saveMidiMappingSettings(initialSettings)
+
+        // AUTO解析結果が F / Major / 5 の曲を選択したシミュレーション
+        val autoResolved = com.onigiri.keycue.model.ResolvedMidiMapping(
+            root = com.onigiri.keycue.model.PitchClass.F,
+            scale = com.onigiri.keycue.model.ScaleType.MAJOR,
+            baseOctave = 5,
+            midiNotes = listOf(65, 67, 69),
+            mappedEventCount = 10,
+            totalEventCount = 10
+        )
+        val expectedUpdatedSettings = initialSettings.copy(
+            manualRoot = com.onigiri.keycue.model.PitchClass.F,
+            manualScale = com.onigiri.keycue.model.ScaleType.MAJOR,
+            manualBaseOctave = 5
+        )
+
+        val fakeSongLoader = object : SongLoader() {
+            override suspend fun loadSong(
+                contentResolver: ContentResolver,
+                uri: Uri,
+                midiMappingSettings: com.onigiri.keycue.model.MidiMappingSettings?,
+                initializeManualFromAuto: Boolean
+            ): SongLoadResult {
+                assertTrue(initializeManualFromAuto)
+                return SongLoadResult.Success(
+                    songData = sampleSongData,
+                    metadata = sampleMetadata,
+                    resolvedMidiMapping = autoResolved,
+                    updatedMidiSettings = expectedUpdatedSettings
+                )
+            }
+        }
+
+        val coordinator = SongSelectionCoordinator(
+            contentResolver = contentResolver,
+            songLoader = fakeSongLoader,
+            sessionRepository = sessionRepository,
+            settingsRepository = settingsRepository
+        )
+
+        val result = coordinator.select(sampleUri, initializeManualFromAuto = true)
+
+        assertTrue(result.isSuccess)
+        val savedSettings = settingsRepository.midiMappingSettings.value
+        // modeはMANUALのまま維持され、手動値のみF / Major / 5に初期化されていること
+        assertEquals(com.onigiri.keycue.model.MidiMappingMode.MANUAL, savedSettings.mode)
+        assertEquals(com.onigiri.keycue.model.PitchClass.F, savedSettings.manualRoot)
+        assertEquals(com.onigiri.keycue.model.ScaleType.MAJOR, savedSettings.manualScale)
+        assertEquals(5, savedSettings.manualBaseOctave)
+    }
+
+    @Test
+    fun select_withoutInitializeManualFromAuto_preservesManualSettings() = runBlocking {
+        // 前回保存済み: D / Minor / 3
+        val savedSettings = com.onigiri.keycue.model.MidiMappingSettings(
+            mode = com.onigiri.keycue.model.MidiMappingMode.MANUAL,
+            manualRoot = com.onigiri.keycue.model.PitchClass.D,
+            manualScale = com.onigiri.keycue.model.ScaleType.NATURAL_MINOR,
+            manualBaseOctave = 3
+        )
+        settingsRepository.saveMidiMappingSettings(savedSettings)
+
+        val fakeSongLoader = object : SongLoader() {
+            override suspend fun loadSong(
+                contentResolver: ContentResolver,
+                uri: Uri,
+                midiMappingSettings: com.onigiri.keycue.model.MidiMappingSettings?,
+                initializeManualFromAuto: Boolean
+            ): SongLoadResult {
+                assertFalse(initializeManualFromAuto)
+                // initializeManualFromAuto=falseなのでupdatedMidiSettingsはnull
+                return SongLoadResult.Success(
+                    songData = sampleSongData,
+                    metadata = sampleMetadata,
+                    resolvedMidiMapping = null,
+                    updatedMidiSettings = null
+                )
+            }
+        }
+
+        val coordinator = SongSelectionCoordinator(
+            contentResolver = contentResolver,
+            songLoader = fakeSongLoader,
+            sessionRepository = sessionRepository,
+            settingsRepository = settingsRepository
+        )
+
+        val result = coordinator.select(sampleUri, initializeManualFromAuto = false)
+
+        assertTrue(result.isSuccess)
+        // 手動設定が上書きされず維持されていること
+        assertEquals(savedSettings, settingsRepository.midiMappingSettings.value)
+    }
+
+    @Test
+    fun reapplyMapping_preservesManualSettingsAndDoesNotInitializeFromAuto() = runBlocking {
+        // セッションを事前にMIDIで設定
+        sessionRepository.setSession(
+            songData = sampleSongData,
+            config = PlaybackConfig(),
+            fitProfile = FitProfile.createDefaultTestProfile(),
+            uri = sampleUri,
+            format = SongFormat.MIDI
+        )
+
+        // ユーザーが編集した設定: A / Minor / 4
+        val editedSettings = com.onigiri.keycue.model.MidiMappingSettings(
+            mode = com.onigiri.keycue.model.MidiMappingMode.MANUAL,
+            manualRoot = com.onigiri.keycue.model.PitchClass.A,
+            manualScale = com.onigiri.keycue.model.ScaleType.NATURAL_MINOR,
+            manualBaseOctave = 4
+        )
+        settingsRepository.saveMidiMappingSettings(editedSettings)
+
+        val fakeSongLoader = object : SongLoader() {
+            override suspend fun loadSong(
+                contentResolver: ContentResolver,
+                uri: Uri,
+                midiMappingSettings: com.onigiri.keycue.model.MidiMappingSettings?,
+                initializeManualFromAuto: Boolean
+            ): SongLoadResult {
+                // reapplyMappingではinitializeManualFromAutoがfalseであること
+                assertFalse(initializeManualFromAuto)
+                assertEquals(editedSettings, midiMappingSettings)
+                return SongLoadResult.Success(
+                    songData = sampleSongData,
+                    metadata = sampleMetadata,
+                    resolvedMidiMapping = null,
+                    updatedMidiSettings = null
+                )
+            }
+        }
+
+        val coordinator = SongSelectionCoordinator(
+            contentResolver = contentResolver,
+            songLoader = fakeSongLoader,
+            sessionRepository = sessionRepository,
+            settingsRepository = settingsRepository
+        )
+
+        val result = coordinator.reapplyMapping(editedSettings)
+
+        assertTrue(result.isSuccess)
+        // 編集された設定が維持されていること
+        assertEquals(editedSettings, settingsRepository.midiMappingSettings.value)
     }
 }

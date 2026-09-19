@@ -44,7 +44,7 @@ class GuideLabelsTest {
         val notes = listOf(64, 60, 67)
         val mapping = createMapping(notes)
 
-        assertEquals(listOf("64", "60", "67"), mapping.guideLabels)
+        assertEquals(listOf("E4", "C4", "G4"), mapping.guideLabels)
         assertEquals(notes.size, mapping.guideLabels.size)
     }
 
@@ -54,17 +54,19 @@ class GuideLabelsTest {
         val notes = listOf(127)
         val mapping = createMapping(notes)
 
-        assertEquals(listOf("127"), mapping.guideLabels)
+        assertEquals(listOf(PitchClass.formatMidiNote(127)), mapping.guideLabels)
         assertEquals(1, mapping.guideLabels.size)
     }
 
     @Test
-    fun guideLabels_handlesThreeDigitMidiNotesCorrectly() {
-        // 0..127 の範囲で3桁のノート番号が正常に文字列表記されること
-        val notes = listOf(100, 120, 127)
+    fun guideLabels_handlesSemitonesAndOctavesCorrectly() {
+        // 半音（黒鍵相当）やオクターブ違いが既存 PitchClass.formatMidiNote と一致して表記されること
+        val notes = listOf(60, 61, 62, 63, 72)
         val mapping = createMapping(notes)
 
-        assertEquals(listOf("100", "120", "127"), mapping.guideLabels)
+        val expected = notes.map { PitchClass.formatMidiNote(it) }
+        assertEquals(expected, mapping.guideLabels)
+        assertEquals(listOf("C4", "C#4", "D4", "Eb4", "C5"), mapping.guideLabels)
     }
 
     @Test
@@ -73,8 +75,8 @@ class GuideLabelsTest {
         val mapping1 = createMapping(listOf(60, 62, 64))
         val mapping2 = createMapping(listOf(72, 74, 76))
 
-        assertEquals(listOf("60", "62", "64"), mapping1.guideLabels)
-        assertEquals(listOf("72", "74", "76"), mapping2.guideLabels)
+        assertEquals(listOf("C4", "D4", "E4"), mapping1.guideLabels)
+        assertEquals(listOf("C5", "D5", "E5"), mapping2.guideLabels)
     }
 
     @Test
@@ -90,7 +92,7 @@ class GuideLabelsTest {
         val labels = resolveGuideLabels(session)
         // 同一参照が返されること（無駄なコピーを行わない）
         assertSame(mapping.guideLabels, labels)
-        assertEquals(listOf("48", "50", "52"), labels)
+        assertEquals(listOf("C3", "D3", "E3"), labels)
     }
 
     @Test

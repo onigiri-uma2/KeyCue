@@ -37,11 +37,13 @@ class SongSelectionCoordinator(
      *
      * @param uri 選択された楽曲ファイルの content:// URI
      * @param midiMappingSettings MIDIマッピング設定 (null の場合は settingsRepository の設定を使用)
+     * @param initializeManualFromAuto 新規MIDIファイル選択時にAUTO解析結果を手動設定の初期値へ反映するかどうか
      * @return 読み込みに成功した場合は [Result.success] (SongData)、失敗時は [Result.failure] (SongLoadException)
      */
     suspend fun select(
         uri: Uri,
-        midiMappingSettings: com.onigiri.keycue.model.MidiMappingSettings? = null
+        midiMappingSettings: com.onigiri.keycue.model.MidiMappingSettings? = null,
+        initializeManualFromAuto: Boolean = false
     ): Result<SongData> {
         // 1. 永続URIパーミッション取得の試行 (Provider非対応でもクラッシュしない)
         try {
@@ -57,7 +59,7 @@ class SongSelectionCoordinator(
         val mappingSettings = midiMappingSettings ?: settingsRepository.midiMappingSettings.value
 
         // 3. SongLoader による楽曲解析
-        return when (val result = songLoader.loadSong(contentResolver, uri, mappingSettings)) {
+        return when (val result = songLoader.loadSong(contentResolver, uri, mappingSettings, initializeManualFromAuto)) {
             is SongLoadResult.Success -> {
                 val songData = result.songData
 
@@ -78,6 +80,11 @@ class SongSelectionCoordinator(
 
                 // 6. SettingsRepository へ lastSongUri を保存
                 settingsRepository.saveLastSongUri(uri.toString())
+
+                // 7. 全読み込み成功後にのみ、AUTO解析結果による手動設定更新を永続化
+                if (result.updatedMidiSettings != null) {
+                    settingsRepository.saveMidiMappingSettings(result.updatedMidiSettings)
+                }
 
                 Result.success(songData)
             }
@@ -123,6 +130,6 @@ class SongSelectionCoordinator(
             return Result.failure(IllegalStateException("現在の楽曲はMIDI形式ではありません"))
         }
 
-        return select(uri, midiMappingSettings)
+        return select(uri, midiMappingSettings, initializeManualFromAuto = false)
     }
 }

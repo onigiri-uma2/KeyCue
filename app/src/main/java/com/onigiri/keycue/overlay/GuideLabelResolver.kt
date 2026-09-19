@@ -4,10 +4,10 @@ import com.onigiri.keycue.model.PlaybackSession
 import com.onigiri.keycue.model.SongFormat
 
 /**
- * 現在の演奏セッションに基づき、オーバーレイに描画すべきガイドラベル（MIDIノート番号文字列リスト等）を解決する純粋関数。
+ * 現在の演奏セッションに基づき、オーバーレイに描画すべきガイドラベル（MIDIキー配置音名文字列リスト等）を解決する純粋関数。
  *
  * - セッションが [SongFormat.MIDI] かつ [PlaybackSession.resolvedMidiMapping] を持つ場合:
- *   マッピング済みの MIDI ノート番号文字列リスト ([com.onigiri.keycue.model.ResolvedMidiMapping.guideLabels]) を返す。
+ *   マッピング済みのキー配置音名文字列リスト ([com.onigiri.keycue.model.ResolvedMidiMapping.guideLabels]) を返す。
  * - それ以外（通常曲、セッション null、MIDI だがマッピング未解決）:
  *   デフォルトのガイド番号表示へ戻すため `null` を返す。
  */

@@ -81,7 +81,7 @@ fun VisualConfigContent(
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             SettingSwitchRow(
                 label = "ガイドラベル表示",
-                description = "通常はガイド番号、MIDIではMIDIノート番号を表示します",
+                description = "通常はガイド番号、MIDIではキー配置音を表示します",
                 checked = visualConfig.showGuideLabels,
                 onCheckedChange = onShowGuideLabelsChange
             )

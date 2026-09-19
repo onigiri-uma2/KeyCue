@@ -330,4 +330,97 @@ class HomeViewModelTest {
         assertEquals(0, state.noteCount)
         assertFalse(state.canStart)
     }
+
+    @Test
+    fun onFileSelected_invokesCoordinatorWithInitializeManualFromAutoTrue() = runBlocking {
+        val fakeContentResolver = android.content.FakeContentResolver()
+        val fakeSettingsRepo = com.onigiri.keycue.data.InMemorySettingsRepository()
+        val fakeSessionRepo = com.onigiri.keycue.data.InMemoryPlaybackSessionRepository()
+
+        val latch = java.util.concurrent.CountDownLatch(1)
+        var capturedInitializeManualFromAuto: Boolean? = null
+        val fakeSongLoader = object : com.onigiri.keycue.song.SongLoader() {
+            override suspend fun loadSong(
+                contentResolver: android.content.ContentResolver,
+                uri: android.net.Uri,
+                midiMappingSettings: com.onigiri.keycue.model.MidiMappingSettings?,
+                initializeManualFromAuto: Boolean
+            ): com.onigiri.keycue.song.SongLoadResult {
+                capturedInitializeManualFromAuto = initializeManualFromAuto
+                latch.countDown()
+                return com.onigiri.keycue.song.SongLoadResult.Success(
+                    songData = SongData("test.mid", 1000L, emptyList()),
+                    metadata = com.onigiri.keycue.song.SongFileMetadata(uri, "test.mid", "audio/midi", com.onigiri.keycue.model.SongFormat.MIDI)
+                )
+            }
+        }
+
+        val coordinator = com.onigiri.keycue.song.SongSelectionCoordinator(
+            contentResolver = fakeContentResolver,
+            songLoader = fakeSongLoader,
+            sessionRepository = fakeSessionRepo,
+            settingsRepository = fakeSettingsRepo
+        )
+
+        val viewModel = HomeViewModel(
+            settingsRepository = fakeSettingsRepo,
+            sessionRepository = fakeSessionRepo,
+            songSelectionCoordinator = coordinator,
+            externalScope = testScope
+        )
+
+        val uri = FakeUri("content://test/song.mid")
+        viewModel.onFileSelected(uri)
+
+        assertTrue(latch.await(3, java.util.concurrent.TimeUnit.SECONDS))
+        assertEquals(true, capturedInitializeManualFromAuto)
+    }
+
+    @Test
+    fun tryRestoreLastSong_invokesCoordinatorWithInitializeManualFromAutoFalse() = runBlocking {
+        val fakeContentResolver = android.content.FakeContentResolver()
+        val fakeSettingsRepo = com.onigiri.keycue.data.InMemorySettingsRepository()
+        val fakeSessionRepo = com.onigiri.keycue.data.InMemoryPlaybackSessionRepository()
+
+        val uri = FakeUri("content://test/last_song.mid")
+        fakeSettingsRepo.saveLastSongUri(uri.toString())
+
+        val latch = java.util.concurrent.CountDownLatch(1)
+        var capturedInitializeManualFromAuto: Boolean? = null
+        val fakeSongLoader = object : com.onigiri.keycue.song.SongLoader() {
+            override suspend fun loadSong(
+                contentResolver: android.content.ContentResolver,
+                uri: android.net.Uri,
+                midiMappingSettings: com.onigiri.keycue.model.MidiMappingSettings?,
+                initializeManualFromAuto: Boolean
+            ): com.onigiri.keycue.song.SongLoadResult {
+                capturedInitializeManualFromAuto = initializeManualFromAuto
+                latch.countDown()
+                return com.onigiri.keycue.song.SongLoadResult.Success(
+                    songData = SongData("last_song.mid", 1000L, emptyList()),
+                    metadata = com.onigiri.keycue.song.SongFileMetadata(uri, "last_song.mid", "audio/midi", com.onigiri.keycue.model.SongFormat.MIDI)
+                )
+            }
+        }
+
+        val coordinator = com.onigiri.keycue.song.SongSelectionCoordinator(
+            contentResolver = fakeContentResolver,
+            songLoader = fakeSongLoader,
+            sessionRepository = fakeSessionRepo,
+            settingsRepository = fakeSettingsRepo
+        )
+
+        val viewModel = HomeViewModel(
+            settingsRepository = fakeSettingsRepo,
+            sessionRepository = fakeSessionRepo,
+            songSelectionCoordinator = coordinator,
+            externalScope = testScope,
+            uriParser = { FakeUri(it) }
+        )
+
+        viewModel.tryRestoreLastSong()
+
+        assertTrue(latch.await(3, java.util.concurrent.TimeUnit.SECONDS))
+        assertEquals(false, capturedInitializeManualFromAuto)
+    }
 }

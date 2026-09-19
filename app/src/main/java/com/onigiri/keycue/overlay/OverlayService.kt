@@ -300,7 +300,7 @@ class OverlayService : Service() {
                             sessionRepository = sessionRepository,
                             settingsRepository = settingsRepository
                         )
-                        val result = coordinator.select(uri)
+                        val result = coordinator.select(uri, initializeManualFromAuto = true)
                         android.util.Log.d("OverlayService", "coordinator.select result: isSuccess=${result.isSuccess}")
                         windowController?.restoreAfterFilePicker()
                         if (result.isSuccess) {

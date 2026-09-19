@@ -29,7 +29,8 @@ sealed interface SongLoadResult {
     data class Success(
         val songData: SongData,
         val metadata: SongFileMetadata,
-        val resolvedMidiMapping: com.onigiri.keycue.model.ResolvedMidiMapping? = null
+        val resolvedMidiMapping: com.onigiri.keycue.model.ResolvedMidiMapping? = null,
+        val updatedMidiSettings: com.onigiri.keycue.model.MidiMappingSettings? = null
     ) : SongLoadResult
 
     /**
@@ -124,12 +125,14 @@ open class SongLoader(
      * @param contentResolver ContentResolver インスタンス
      * @param uri 選択された content:// URI
      * @param midiMappingSettings MIDIマッピング設定 (AUTO / MANUAL)
+     * @param initializeManualFromAuto 新規ファイル選択時にAUTO解析結果を手動設定の初期値へ反映するかどうか
      * @return 読み込み結果 [SongLoadResult]
      */
     open suspend fun loadSong(
         contentResolver: ContentResolver,
         uri: Uri,
-        midiMappingSettings: com.onigiri.keycue.model.MidiMappingSettings? = null
+        midiMappingSettings: com.onigiri.keycue.model.MidiMappingSettings? = null,
+        initializeManualFromAuto: Boolean = false
     ): SongLoadResult = withContext(Dispatchers.IO) {
         val displayName = queryDisplayName(contentResolver, uri) ?: "unknown"
         val mimeType = contentResolver.getType(uri)
@@ -189,13 +192,21 @@ open class SongLoader(
         )
 
         try {
-            val (songData, resolvedMapping) = when (format) {
-                SongFormat.MIDI -> parseMidi(bytes, displayName, midiMappingSettings)
-                SongFormat.SKY_STUDIO_JSON -> parseSkyStudioJson(bytes, displayName)
+            val (songData, resolvedMapping, updatedSettings) = when (format) {
+                SongFormat.MIDI -> parseMidi(bytes, displayName, midiMappingSettings, initializeManualFromAuto)
+                SongFormat.SKY_STUDIO_JSON -> {
+                    val (song, mapping) = parseSkyStudioJson(bytes, displayName)
+                    Triple(song, mapping, null)
+                }
                 else -> throw UnsupportedOperationException("Unsupported format: $format")
             }
 
-            SongLoadResult.Success(songData, metadata, resolvedMapping)
+            SongLoadResult.Success(
+                songData = songData,
+                metadata = metadata,
+                resolvedMidiMapping = resolvedMapping,
+                updatedMidiSettings = updatedSettings
+            )
         } catch (e: Throwable) {
             mapToFailure(e)
         }
@@ -204,13 +215,33 @@ open class SongLoader(
     private fun parseMidi(
         bytes: ByteArray,
         displayName: String,
-        midiMappingSettings: com.onigiri.keycue.model.MidiMappingSettings?
-    ): Pair<SongData, com.onigiri.keycue.model.ResolvedMidiMapping> {
-        val settings = midiMappingSettings ?: com.onigiri.keycue.model.MidiMappingSettings()
+        midiMappingSettings: com.onigiri.keycue.model.MidiMappingSettings?,
+        initializeManualFromAuto: Boolean
+    ): Triple<SongData, com.onigiri.keycue.model.ResolvedMidiMapping, com.onigiri.keycue.model.MidiMappingSettings?> {
+        val currentSettings = midiMappingSettings ?: com.onigiri.keycue.model.MidiMappingSettings()
         val extracted = midiParser.extractRawEvents(bytes)
-        val resolved = com.onigiri.keycue.song.midi.MidiKeyMapper.resolveMapping(extracted.rawEvents, settings)
+
+        val (resolved, updatedSettings) = if (initializeManualFromAuto) {
+            // AUTO解析を実行し、曲の最適なRoot/Scale/BaseOctaveを取得
+            val autoSettings = currentSettings.copy(mode = com.onigiri.keycue.model.MidiMappingMode.AUTO)
+            val autoResolved = com.onigiri.keycue.song.midi.MidiKeyMapper.resolveMapping(extracted.rawEvents, autoSettings)
+
+            // AUTO解析結果を手動設定の初期値へ反映（modeは現在のものを維持）
+            val updated = currentSettings.copy(
+                manualRoot = autoResolved.root,
+                manualScale = autoResolved.scale,
+                manualBaseOctave = autoResolved.baseOctave
+            )
+            // AUTO modeでは autoResolved をそのまま finalResolved として再利用し、AUTO探索を2回しない。
+            // MANUAL modeの場合も手動値がautoResolvedと完全に同一になるため、探索結果autoResolvedをそのままfinalResolvedとして再利用可能。
+            Pair(autoResolved, updated)
+        } else {
+            val resolved = com.onigiri.keycue.song.midi.MidiKeyMapper.resolveMapping(extracted.rawEvents, currentSettings)
+            Pair(resolved, null)
+        }
+
         val song = midiParser.parseWithResolvedMapping(bytes, displayName, resolved)
-        return Pair(song, resolved)
+        return Triple(song, resolved, updatedSettings)
     }
 
     private fun parseSkyStudioJson(

@@ -257,7 +257,7 @@ class OverlayWindowController(
     }
 
     /**
-     * ガイドラベル（通常曲: ガイド番号, MIDI: MIDIノート番号）を更新し、Guide Overlay に反映する。
+     * ガイドラベル（通常曲: ガイド番号, MIDI: キー配置音）を更新し、Guide Overlay に反映する。
      */
     fun updateGuideLabels(labels: List<String>?) {
         currentGuideLabels = labels

@@ -19,12 +19,12 @@ data class ResolvedMidiMapping(
     val totalEventCount: Int
 ) {
     /**
-     * 各ガイドキーに対応するMIDIノート番号の文字列表記リスト（例: ["48", "50", ...]）。
+     * 各ガイドキーに対応するキー配置音名の文字列表記リスト（例: ["C4", "D4", ...]）。
      * [midiNotes] 生成時の順序を保持して一度生成され、以後読み取り専用として扱うラベルList。
-     * [guideLabels] の各要素はそのインデックスに対応するガイドキー用MIDIノート番号の文字列表記であり、
-     * `guideLabels[index] == midiNotes[index].toString()` を保証する。
+     * [guideLabels] の各要素はそのインデックスに対応するキー配置音の文字列表記であり、
+     * `guideLabels[index] == PitchClass.formatMidiNote(midiNotes[index])` を保証する。
      */
-    val guideLabels: List<String> = midiNotes.map { it.toString() }
+    val guideLabels: List<String> = midiNotes.map { PitchClass.formatMidiNote(it) }
 
     /**
      * マッピング成功割合（0.0f〜100.0f）。
@@ -48,8 +48,7 @@ data class ResolvedMidiMapping(
 
     /**
      * 各音それぞれの音名表記リスト（例: ["C4", "D4", "E4", ...]）を返す。
+     * 事前生成済みの [guideLabels] を再利用し、重複計算を回避する。
      */
-    fun getFormattedNoteNames(): List<String> {
-        return midiNotes.map { PitchClass.formatMidiNote(it) }
-    }
+    fun getFormattedNoteNames(): List<String> = guideLabels
 }

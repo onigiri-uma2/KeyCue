@@ -6,7 +6,7 @@ package com.onigiri.keycue.model
  * キーの位置・配置を保持する [FitProfile] と責務を分離し、
  * ユーザーが調整可能な外観パラメータの Single Source of Truth として機能します。
  *
- * @param showGuideLabels ガイドのラベル（通常曲: ガイド番号, MIDI: MIDIノート番号）を表示するかどうか
+ * @param showGuideLabels ガイドのラベル（通常曲: ガイド番号, MIDI: キー配置音）を表示するかどうか
  * @param showFallingNotes 落下ノートを表示するかどうか
  * @param showApproachCircles 音ゲー風アプローチサークル（縮小タイミング円）を表示するかどうか
  * @param showJustEffect ジャストタイミング時の発光演出を表示するかどうか

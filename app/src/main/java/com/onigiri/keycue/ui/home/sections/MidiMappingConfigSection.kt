@@ -247,7 +247,7 @@ fun MidiMappingConfigContent(
         }
 
         // ミニ鍵盤グリッド表示
-        val noteNames = resolvedMapping?.getFormattedNoteNames()
+        val noteNames = resolvedMapping?.guideLabels
             ?: MidiKeyMapper.createMapping(
                 midiMappingSettings.manualRoot,
                 midiMappingSettings.manualScale,
