@@ -930,4 +930,52 @@ class NoteSchedulerTest {
 
         assertTrue(frame.chordGroups.isEmpty())
     }
+
+    @Test
+    fun chordTolerance_failedSameKeyWindow_doesNotSkipFollowingChord() {
+        // 1000 Key5 + 1020 Key5 で不成立となった後、1020 Key5 + 1040 Key7 が取りこぼされずChord成立すること
+        val events = listOf(
+            NoteEvent(timeMs = 1000L, key = 5),
+            NoteEvent(timeMs = 1020L, key = 5),
+            NoteEvent(timeMs = 1040L, key = 7)
+        )
+        scheduler.prepare(events)
+        val frame = scheduler.scheduleFrame(events, currentTimeMs = 800L, noteLeadTimeMs = 500L)
+
+        assertEquals(1, frame.chordGroups.size)
+        assertEquals(1020L, frame.chordGroups.single().timeMs)
+        assertEquals(listOf(5, 7), frame.chordGroups.single().keys)
+    }
+
+    @Test
+    fun chordTolerance_failedWindow_doesNotSkipSubsequentThreeNoteChord() {
+        // 1000 Key1, 1020 Key1, 1040 Key3, 1050 Key5
+        // 1000起点は不成立 -> i++ -> 1020起点で 1020/1040/1050 (keys=[1, 3, 5], timeMs=1020) が成立
+        val events = listOf(
+            NoteEvent(timeMs = 1000L, key = 1),
+            NoteEvent(timeMs = 1020L, key = 1),
+            NoteEvent(timeMs = 1040L, key = 3),
+            NoteEvent(timeMs = 1050L, key = 5)
+        )
+        scheduler.prepare(events)
+        val frame = scheduler.scheduleFrame(events, currentTimeMs = 800L, noteLeadTimeMs = 500L)
+
+        assertEquals(1, frame.chordGroups.size)
+        assertEquals(1020L, frame.chordGroups.single().timeMs)
+        assertEquals(listOf(1, 3, 5), frame.chordGroups.single().keys)
+    }
+
+    @Test
+    fun chordTolerance_consecutiveSameKeysOnly_noChordGroup() {
+        // 1000 Key5, 1020 Key5, 1045 Key5: Chord不成立で i++ されても異なるキーが2種類以上なければChordGroupなし
+        val events = listOf(
+            NoteEvent(timeMs = 1000L, key = 5),
+            NoteEvent(timeMs = 1020L, key = 5),
+            NoteEvent(timeMs = 1045L, key = 5)
+        )
+        scheduler.prepare(events)
+        val frame = scheduler.scheduleFrame(events, currentTimeMs = 800L, noteLeadTimeMs = 500L)
+
+        assertTrue(frame.chordGroups.isEmpty())
+    }
 }

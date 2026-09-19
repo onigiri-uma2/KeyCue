@@ -78,9 +78,13 @@ class NoteScheduler {
             if (uniqueKeys.size >= 2) {
                 uniqueKeys.sort()
                 chordGroupsList.add(ChordGroup(timeMs = chordStartTime, keys = uniqueKeys.toList()))
+                // 有効Chordとして確定したので、この候補範囲を消費
+                i = j
+            } else {
+                // Chord不成立。
+                // 後続イベントを新しい起点として再評価できるよう、先頭イベントだけ進める。
+                i++
             }
-
-            i = j
         }
 
         // 2. キーごとの打鍵時刻一覧 (連打バッジ判定用)
