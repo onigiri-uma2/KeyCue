@@ -35,7 +35,7 @@ fun AppNavigation(
     onFittingClick: () -> Unit = {},
     onStartSupportClick: () -> Unit = {}
 ) {
-    // Overlay起動の新規Intent受信時にHOME_ROUTEまで強制的に戻す
+    // Overlay起動時（onCreate / onNewIntent）にHOME_ROUTEまで強制的に戻す
     LaunchedEffect(resetToHomeTrigger) {
         if (resetToHomeTrigger > 0) {
             navController.popBackStack(AppDestinations.HOME_ROUTE, inclusive = false)

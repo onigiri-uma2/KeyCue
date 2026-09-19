@@ -27,12 +27,13 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val fromIntent = intent.getBooleanExtra(EXTRA_OPENED_FROM_OVERLAY, false)
-        val fromSaved = savedInstanceState?.getBoolean(KEY_OPENED_FROM_OVERLAY) ?: false
-        val fromOverlay = fromIntent || fromSaved
-        openedFromOverlay = fromOverlay
+        openedFromOverlay = if (intent.hasExtra(EXTRA_OPENED_FROM_OVERLAY)) {
+            intent.getBooleanExtra(EXTRA_OPENED_FROM_OVERLAY, false)
+        } else {
+            savedInstanceState?.getBoolean(KEY_OPENED_FROM_OVERLAY) ?: false
+        }
 
-        if (fromOverlay) {
+        if (openedFromOverlay) {
             resetToHomeTrigger++
         }
 
