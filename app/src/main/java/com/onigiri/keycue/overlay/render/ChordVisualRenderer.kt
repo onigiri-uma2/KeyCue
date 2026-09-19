@@ -13,7 +13,7 @@ import com.onigiri.keycue.playback.GuideFrame
  * 和音・同時押しキーの視覚的グルーピング（Chord Link および Chord Halo）の描画を担当するレンダラー。
  *
  * - **Chord Link**: 同一時刻のキー間を最小全域木（MST）で結ぶリンク線（N点に対し N-1 本）
- * - **Chord Halo**: 同一時刻のキー/ノート群の外側を薄く囲む Stroke 枠線（Convex Hull + margin）
+ * - **Chord Halo**: 同一時刻のキー/ノート群を薄い内部面と外周枠線で囲むグルーピング表現（Convex Hull + margin）
  *
  * GameProfile の 15 キーや 3x5 配置をハードコードせず、渡された座標リストにのみ依存します。
  * また、毎フレームの onDraw 経路における不要なアロケーションを抑えるため、
@@ -71,22 +71,9 @@ class ChordVisualRenderer(context: Context) {
         private const val LINK_ALPHA = 150
         // Chord Halo のアルファ値（Chord Link より目立たない薄い外周線）
         private const val HALO_ALPHA = 90
-        // Chord Halo 内部 Fill のアルファ値（Halo Stroke に対する掛け合わせではなく、最終 alpha ≒ 10% として定義）
+        // Chord Halo 内部 Fill のアルファ値（薄い面 + 外周線として表現するための最終 alpha ≒ 10%）
         // 初期値: 26 (26/255 ≒ 10%)。実機確認により 20〜38 程度で微調整可能。
         private const val HALO_FILL_ALPHA = 26
-
-        /**
-         * Falling Notes OFF 時において、Chord Halo 内部の薄い塗りつぶし（Halo Fill）を描画すべきかを判定する。
-         *
-         * Halo Fill は Falling Notes OFF かつ Chord Halo ON の時のみ描画し、
-         * 複数キーを1つの面として視覚的にグループ化します。
-         */
-        internal fun shouldDrawHaloFill(
-            showChordHalos: Boolean,
-            showFallingNotes: Boolean
-        ): Boolean {
-            return showChordHalos && !showFallingNotes
-        }
 
 
         /**
@@ -212,19 +199,12 @@ class ChordVisualRenderer(context: Context) {
         val gg = Color.green(guideColor)
         val gb = Color.blue(guideColor)
 
-        val drawHaloFill = shouldDrawHaloFill(
-            showChordHalos = showChordHalos,
-            showFallingNotes = showFallingNotes
-        )
-
         if (showChordLinks) {
             linkPaint.color = Color.argb(LINK_ALPHA, gr, gg, gb)
         }
         if (showChordHalos) {
             haloPaint.color = Color.argb(HALO_ALPHA, gr, gg, gb)
-            if (drawHaloFill) {
-                haloFillPaint.color = Color.argb(HALO_FILL_ALPHA, gr, gg, gb)
-            }
+            haloFillPaint.color = Color.argb(HALO_FILL_ALPHA, gr, gg, gb)
         }
 
         val fallDistancePx = viewHeight * FallingNoteCalculator.DEFAULT_FALL_DISTANCE_RATIO
@@ -255,8 +235,8 @@ class ChordVisualRenderer(context: Context) {
 
                 val hasHalo = !geometry.haloPath.isEmpty
 
-                // 1. Halo Fill (Falling Notes OFF かつ Chord Halo ON 時のみ、背面に描画)
-                if (drawHaloFill && hasHalo) {
+                // 1. Halo Fill (Chord Halo ON 時、背面に描画)
+                if (showChordHalos && hasHalo) {
                     canvas.drawPath(geometry.haloPath, haloFillPaint)
                 }
                 // 2. Halo Stroke (外周線: 既存順序維持)
@@ -289,9 +269,17 @@ class ChordVisualRenderer(context: Context) {
                 canvas.save()
                 canvas.translate(0f, dY)
 
-                if (showChordHalos && !geometry.haloPath.isEmpty) {
+                val hasHalo = !geometry.haloPath.isEmpty
+
+                // 1. Halo Fill (Chord Halo ON 時、背面に描画)
+                if (showChordHalos && hasHalo) {
+                    canvas.drawPath(geometry.haloPath, haloFillPaint)
+                }
+                // 2. Halo Stroke (外周線: 既存順序維持)
+                if (showChordHalos && hasHalo) {
                     canvas.drawPath(geometry.haloPath, haloPaint)
                 }
+                // 3. Chord Link (MST 線分: 既存順序維持)
                 if (showChordLinks && geometry.linkLines.isNotEmpty()) {
                     canvas.drawLines(geometry.linkLines, linkPaint)
                 }

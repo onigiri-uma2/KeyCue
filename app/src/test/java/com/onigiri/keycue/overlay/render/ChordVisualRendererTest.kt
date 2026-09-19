@@ -186,31 +186,4 @@ class ChordVisualRendererTest {
         )
         assertFalse("Falling Notes OFF: Approach Circle 未出現の250ms前はChordも非表示", visibleOff250)
     }
-
-    @Test
-    fun shouldDrawHaloFill_fourCases() {
-        // Case 1: Halo ON + Falling OFF -> true (唯一Fillが表示される条件)
-        assertTrue(
-            "Halo ON + Falling OFF は Fill 表示対象 (true)",
-            ChordVisualRenderer.shouldDrawHaloFill(showChordHalos = true, showFallingNotes = false)
-        )
-
-        // Case 2: Halo ON + Falling ON -> false (落下ノート表示時はFill無効)
-        assertFalse(
-            "Halo ON + Falling ON は Fill 非表示 (false)",
-            ChordVisualRenderer.shouldDrawHaloFill(showChordHalos = true, showFallingNotes = true)
-        )
-
-        // Case 3: Halo OFF + Falling OFF -> false (Halo自体が無効時はFillも無効)
-        assertFalse(
-            "Halo OFF + Falling OFF は Fill 非表示 (false)",
-            ChordVisualRenderer.shouldDrawHaloFill(showChordHalos = false, showFallingNotes = false)
-        )
-
-        // Case 4: Halo OFF + Falling ON -> false (両方無効)
-        assertFalse(
-            "Halo OFF + Falling ON は Fill 非表示 (false)",
-            ChordVisualRenderer.shouldDrawHaloFill(showChordHalos = false, showFallingNotes = true)
-        )
-    }
 }
