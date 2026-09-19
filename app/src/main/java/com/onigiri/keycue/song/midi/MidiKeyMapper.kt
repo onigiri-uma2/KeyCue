@@ -83,7 +83,7 @@ class MidiKeyMapper(
             baseOctave: Int
         ): List<Int>? {
             val baseMidiNote = root.toMidiNote(baseOctave)
-            val notes = ArrayList<Int>(15)
+            val notes = ArrayList<Int>(scale.intervals.size)
             for (interval in scale.intervals) {
                 val note = baseMidiNote + interval
                 if (note !in 0..127) {

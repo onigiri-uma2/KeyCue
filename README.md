@@ -4,7 +4,7 @@
 [![Android](https://img.shields.io/badge/Platform-Android%2010%2B%20(API%2029%2B)-green.svg)](https://developer.android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.2-purple.svg)](https://kotlinlang.org)
 
-**KeyCue** は、『Sky 星を紡ぐ子どもたち』などの15キー楽器演奏をサポートする、Android向けフローティング演奏ガイド・練習支援アプリです。
+**KeyCue** は、『Sky 星を紡ぐ子どもたち』の15キー楽器演奏をサポートする、Android向けフローティング演奏ガイド・練習支援アプリです。
 
 ゲーム画面の上に透過オーバーレイを表示し、打鍵すべきキーやタイミング、音ゲー風の落下ノーツ（Falling Notes）やアプローチサークル、ジャスト演出をリアルタイムにガイドします。
 

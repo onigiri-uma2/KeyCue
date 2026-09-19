@@ -66,7 +66,7 @@ class FittingOverlayView(
         set(value) { cornerController.isIndividualMode = value }
 
     // キャッシュ用ピクセル座標
-    private val keyPixelCenters = ArrayList<PointF>(FitProfile.KEY_COUNT)
+    private val keyPixelCenters = ArrayList<PointF>(initialProfile.keyCenters.size)
     private var keyRadiusPx: Float = 0f
 
     // 描画用ビュー
@@ -541,10 +541,10 @@ class FittingOverlayView(
         override fun onDraw(canvas: Canvas) {
             super.onDraw(canvas)
 
-            if (keyPixelCenters.size < FitProfile.KEY_COUNT) return
+            if (keyPixelCenters.isEmpty()) return
 
             // 1. 全キーの描画
-            for (i in 0 until FitProfile.KEY_COUNT) {
+            for (i in 0 until keyPixelCenters.size) {
                 val pt = keyPixelCenters[i]
                 canvas.drawCircle(pt.x, pt.y, keyRadiusPx, circleFillPaint)
                 canvas.drawCircle(pt.x, pt.y, keyRadiusPx, circleStrokePaint)

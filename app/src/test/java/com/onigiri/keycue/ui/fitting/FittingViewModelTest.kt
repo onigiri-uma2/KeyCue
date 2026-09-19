@@ -5,7 +5,9 @@ import com.onigiri.keycue.fitting.DetectedPoint
 import com.onigiri.keycue.fitting.GridFitter
 import com.onigiri.keycue.fitting.KeyDetector
 import com.onigiri.keycue.model.FitProfile
+import com.onigiri.keycue.model.FitProfileSerializer
 import com.onigiri.keycue.model.NormalizedPoint
+import com.onigiri.keycue.profile.SkyProfile
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -108,5 +110,50 @@ class FittingViewModelTest {
         assertEquals(true, viewModel.uiState.value.showDebugView)
         viewModel.toggleDebugView()
         assertEquals(false, viewModel.uiState.value.showDebugView)
+    }
+
+    @Test
+    fun `custom user adjusted profile from legacy json persists through repository and ViewModel`() = runBlocking {
+        // ユーザーが手動調整した意図的にズラした15座標＋半径比率の旧JSONデータ
+        // Key 0: (0.17, 0.61) ... Key 14: (0.84, 0.89), keyRadiusRatio: 0.053f
+        val customAdjustedJson = """
+            {"landscape":true,"keyRadiusRatio":0.053,"keyCenters":[{"x":0.17,"y":0.61},{"x":0.33,"y":0.62},{"x":0.49,"y":0.61},{"x":0.66,"y":0.63},{"x":0.82,"y":0.62},{"x":0.18,"y":0.74},{"x":0.34,"y":0.75},{"x":0.51,"y":0.74},{"x":0.67,"y":0.76},{"x":0.83,"y":0.75},{"x":0.19,"y":0.88},{"x":0.35,"y":0.89},{"x":0.52,"y":0.88},{"x":0.68,"y":0.90},{"x":0.84,"y":0.89}]}
+        """.trimIndent()
+
+        // 1. 旧JSONのデシリアライズ
+        val restoredProfile = FitProfileSerializer.fromJson(customAdjustedJson)
+        assertNotNull(restoredProfile)
+        assertEquals(SkyProfile.keyCount, restoredProfile!!.keyCenters.size)
+        assertEquals(0.053f, restoredProfile.keyRadiusRatio, 0.0001f)
+        assertEquals(0.17f, restoredProfile.keyCenters[0].x, 0.0001f)
+        assertEquals(0.61f, restoredProfile.keyCenters[0].y, 0.0001f)
+        assertEquals(0.84f, restoredProfile.keyCenters[14].x, 0.0001f)
+        assertEquals(0.89f, restoredProfile.keyCenters[14].y, 0.0001f)
+
+        // 2. SettingsRepository に保存（SharedPreferencesへの復元シミュレーション）
+        settingsRepo.saveFitProfile(restoredProfile)
+        assertEquals(restoredProfile, viewModel.uiState.value.savedProfile)
+
+        // 3. ViewModel の useSavedProfile() で画面に適用
+        viewModel.useSavedProfile()
+        val appliedState = viewModel.uiState.value
+        assertEquals(restoredProfile, appliedState.currentProfile)
+        assertEquals(0.053f, appliedState.currentProfile!!.keyRadiusRatio, 0.0001f)
+        assertEquals(0.17f, appliedState.currentProfile!!.keyCenters[0].x, 0.0001f)
+        assertEquals(0.61f, appliedState.currentProfile!!.keyCenters[0].y, 0.0001f)
+        assertEquals(0.84f, appliedState.currentProfile!!.keyCenters[14].x, 0.0001f)
+        assertEquals(0.89f, appliedState.currentProfile!!.keyCenters[14].y, 0.0001f)
+
+        // 4. 手動微調整モードに入っても保存済みプロファイルの4隅アンカーが正確に引き継がれること
+        viewModel.startManualAdjust()
+        val manualState = viewModel.uiState.value
+        assertEquals(0.17f, manualState.manualTopLeft.x, 0.001f)
+        assertEquals(0.61f, manualState.manualTopLeft.y, 0.001f)
+        assertEquals(0.82f, manualState.manualTopRight.x, 0.001f)
+        assertEquals(0.62f, manualState.manualTopRight.y, 0.001f)
+        assertEquals(0.19f, manualState.manualBottomLeft.x, 0.001f)
+        assertEquals(0.88f, manualState.manualBottomLeft.y, 0.001f)
+        assertEquals(0.84f, manualState.manualBottomRight.x, 0.001f)
+        assertEquals(0.89f, manualState.manualBottomRight.y, 0.001f)
     }
 }

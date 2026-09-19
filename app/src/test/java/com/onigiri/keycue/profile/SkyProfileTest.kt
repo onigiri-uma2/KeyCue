@@ -88,10 +88,6 @@ class SkyProfileTest {
         assertEquals(SkyProfile.defaultMidiNotes, MidiKeyMapper.DEFAULT_RESOLVED_MAPPING.midiNotes)
     }
 
-    @Test
-    fun `FitProfile KEY_COUNT legacy constant stays in sync with SkyProfile keyCount`() {
-        assertEquals(SkyProfile.keyCount, FitProfile.KEY_COUNT)
-    }
 
     @Test
     fun `getRow and getColumn match existing FallingNoteCalculator behavior for all valid keys`() {

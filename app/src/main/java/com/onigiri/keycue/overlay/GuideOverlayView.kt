@@ -78,7 +78,7 @@ class GuideOverlayView(
     }
 
     // 計算済みピクセル座標のキャッシュ
-    private val keyPixelCenters = ArrayList<PointF>(FitProfile.KEY_COUNT)
+    private val keyPixelCenters = ArrayList<PointF>(fitProfile.keyCenters.size)
     private var keyRadiusPx: Float = 0f
     private var textYOffset: Float = 0f
 

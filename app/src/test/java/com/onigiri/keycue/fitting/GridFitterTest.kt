@@ -2,6 +2,7 @@ package com.onigiri.keycue.fitting
 
 import com.onigiri.keycue.model.FitProfile
 import com.onigiri.keycue.model.NormalizedPoint
+import com.onigiri.keycue.profile.SkyProfile
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -42,7 +43,7 @@ class GridFitterTest {
 
         assertNotNull(result.profile)
         val profile = result.profile!!
-        assertEquals(FitProfile.KEY_COUNT, profile.keyCenters.size)
+        assertEquals(SkyProfile.keyCount, profile.keyCenters.size)
         assertTrue("Landscape should be true", profile.landscape)
         assertTrue("Confidence should be high for ideal points (>= 0.90)", result.confidence >= 0.90f)
 
@@ -75,12 +76,12 @@ class GridFitterTest {
 
         val result = fitter.fit(partialPoints, 1920, 1080)
         assertNotNull("Grid should be successfully estimated even with missing points", result.profile)
-        assertEquals(FitProfile.KEY_COUNT, result.profile!!.keyCenters.size)
+        assertEquals(SkyProfile.keyCount, result.profile!!.keyCenters.size)
         assertTrue("Confidence should still be reasonably high (>= 0.60)", result.confidence >= 0.60f)
 
         // 欠損したキー位置も正しく補完されているか（元の理想位置と近接しているか）
         val fullProfile = fitter.fit(fullPoints, 1920, 1080).profile!!
-        for (i in 0 until FitProfile.KEY_COUNT) {
+        for (i in 0 until SkyProfile.keyCount) {
             val estimated = result.profile!!.keyCenters[i]
             val ideal = fullProfile.keyCenters[i]
             assertEquals("Key $i X should match ideal", ideal.x, estimated.x, 0.02f)

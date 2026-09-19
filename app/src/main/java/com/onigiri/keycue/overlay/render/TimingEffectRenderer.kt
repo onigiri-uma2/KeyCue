@@ -56,8 +56,9 @@ class TimingEffectRenderer(
     }
 
     // 各キーの直近ジャスト突入時刻 (SystemClock.uptimeMillis) と直前フレーム状態
-    private val lastJustTriggerTimes = LongArray(FitProfile.KEY_COUNT) { -1L }
-    private val wasJustActive = BooleanArray(FitProfile.KEY_COUNT) { false }
+    private val keyCount = com.onigiri.keycue.profile.GameProfileRegistry.current.keyCount
+    private val lastJustTriggerTimes = LongArray(keyCount) { -1L }
+    private val wasJustActive = BooleanArray(keyCount) { false }
 
     // --- アプローチサークル（縮小タイミング円）用 Paint ---
     private val approachCirclePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {

@@ -77,20 +77,11 @@ class FitProfileTest {
     }
 
     @Test
-    fun fitProfile_rejectsInvalidKeyCount() {
-        // 14キー（1つ不足）
-        val fewerKeys = List(14) { NormalizedPoint(0.5f, 0.5f) }
-        val exFewer = assertThrows(IllegalArgumentException::class.java) {
-            FitProfile(keyCenters = fewerKeys)
+    fun fitProfile_rejectsEmptyKeyCenters() {
+        val ex = assertThrows(IllegalArgumentException::class.java) {
+            FitProfile(keyCenters = emptyList())
         }
-        assertTrue(exFewer.message?.contains("15") == true)
-
-        // 16キー（1つ超過）
-        val moreKeys = List(16) { NormalizedPoint(0.5f, 0.5f) }
-        val exMore = assertThrows(IllegalArgumentException::class.java) {
-            FitProfile(keyCenters = moreKeys)
-        }
-        assertTrue(exMore.message?.contains("15") == true)
+        assertTrue(ex.message?.contains("empty") == true)
     }
 
     @Test

@@ -38,7 +38,8 @@ object FitProfileSerializer {
             val pointRegex = Regex("\\{\\s*\"x\"\\s*:\\s*([0-9.]+)\\s*,\\s*\"y\"\\s*:\\s*([0-9.]+)\\s*\\}")
             val matches = pointRegex.findAll(json).toList()
 
-            if (matches.size != FitProfile.KEY_COUNT) {
+            val expectedKeyCount = com.onigiri.keycue.profile.GameProfileRegistry.current.keyCount
+            if (matches.size != expectedKeyCount) {
                 return null
             }
 
