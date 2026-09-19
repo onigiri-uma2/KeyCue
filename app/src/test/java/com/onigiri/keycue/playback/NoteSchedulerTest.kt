@@ -488,7 +488,7 @@ class NoteSchedulerTest {
 
     @Test
     fun scheduleFrame_repeatBadge_falsePositivePrevention_differentInterNoteInterval() {
-        // 前回ノート 0ms, 現在時刻 400ms, 次のノート 900ms, repeatSequenceMaxIntervalMs = 500ms
+        // 前回ノート 0ms, 現在時刻 400ms, 次のノート 900ms, approachCircleLeadTimeMs = 500ms
         // 現在時刻400msから見ると 0ms は過去500ms以内にあるが、次ノート(900ms)と前ノート(0ms)の間隔は 900ms > 500ms
         val events = listOf(
             NoteEvent(timeMs = 0L, key = 5),
@@ -528,7 +528,7 @@ class NoteSchedulerTest {
     }
 
     @Test
-    fun scheduleFrame_repeatSequence_followsApproachCircleLeadTime() {
+    fun scheduleFrame_repeatBadge_followsApproachCircleLeadTime() {
         // 前ノート 500ms, 次ノート 750ms (間隔 250ms)
         val events = listOf(
             NoteEvent(timeMs = 500L, key = 1),
@@ -616,5 +616,33 @@ class NoteSchedulerTest {
 
         assertTrue(base != differentApproachCircle)
         assertTrue(base.hashCode() != differentApproachCircle.hashCode())
+    }
+
+    @Test
+    fun scheduleFrame_chordGroups_boundaryAtNoteLeadTimeMs() {
+        val events = listOf(
+            NoteEvent(timeMs = 1000L, key = 0),
+            NoteEvent(timeMs = 1000L, key = 4)
+        )
+        val noteLeadTimeMs = 300L
+
+        // 300ms前 (currentTime = 700ms): 1000ms の和音が chordGroups に含まれる
+        val frame300 = scheduler.scheduleFrame(
+            events = events,
+            currentTimeMs = 700L,
+            noteLeadTimeMs = noteLeadTimeMs,
+            approachCircleLeadTimeMs = 200L
+        )
+        assertEquals(1, frame300.chordGroups.size)
+        assertEquals(1000L, frame300.chordGroups[0].timeMs)
+
+        // 301ms前 (currentTime = 699ms): 1000ms の和音は chordGroups に含まれない
+        val frame301 = scheduler.scheduleFrame(
+            events = events,
+            currentTimeMs = 699L,
+            noteLeadTimeMs = noteLeadTimeMs,
+            approachCircleLeadTimeMs = 200L
+        )
+        assertTrue(frame301.chordGroups.isEmpty())
     }
 }

@@ -51,8 +51,39 @@ class ChordVisualRenderer(context: Context) {
         private const val LINK_ALPHA = 150
         // Chord Halo のアルファ値（Chord Link より目立たない薄い外周線）
         private const val HALO_ALPHA = 90
-        /** Falling Notes OFF 時に直近和音を表示する先行時間（ミリ秒、既存挙動を維持） */
-        const val DEFAULT_CHORD_VISIBILITY_LEAD_TIME_MS = 200L
+
+        /**
+         * 和音（Chord Link / Chord Halo）が画面上に描画対象となるかを判定する。
+         *
+         * - Falling Notes ON: Chord Link/Halo は落下ノートに追従するため noteLeadTimeMs を使用する。
+         * - Falling Notes OFF: Chord Link/Halo はキー上の Approach Circle を視覚的にグループ化するため approachCircleLeadTimeMs を使用する。
+         *
+         * @param chordTimeMs 和音の打鍵目標時刻（ミリ秒）
+         * @param currentTimeMs 現在の楽曲再生位置（ミリ秒）
+         * @param noteLeadTimeMs ノート先読み時間（ミリ秒、Falling Notes ON 時に使用）
+         * @param approachCircleLeadTimeMs タイミングサークル先読み時間（ミリ秒、Falling Notes OFF 時に使用）
+         * @param showFallingNotes Falling Notes 表示が有効かどうか
+         * @return 描画対象であれば true
+         */
+        fun isChordVisible(
+            chordTimeMs: Long,
+            currentTimeMs: Long,
+            noteLeadTimeMs: Long,
+            approachCircleLeadTimeMs: Long,
+            showFallingNotes: Boolean
+        ): Boolean {
+            return if (showFallingNotes) {
+                val fallingProgress = FallingNoteCalculator.calculateProgress(
+                    eventTimeMs = chordTimeMs,
+                    currentTimeMs = currentTimeMs,
+                    noteLeadTimeMs = noteLeadTimeMs
+                )
+                FallingNoteCalculator.shouldDraw(fallingProgress)
+            } else {
+                val remainingTime = chordTimeMs - currentTimeMs
+                remainingTime <= approachCircleLeadTimeMs
+            }
+        }
     }
 
     /**
@@ -70,8 +101,7 @@ class ChordVisualRenderer(context: Context) {
         showChordLinks: Boolean,
         showChordHalos: Boolean,
         showFallingNotes: Boolean,
-        viewHeight: Int,
-        chordVisibilityLeadTimeMs: Long = DEFAULT_CHORD_VISIBILITY_LEAD_TIME_MS
+        viewHeight: Int
     ) {
         if (!showChordLinks && !showChordHalos) return
         if (frame.chordGroups.isEmpty()) return
@@ -94,10 +124,11 @@ class ChordVisualRenderer(context: Context) {
         // frame.chordGroups は NoteScheduler 側で timeMs 降順（遠い未来 -> 直近）にソート済み。
         // そのまま順次描画することで、遠い未来が背面に、直近が最前面に重なる。
         for (chord in frame.chordGroups) {
-            // Falling Notes OFF 時は画面ノイズを防ぐため、chordVisibilityLeadTimeMs 範囲内（直近）のみを描画
+            // Falling Notes OFF 時は、キー上の Approach Circle を視覚的にグループ化するため、
+            // approachCircleLeadTimeMs を基準として表示する。
             if (!showFallingNotes) {
                 val remainingTime = chord.timeMs - frame.currentTimeMs
-                if (remainingTime > chordVisibilityLeadTimeMs) continue
+                if (remainingTime > frame.approachCircleLeadTimeMs) continue
             }
 
             tempChordPoints.clear()

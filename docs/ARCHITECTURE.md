@@ -96,13 +96,13 @@ com.onigiri.keycue
 │
 ├── model/
 │   ├── NoteEvent.kt                    # 打鍵イベント定義 (timeMs, key 0..14)
-│   ├── SongData.kt                     # 楽曲メタデータ & ノーツリスト
+│   ├── SongData.kt                     # 楽曲メタデータ & ノートリスト
 │   ├── SongFormat.kt                   # 楽曲フォーマット種別 (SKY_STUDIO_JSON / MIDI)
 │   ├── FitProfile.kt                   # 15キーの正規化座標および半径比率
 │   ├── NormalizedPoint.kt              # 0.0〜1.0 の相対座標
-│   ├── VisualConfig.kt                 # ノーツ色、ガイド円半径、エフェクトON/OFF設定
+│   ├── VisualConfig.kt                 # ノート色、ガイド円半径、エフェクトON/OFF設定
 │   ├── MidiMappingSettings.kt          # MIDI手動/自動マッピング設定
-│   ├── PlaybackConfig.kt               # 再生速度、先読み、ハイライト、カウントダウン設定
+│   ├── PlaybackConfig.kt               # 再生速度、ノート先読み、サークル先読み、カウントダウン設定
 │   └── PlaybackSession.kt              # 現在選択中の楽曲と再生設定のペア
 │
 ├── fitting/
@@ -133,7 +133,7 @@ com.onigiri.keycue
 ├── playback/
 │   ├── PlaybackEngine.kt               # 再生状態管理、タイマーループ、イベントディスパッチ
 │   ├── PlaybackClock.kt                # ポーズ・シーク・速度対応の単調増加再生時計
-│   ├── NoteScheduler.kt                # 二分探索による表示対象ノーツの高速時間窓切り出し
+│   ├── NoteScheduler.kt                # 二分探索による表示対象ノートの高速時間窓切り出し
 │   ├── FallingNoteCalculator.kt        # 落下進行度 (0.0..1.0)、Y座標、キー行判定純粋関数
 │   ├── GuideFrame.kt                   # 1フレーム分の描画データ不変クラス
 │   ├── PlaybackState.kt                # 再生中、一時停止、停止、カウントダウン等の状態
@@ -150,7 +150,7 @@ com.onigiri.keycue
 │   ├── OverlayNotificationFactory.kt   # 常駐通知および操作アクション生成
 │   ├── OverlayFilePickerActivity.kt    # オーバーレイから呼び出す透明ファイル選択Activity
 │   └── render/
-│       ├── FallingNotesRenderer.kt     # 音ゲー風落下ノーツ (○/□/△) 専門レンダラー
+│       ├── FallingNotesRenderer.kt     # 音ゲー風落下ノート (○/□/△) 専門レンダラー
 │       └── TimingEffectRenderer.kt     # アプローチサークル、ジャスト演出専門レンダラー
 │
 └── ui/
@@ -208,14 +208,14 @@ OverlayService.onVsyncFrame()
        │        │
        │        ├─→ PlaybackClock.getCurrentTimeMs() (論理再生時刻)
        │        └─→ NoteScheduler.scheduleFrame(currentTimeMs)
-       │                 │ (二分探索で表示範囲ノーツを抽出)
+       │                 │ (二分探索で表示範囲ノートを抽出)
        │                 └─→ GuideFrame 生成
        │
        ▼
 GuideOverlayView.renderFrame(guideFrame)
        │ (invalidate -> onDraw)
        ├─→ FallingNotesRenderer.drawFallingNotes()
-       │        └─→ FallingNoteCalculator で各ノーツの進捗 & Y座標算出
+       │        └─→ FallingNoteCalculator で各ノートの進捗 & Y座標算出
        ├─→ TimingEffectRenderer.drawApproachCircles()
        └─→ TimingEffectRenderer.drawKeyJustEffect() (フラッシュ・二重リング・波紋)
 ```
@@ -227,6 +227,6 @@ GuideOverlayView.renderFrame(guideFrame)
 - **純粋ロジック・ドメイン層の JVM 単体テスト**:
   - Android SDK（Context等）に依存しない計算モジュール（`FallingNoteCalculator`, `NoteScheduler`, `PlaybackClock`, `TimeFormatter`, `GridFitter` 等）は、Robolectric等を使わず高速な純粋JUnitテストで100%検証。
 - **パーサー・マッピングの網羅的検証**:
-  - `MidiParserTest`, `MidiKeyMapperTest`, `SkyStudioJsonParserTest` において、異常系（破損ファイル、未対応フォーマット、ゼロ長ノーツ）のテストケースを整備。
+  - `MidiParserTest`, `MidiKeyMapperTest`, `SkyStudioJsonParserTest` において、異常系（破損ファイル、未対応フォーマット、ゼロ長ノート）のテストケースを整備。
 - **結合テスト**:
   - `Phase7IntegrationUnitTest` により、楽曲読み込みからスケジューリング、GuideFrame 生成までの統合フローを自動テスト化。

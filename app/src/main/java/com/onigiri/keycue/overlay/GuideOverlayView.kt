@@ -233,8 +233,7 @@ class GuideOverlayView(
                 showChordLinks = visualConfig.showChordLinks,
                 showChordHalos = visualConfig.showChordHalos,
                 showFallingNotes = visualConfig.showFallingNotes,
-                viewHeight = height,
-                chordVisibilityLeadTimeMs = ChordVisualRenderer.DEFAULT_CHORD_VISIBILITY_LEAD_TIME_MS
+                viewHeight = height
             )
         }
 

@@ -67,7 +67,6 @@ class NoteScheduler {
      * @param approachCircleLeadTimeMs タイミングサークル先読み時間（ミリ秒、例: 200ms）
      * @param justThresholdMs ジャスト判定幅（ミリ秒、例: 80ms）
      * @param countdownText カウントダウン中テキスト（例: "3", "START" 等）
-     * @param repeatSequenceMaxIntervalMs 同一キー連打系列と判定する最大ノート間隔（ミリ秒、デフォルト: approachCircleLeadTimeMs に追従）
      * @return 描画に必要な情報を含む [GuideFrame]
      */
     fun scheduleFrame(
@@ -76,8 +75,7 @@ class NoteScheduler {
         noteLeadTimeMs: Long = PlaybackConfig.DEFAULT_NOTE_LEAD_TIME_MS,
         approachCircleLeadTimeMs: Long = PlaybackConfig.DEFAULT_APPROACH_CIRCLE_LEAD_TIME_MS,
         justThresholdMs: Long = FallingNoteCalculator.DEFAULT_JUST_THRESHOLD_MS,
-        countdownText: String? = null,
-        repeatSequenceMaxIntervalMs: Long = approachCircleLeadTimeMs
+        countdownText: String? = null
     ): GuideFrame {
         if (events.isEmpty()) {
             return GuideFrame(
@@ -113,7 +111,9 @@ class NoteScheduler {
         val tempCircles = ArrayList<ApproachCircle>()
         val seenKeyTimes = HashSet<Long>()
 
-        // 和音グループ (ChordGroup) 収集用: noteLeadTimeMs 範囲内のノートから同一 timeMs のユニークキーを集計
+        // 和音グループ (ChordGroup) 収集用:
+        // どのキーを同時に押すかを先読みする目的であり、Falling Note が画面上に存在する期間（noteLeadTimeMs）を基準とする。
+        // （同一キーの Approach Circle 重なりを補助する連打バッジの approachCircleLeadTimeMs とは責務を分離）
         val chordKeysByTime = LinkedHashMap<Long, MutableList<Int>>()
         val seenChordKeyTimes = HashSet<Long>()
 
@@ -199,10 +199,17 @@ class NoteScheduler {
             }
         }
 
-        // 過去 repeatSequenceMaxIntervalMs 範囲のイベントから各キーの最後のノート時刻を取得（現在時刻ちょうどを含めない）
+        // --- 連打バッジのグルーピング時間幅 ---
+        // 連打バッジは譜面上の長期的な連打系列を予告する機能ではない。
+        // 同一キーの Approach Circle が時間的に重なって表示され、視認しづらくなる場合に、
+        // それらをまとめて示す UI 補助である。
+        // そのため、連打バッジのグルーピング時間幅は Approach Circle の表示期間（approachCircleLeadTimeMs）に従う。
+        val repeatBadgeGroupingWindowMs = approachCircleLeadTimeMs
+
+        // 過去 repeatBadgeGroupingWindowMs 範囲のイベントから各キーの最後のノート時刻を取得（現在時刻ちょうどを含めない）
         val lastPastTimeByKey = HashMap<Int, Long>()
         val pastRangeEnd = currentTimeMs - 1L
-        val pastRangeStart = (currentTimeMs - repeatSequenceMaxIntervalMs).coerceAtLeast(0L)
+        val pastRangeStart = (currentTimeMs - repeatBadgeGroupingWindowMs).coerceAtLeast(0L)
         if (pastRangeEnd >= pastRangeStart) {
             val pastEvents = findEventsInRange(events, pastRangeStart, pastRangeEnd)
             for (pNote in pastEvents) {
@@ -247,10 +254,13 @@ class NoteScheduler {
                     showRepeatBadge = true
                 } else {
                     remainingCount = 1
+                    // 「×1」は遠い未来に連打が終了することを予告するための表示ではなく、
+                    // Approach Circle が重なって見える連打グループの中で、
+                    // 現在表示されている系列の最後の1回であることを視覚的に示すためのもの。
                     val prevTime = lastPastTimeByKey[circle.key]
                     val futureTime = firstFutureTimeByKey[circle.key]
                     showRepeatBadge = prevTime != null && futureTime != null &&
-                            (futureTime - prevTime <= repeatSequenceMaxIntervalMs)
+                            (futureTime - prevTime <= repeatBadgeGroupingWindowMs)
                 }
             } else {
                 remainingCount = 1
@@ -281,10 +291,6 @@ class NoteScheduler {
         )
     }
 
-    companion object {
-        /** 同一キー連打系列と判定する最大ノート間隔（ミリ秒）。サークル先読み時間（重なり表示期間）に追従する。 */
-        const val DEFAULT_REPEAT_SEQUENCE_MAX_INTERVAL_MS = PlaybackConfig.DEFAULT_APPROACH_CIRCLE_LEAD_TIME_MS
-    }
 
     /**
      * 二分探索を用いて [startTimeMs, endTimeMs] の範囲に含まれるイベントのリストを抽出する。
