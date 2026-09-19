@@ -1,20 +1,20 @@
 package com.onigiri.keycue.model
 
 /**
- * 演奏ガイドおよびノーツのビジュアル（見た目・配色・エフェクト）設定を集約する不変データモデル。
+ * 演奏ガイドおよびノートのビジュアル（見た目・配色・エフェクト）設定を集約する不変データモデル。
  *
  * キーの位置・配置を保持する [FitProfile] と責務を分離し、
  * ユーザーが調整可能な外観パラメータの Single Source of Truth として機能します。
  *
  * @param showKeyNumbers ガイドのキー番号 (0..14) を表示するかどうか
- * @param showFallingNotes 落下ノーツを表示するかどうか
+ * @param showFallingNotes 落下ノートを表示するかどうか
  * @param showApproachCircles 音ゲー風アプローチサークル（縮小タイミング円）を表示するかどうか
  * @param showJustEffect ジャストタイミング時の発光演出を表示するかどうか
  * @param guideRadiusRatio 画面サイズに対するキーガイド円の半径比率 (0.02f..0.08f)
  * @param guideColor キーガイド円の基本描画色 (ARGB Int)
- * @param noteColorTop 上段ノーツ（Row 0, Key 0..4）の描画色 (ARGB Int)
- * @param noteColorMiddle 中段ノーツ（Row 1, Key 5..9）の描画色 (ARGB Int)
- * @param noteColorBottom 下段ノーツ（Row 2, Key 10..14）の描画色 (ARGB Int)
+ * @param noteColorTop 上段ノート（Row 0, Key 0..4）の描画色 (ARGB Int)
+ * @param noteColorMiddle 中段ノート（Row 1, Key 5..9）の描画色 (ARGB Int)
+ * @param noteColorBottom 下段ノート（Row 2, Key 10..14）の描画色 (ARGB Int)
  */
 data class VisualConfig(
     val showKeyNumbers: Boolean = DEFAULT_SHOW_KEY_NUMBERS,

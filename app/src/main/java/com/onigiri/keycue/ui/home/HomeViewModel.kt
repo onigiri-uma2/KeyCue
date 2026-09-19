@@ -73,8 +73,8 @@ class HomeViewModel(
 
                     base.copy(
                         speed = state.config.speed,
-                        leadTimeMs = state.config.leadTimeMs,
-                        highlightTimeMs = state.config.highlightTimeMs,
+                        noteLeadTimeMs = state.config.noteLeadTimeMs,
+                        approachCircleLeadTimeMs = state.config.approachCircleLeadTimeMs,
                         countdownMs = state.config.countdownMs,
                         fitConfigured = state.profile != null,
                         visualConfig = state.visualConfig,
@@ -250,24 +250,32 @@ class HomeViewModel(
     }
 
     /**
-     * 先読み時間をデルタ分変更する（最小300ms、最大2000ms、100ms刻み）
+     * ノート先読み時間をデルタ分変更する（最小300ms、最大2000ms、100ms刻み）
+     * サークル時間が超過する場合は自然に追従する。
      */
-    fun adjustLeadTime(deltaMs: Long) {
-        val newLeadTime = (_uiState.value.leadTimeMs + deltaMs).coerceIn(300L, 2000L)
-        _uiState.update { it.copy(leadTimeMs = newLeadTime) }
+    fun adjustNoteLeadTime(deltaMs: Long) {
+        val currentNote = _uiState.value.noteLeadTimeMs
+        val currentCircle = _uiState.value.approachCircleLeadTimeMs
+        val candidateNote = currentNote + deltaMs
+        val (clampedNote, clampedCircle) = PlaybackConfig.normalizeLeadTimes(candidateNote, currentCircle)
+        _uiState.update { it.copy(noteLeadTimeMs = clampedNote, approachCircleLeadTimeMs = clampedCircle) }
         scope.launch {
-            settingsRepository.saveLeadTimeMs(newLeadTime)
+            settingsRepository.saveNoteLeadTimeMs(clampedNote)
         }
     }
 
     /**
-     * 事前ハイライト時間をデルタ分変更する（最小100ms、最大1000ms、50ms刻み）
+     * タイミングサークル先読み時間をデルタ分変更する（最小100ms、最大1000ms、50ms刻み）
+     * ノート先読み時間を超える値にならないよう正規化する。
      */
-    fun adjustHighlightTime(deltaMs: Long) {
-        val newHl = (_uiState.value.highlightTimeMs + deltaMs).coerceIn(100L, 1000L)
-        _uiState.update { it.copy(highlightTimeMs = newHl) }
+    fun adjustApproachCircleLeadTime(deltaMs: Long) {
+        val currentNote = _uiState.value.noteLeadTimeMs
+        val currentCircle = _uiState.value.approachCircleLeadTimeMs
+        val candidateCircle = currentCircle + deltaMs
+        val (_, clampedCircle) = PlaybackConfig.normalizeLeadTimes(currentNote, candidateCircle)
+        _uiState.update { it.copy(approachCircleLeadTimeMs = clampedCircle) }
         scope.launch {
-            settingsRepository.saveHighlightTimeMs(newHl)
+            settingsRepository.saveApproachCircleLeadTimeMs(clampedCircle)
         }
     }
 

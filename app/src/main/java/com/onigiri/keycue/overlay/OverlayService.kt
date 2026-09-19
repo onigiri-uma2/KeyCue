@@ -122,9 +122,9 @@ class OverlayService : Service() {
                     settingsRepository.saveSpeed(newSpeed)
                 }
             },
-            onLeadTimeChange = { newLead ->
+            onNoteLeadTimeChange = { newLead ->
                 serviceScope.launch {
-                    settingsRepository.saveLeadTimeMs(newLead)
+                    settingsRepository.saveNoteLeadTimeMs(newLead)
                 }
             },
             onSaveFitProfile = { profile ->
@@ -357,7 +357,7 @@ class OverlayService : Service() {
             else -> null
         }
 
-        // 停止時および再生完了時は空フレームにしてノーツ・ハイライト等を即座にクリア
+        // 停止時および再生完了時は空フレームにしてノート・ハイライト等を即座にクリア
         val frame = if (state is PlaybackState.Stopped || state is PlaybackState.Finished) {
             com.onigiri.keycue.playback.GuideFrame(
                 currentTimeMs = if (state is PlaybackState.Stopped) 0L else currentPos,
@@ -365,14 +365,15 @@ class OverlayService : Service() {
                 highlightedKeys = emptySet(),
                 justKeys = emptySet(),
                 countdownText = null,
-                leadTimeMs = config.leadTimeMs
+                noteLeadTimeMs = config.noteLeadTimeMs,
+                approachCircleLeadTimeMs = config.approachCircleLeadTimeMs
             )
         } else {
             noteScheduler.scheduleFrame(
                 events = song?.events ?: emptyList(),
                 currentTimeMs = currentPos,
-                leadTimeMs = config.leadTimeMs,
-                highlightTimeMs = config.highlightTimeMs,
+                noteLeadTimeMs = config.noteLeadTimeMs,
+                approachCircleLeadTimeMs = config.approachCircleLeadTimeMs,
                 countdownText = countdownText
             )
         }
@@ -384,7 +385,7 @@ class OverlayService : Service() {
             durationMs = song?.durationMs ?: 0L,
             speed = config.speed,
             songTitle = song?.title,
-            leadTimeMs = config.leadTimeMs
+            noteLeadTimeMs = config.noteLeadTimeMs
         )
     }
 

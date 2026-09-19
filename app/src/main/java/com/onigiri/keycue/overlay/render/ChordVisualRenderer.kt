@@ -13,7 +13,7 @@ import com.onigiri.keycue.playback.GuideFrame
  * 和音・同時押しキーの視覚的グルーピング（Chord Link および Chord Halo）の描画を担当するレンダラー。
  *
  * - **Chord Link**: 同一時刻のキー間を最小全域木（MST）で結ぶリンク線（N点に対し N-1 本）
- * - **Chord Halo**: 同一時刻のキー/ノーツ群の外側を薄く囲む Stroke 枠線（Convex Hull + margin）
+ * - **Chord Halo**: 同一時刻のキー/ノート群の外側を薄く囲む Stroke 枠線（Convex Hull + margin）
  *
  * GameProfile の 15 キーや 3x5 配置をハードコードせず、渡された座標リストにのみ依存します。
  * また、毎フレームの onDraw 経路における不要なアロケーションを抑えるため、
@@ -51,12 +51,14 @@ class ChordVisualRenderer(context: Context) {
         private const val LINK_ALPHA = 150
         // Chord Halo のアルファ値（Chord Link より目立たない薄い外周線）
         private const val HALO_ALPHA = 90
+        /** Falling Notes OFF 時に直近和音を表示する先行時間（ミリ秒、既存挙動を維持） */
+        const val DEFAULT_CHORD_VISIBILITY_LEAD_TIME_MS = 200L
     }
 
     /**
      * 和音リンクおよび和音ハローを描画する。
      *
-     * 描画レイヤー順序に従い、ノーツや Approach Circle の背面に描画します。
+     * 描画レイヤー順序に従い、ノートや Approach Circle の背面に描画します。
      * 遠い未来の ChordGroup から先に描画し、直近が前面に来るよう timeMs 降順で描画します。
      */
     fun drawChords(
@@ -69,7 +71,7 @@ class ChordVisualRenderer(context: Context) {
         showChordHalos: Boolean,
         showFallingNotes: Boolean,
         viewHeight: Int,
-        highlightTimeMs: Long
+        chordVisibilityLeadTimeMs: Long = DEFAULT_CHORD_VISIBILITY_LEAD_TIME_MS
     ) {
         if (!showChordLinks && !showChordHalos) return
         if (frame.chordGroups.isEmpty()) return
@@ -92,10 +94,10 @@ class ChordVisualRenderer(context: Context) {
         // frame.chordGroups は NoteScheduler 側で timeMs 降順（遠い未来 -> 直近）にソート済み。
         // そのまま順次描画することで、遠い未来が背面に、直近が最前面に重なる。
         for (chord in frame.chordGroups) {
-            // Falling Notes OFF 時は画面ノイズを防ぐため、highlightTimeMs 範囲内（直近）のみを描画
+            // Falling Notes OFF 時は画面ノイズを防ぐため、chordVisibilityLeadTimeMs 範囲内（直近）のみを描画
             if (!showFallingNotes) {
                 val remainingTime = chord.timeMs - frame.currentTimeMs
-                if (remainingTime > highlightTimeMs) continue
+                if (remainingTime > chordVisibilityLeadTimeMs) continue
             }
 
             tempChordPoints.clear()
@@ -104,15 +106,15 @@ class ChordVisualRenderer(context: Context) {
             val visualRadius: Float
 
             if (showFallingNotes) {
-                // Falling Notes ON: 落下中ノーツの現在座標に追従
+                // Falling Notes ON: 落下中ノートの現在座標に追従
                 val fallingProgress = FallingNoteCalculator.calculateProgress(
                     eventTimeMs = chord.timeMs,
                     currentTimeMs = frame.currentTimeMs,
-                    leadTimeMs = frame.leadTimeMs
+                    noteLeadTimeMs = frame.noteLeadTimeMs
                 )
                 if (!FallingNoteCalculator.shouldDraw(fallingProgress)) continue
 
-                // 落下ノーツの半径
+                // 落下ノートの半径
                 visualRadius = keyRadiusPx * 0.65f + haloMarginPx
 
                 for (key in chord.keys) {

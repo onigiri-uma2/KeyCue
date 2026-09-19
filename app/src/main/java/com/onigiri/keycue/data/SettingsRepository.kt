@@ -23,13 +23,13 @@ interface SettingsRepository {
     val speed: StateFlow<Float>
     suspend fun saveSpeed(speed: Float)
 
-    /** 先読み時間（ミリ秒） */
-    val leadTimeMs: StateFlow<Long>
-    suspend fun saveLeadTimeMs(leadTimeMs: Long)
+    /** ノート先読み時間（ミリ秒） */
+    val noteLeadTimeMs: StateFlow<Long>
+    suspend fun saveNoteLeadTimeMs(noteLeadTimeMs: Long)
 
-    /** 事前ハイライト時間（ミリ秒） */
-    val highlightTimeMs: StateFlow<Long>
-    suspend fun saveHighlightTimeMs(highlightTimeMs: Long)
+    /** タイミングサークル先読み時間（ミリ秒） */
+    val approachCircleLeadTimeMs: StateFlow<Long>
+    suspend fun saveApproachCircleLeadTimeMs(approachCircleLeadTimeMs: Long)
 
     /** 開始前カウントダウン時間（ミリ秒） */
     val countdownMs: StateFlow<Long>
@@ -51,7 +51,7 @@ interface SettingsRepository {
     val fitProfile: StateFlow<com.onigiri.keycue.model.FitProfile?>
     suspend fun saveFitProfile(profile: com.onigiri.keycue.model.FitProfile?)
 
-    /** 演奏ガイドおよびノーツのビジュアル設定 (VisualConfig) */
+    /** 演奏ガイドおよびノートのビジュアル設定 (VisualConfig) */
     val visualConfig: StateFlow<com.onigiri.keycue.model.VisualConfig>
     suspend fun saveVisualConfig(config: com.onigiri.keycue.model.VisualConfig)
     suspend fun updateVisualConfig(transform: (com.onigiri.keycue.model.VisualConfig) -> com.onigiri.keycue.model.VisualConfig) =
@@ -91,19 +91,20 @@ interface SettingsRepository {
 /**
  * Android標準のSharedPreferencesを利用した永続化 SettingsRepository 実装。
  */
-class SharedPreferencesSettingsRepository(
-    context: Context,
-    prefsName: String = "keycue_settings"
+class SharedPreferencesSettingsRepository internal constructor(
+    private val prefs: SharedPreferences
 ) : SettingsRepository {
 
-    private val prefs: SharedPreferences =
-        context.applicationContext.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
+    constructor(
+        context: Context,
+        prefsName: String = "keycue_settings"
+    ) : this(context.applicationContext.getSharedPreferences(prefsName, Context.MODE_PRIVATE))
 
     companion object {
         private const val KEY_LAST_SONG_URI = "last_song_uri"
         private const val KEY_SPEED = "playback_speed"
-        private const val KEY_LEAD_TIME = "lead_time_ms"
-        private const val KEY_HIGHLIGHT_TIME = "highlight_time_ms"
+        private const val KEY_NOTE_LEAD_TIME = "lead_time_ms"
+        private const val KEY_APPROACH_CIRCLE_LEAD_TIME = "highlight_time_ms"
         private const val KEY_COUNTDOWN = "countdown_ms"
         private const val KEY_OVERLAY_NORM_X = "overlay_norm_x"
         private const val KEY_OVERLAY_NORM_Y = "overlay_norm_y"
@@ -140,26 +141,26 @@ class SharedPreferencesSettingsRepository(
     private val _lastSongUri = MutableStateFlow(prefs.getString(KEY_LAST_SONG_URI, null))
     override val lastSongUri: StateFlow<String?> = _lastSongUri.asStateFlow()
 
-    private val _speed = MutableStateFlow(prefs.getFloat(KEY_SPEED, 1.0f).coerceIn(0.25f, 2.0f))
+    private val _initialConfig = PlaybackConfig.normalize(
+        speed = prefs.getFloat(KEY_SPEED, 1.0f),
+        noteLeadTimeMs = prefs.getLong(KEY_NOTE_LEAD_TIME, PlaybackConfig.DEFAULT_NOTE_LEAD_TIME_MS),
+        approachCircleLeadTimeMs = prefs.getLong(KEY_APPROACH_CIRCLE_LEAD_TIME, PlaybackConfig.DEFAULT_APPROACH_CIRCLE_LEAD_TIME_MS),
+        countdownMs = prefs.getLong(KEY_COUNTDOWN, 3000L)
+    )
+
+    private val _speed = MutableStateFlow(_initialConfig.speed)
     override val speed: StateFlow<Float> = _speed.asStateFlow()
 
-    private val _leadTimeMs = MutableStateFlow(prefs.getLong(KEY_LEAD_TIME, PlaybackConfig.DEFAULT_LEAD_TIME_MS).coerceIn(300L, 2000L))
-    override val leadTimeMs: StateFlow<Long> = _leadTimeMs.asStateFlow()
+    private val _noteLeadTimeMs = MutableStateFlow(_initialConfig.noteLeadTimeMs)
+    override val noteLeadTimeMs: StateFlow<Long> = _noteLeadTimeMs.asStateFlow()
 
-    private val _highlightTimeMs = MutableStateFlow(prefs.getLong(KEY_HIGHLIGHT_TIME, PlaybackConfig.DEFAULT_HIGHLIGHT_TIME_MS).coerceIn(100L, 1000L))
-    override val highlightTimeMs: StateFlow<Long> = _highlightTimeMs.asStateFlow()
+    private val _approachCircleLeadTimeMs = MutableStateFlow(_initialConfig.approachCircleLeadTimeMs)
+    override val approachCircleLeadTimeMs: StateFlow<Long> = _approachCircleLeadTimeMs.asStateFlow()
 
-    private val _countdownMs = MutableStateFlow(prefs.getLong(KEY_COUNTDOWN, 3000L).coerceIn(0L, 5000L))
+    private val _countdownMs = MutableStateFlow(_initialConfig.countdownMs)
     override val countdownMs: StateFlow<Long> = _countdownMs.asStateFlow()
 
-    private val _playbackConfig = MutableStateFlow(
-        PlaybackConfig(
-            speed = _speed.value,
-            leadTimeMs = _leadTimeMs.value,
-            highlightTimeMs = _highlightTimeMs.value,
-            countdownMs = _countdownMs.value
-        )
-    )
+    private val _playbackConfig = MutableStateFlow(_initialConfig)
     override val playbackConfig: StateFlow<PlaybackConfig> = _playbackConfig.asStateFlow()
 
     private val _overlayPositionNormalized: MutableStateFlow<NormalizedPoint?> = MutableStateFlow(
@@ -236,12 +237,12 @@ class SharedPreferencesSettingsRepository(
         savePlaybackConfig(_playbackConfig.value.copy(speed = speed))
     }
 
-    override suspend fun saveLeadTimeMs(leadTimeMs: Long) {
-        savePlaybackConfig(_playbackConfig.value.copy(leadTimeMs = leadTimeMs))
+    override suspend fun saveNoteLeadTimeMs(noteLeadTimeMs: Long) {
+        savePlaybackConfig(_playbackConfig.value.copy(noteLeadTimeMs = noteLeadTimeMs))
     }
 
-    override suspend fun saveHighlightTimeMs(highlightTimeMs: Long) {
-        savePlaybackConfig(_playbackConfig.value.copy(highlightTimeMs = highlightTimeMs))
+    override suspend fun saveApproachCircleLeadTimeMs(approachCircleLeadTimeMs: Long) {
+        savePlaybackConfig(_playbackConfig.value.copy(approachCircleLeadTimeMs = approachCircleLeadTimeMs))
     }
 
     override suspend fun saveCountdownMs(countdownMs: Long) {
@@ -254,8 +255,8 @@ class SharedPreferencesSettingsRepository(
 
         prefs.edit()
             .putFloat(KEY_SPEED, normalized.speed)
-            .putLong(KEY_LEAD_TIME, normalized.leadTimeMs)
-            .putLong(KEY_HIGHLIGHT_TIME, normalized.highlightTimeMs)
+            .putLong(KEY_NOTE_LEAD_TIME, normalized.noteLeadTimeMs)
+            .putLong(KEY_APPROACH_CIRCLE_LEAD_TIME, normalized.approachCircleLeadTimeMs)
             .putLong(KEY_COUNTDOWN, normalized.countdownMs)
             .apply()
     }
@@ -344,8 +345,8 @@ class SharedPreferencesSettingsRepository(
     private fun applyPlaybackConfig(config: PlaybackConfig) {
         _playbackConfig.value = config
         _speed.value = config.speed
-        _leadTimeMs.value = config.leadTimeMs
-        _highlightTimeMs.value = config.highlightTimeMs
+        _noteLeadTimeMs.value = config.noteLeadTimeMs
+        _approachCircleLeadTimeMs.value = config.approachCircleLeadTimeMs
         _countdownMs.value = config.countdownMs
     }
 }
@@ -359,8 +360,8 @@ class InMemorySettingsRepository(
     initialOverlayNormalized: NormalizedPoint? = null,
     initialFitProfile: com.onigiri.keycue.model.FitProfile? = null,
     initialSpeed: Float = 1.0f,
-    initialLeadTimeMs: Long = PlaybackConfig.DEFAULT_LEAD_TIME_MS,
-    initialHighlightTimeMs: Long = PlaybackConfig.DEFAULT_HIGHLIGHT_TIME_MS,
+    initialNoteLeadTimeMs: Long = PlaybackConfig.DEFAULT_NOTE_LEAD_TIME_MS,
+    initialApproachCircleLeadTimeMs: Long = PlaybackConfig.DEFAULT_APPROACH_CIRCLE_LEAD_TIME_MS,
     initialCountdownMs: Long = 3000L,
     initialVisualConfig: com.onigiri.keycue.model.VisualConfig = com.onigiri.keycue.model.VisualConfig(),
     initialMidiMappingSettings: com.onigiri.keycue.model.MidiMappingSettings = com.onigiri.keycue.model.MidiMappingSettings()
@@ -376,26 +377,26 @@ class InMemorySettingsRepository(
     private val _fitProfile = MutableStateFlow(initialFitProfile)
     override val fitProfile: StateFlow<com.onigiri.keycue.model.FitProfile?> = _fitProfile.asStateFlow()
 
-    private val _speed = MutableStateFlow(initialSpeed.coerceIn(0.25f, 2.0f))
+    private val _initialConfig = PlaybackConfig.normalize(
+        speed = initialSpeed,
+        noteLeadTimeMs = initialNoteLeadTimeMs,
+        approachCircleLeadTimeMs = initialApproachCircleLeadTimeMs,
+        countdownMs = initialCountdownMs
+    )
+
+    private val _speed = MutableStateFlow(_initialConfig.speed)
     override val speed: StateFlow<Float> = _speed.asStateFlow()
 
-    private val _leadTimeMs = MutableStateFlow(initialLeadTimeMs.coerceIn(300L, 2000L))
-    override val leadTimeMs: StateFlow<Long> = _leadTimeMs.asStateFlow()
+    private val _noteLeadTimeMs = MutableStateFlow(_initialConfig.noteLeadTimeMs)
+    override val noteLeadTimeMs: StateFlow<Long> = _noteLeadTimeMs.asStateFlow()
 
-    private val _highlightTimeMs = MutableStateFlow(initialHighlightTimeMs.coerceIn(100L, 1000L))
-    override val highlightTimeMs: StateFlow<Long> = _highlightTimeMs.asStateFlow()
+    private val _approachCircleLeadTimeMs = MutableStateFlow(_initialConfig.approachCircleLeadTimeMs)
+    override val approachCircleLeadTimeMs: StateFlow<Long> = _approachCircleLeadTimeMs.asStateFlow()
 
-    private val _countdownMs = MutableStateFlow(initialCountdownMs.coerceIn(0L, 5000L))
+    private val _countdownMs = MutableStateFlow(_initialConfig.countdownMs)
     override val countdownMs: StateFlow<Long> = _countdownMs.asStateFlow()
 
-    private val _playbackConfig = MutableStateFlow(
-        PlaybackConfig(
-            speed = _speed.value,
-            leadTimeMs = _leadTimeMs.value,
-            highlightTimeMs = _highlightTimeMs.value,
-            countdownMs = _countdownMs.value
-        )
-    )
+    private val _playbackConfig = MutableStateFlow(_initialConfig)
     override val playbackConfig: StateFlow<PlaybackConfig> = _playbackConfig.asStateFlow()
 
     private val _overlayPositionNormalized = MutableStateFlow(initialOverlayNormalized)
@@ -418,12 +419,12 @@ class InMemorySettingsRepository(
         savePlaybackConfig(_playbackConfig.value.copy(speed = speed))
     }
 
-    override suspend fun saveLeadTimeMs(leadTimeMs: Long) {
-        savePlaybackConfig(_playbackConfig.value.copy(leadTimeMs = leadTimeMs))
+    override suspend fun saveNoteLeadTimeMs(noteLeadTimeMs: Long) {
+        savePlaybackConfig(_playbackConfig.value.copy(noteLeadTimeMs = noteLeadTimeMs))
     }
 
-    override suspend fun saveHighlightTimeMs(highlightTimeMs: Long) {
-        savePlaybackConfig(_playbackConfig.value.copy(highlightTimeMs = highlightTimeMs))
+    override suspend fun saveApproachCircleLeadTimeMs(approachCircleLeadTimeMs: Long) {
+        savePlaybackConfig(_playbackConfig.value.copy(approachCircleLeadTimeMs = approachCircleLeadTimeMs))
     }
 
     override suspend fun saveCountdownMs(countdownMs: Long) {
@@ -444,19 +445,14 @@ class InMemorySettingsRepository(
 
     override suspend fun saveFitProfile(profile: com.onigiri.keycue.model.FitProfile?) {
         _fitProfile.value = profile
-        if (profile != null) {
-            saveGuideRadiusRatio(profile.keyRadiusRatio)
-        }
     }
 
     override suspend fun saveVisualConfig(config: com.onigiri.keycue.model.VisualConfig) {
-        _visualConfig.value = com.onigiri.keycue.model.VisualConfig.safe(
-            showKeyNumbers = config.showKeyNumbers,
-            showFallingNotes = config.showFallingNotes,
-            showApproachCircles = config.showApproachCircles,
-            showRepeatCountBadge = config.showRepeatCountBadge,
-            showJustEffect = config.showJustEffect,
-            guideRadiusRatio = config.guideRadiusRatio,
+        _visualConfig.value = config.copy(
+            guideRadiusRatio = config.guideRadiusRatio.coerceIn(
+                com.onigiri.keycue.model.VisualConfig.MIN_GUIDE_RADIUS_RATIO,
+                com.onigiri.keycue.model.VisualConfig.MAX_GUIDE_RADIUS_RATIO
+            ),
             guideColor = config.guideColor,
             noteColorTop = config.noteColorTop,
             noteColorMiddle = config.noteColorMiddle,
@@ -466,8 +462,6 @@ class InMemorySettingsRepository(
         )
     }
 
-
-
     override suspend fun saveMidiMappingSettings(settings: com.onigiri.keycue.model.MidiMappingSettings) {
         val safeOctave = settings.manualBaseOctave.coerceIn(2, 6)
         _midiMappingSettings.value = settings.copy(manualBaseOctave = safeOctave)
@@ -476,8 +470,8 @@ class InMemorySettingsRepository(
     private fun applyPlaybackConfig(config: PlaybackConfig) {
         _playbackConfig.value = config
         _speed.value = config.speed
-        _leadTimeMs.value = config.leadTimeMs
-        _highlightTimeMs.value = config.highlightTimeMs
+        _noteLeadTimeMs.value = config.noteLeadTimeMs
+        _approachCircleLeadTimeMs.value = config.approachCircleLeadTimeMs
         _countdownMs.value = config.countdownMs
     }
 }

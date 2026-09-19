@@ -14,18 +14,18 @@ class SettingsRepositoryTest {
         val repo = InMemorySettingsRepository(
             initialSongUri = "content://test/song.mid",
             initialSpeed = 1.25f,
-            initialLeadTimeMs = 1000L,
-            initialHighlightTimeMs = 200L,
+            initialNoteLeadTimeMs = 1000L,
+            initialApproachCircleLeadTimeMs = 200L,
             initialCountdownMs = 5000L
         )
 
         assertEquals("content://test/song.mid", repo.lastSongUri.value)
         assertEquals(1.25f, repo.speed.value, 0.001f)
-        assertEquals(1000L, repo.leadTimeMs.value)
-        assertEquals(200L, repo.highlightTimeMs.value)
+        assertEquals(1000L, repo.noteLeadTimeMs.value)
+        assertEquals(200L, repo.approachCircleLeadTimeMs.value)
         assertEquals(5000L, repo.countdownMs.value)
         assertEquals(1.25f, repo.playbackConfig.value.speed, 0.001f)
-        assertEquals(1000L, repo.playbackConfig.value.leadTimeMs)
+        assertEquals(1000L, repo.playbackConfig.value.noteLeadTimeMs)
     }
 
     @Test
@@ -34,11 +34,11 @@ class SettingsRepositoryTest {
 
         assertNull(repo.lastSongUri.value)
         assertEquals(1.0f, repo.speed.value, 0.001f)
-        assertEquals(300L, repo.leadTimeMs.value)
-        assertEquals(200L, repo.highlightTimeMs.value)
+        assertEquals(300L, repo.noteLeadTimeMs.value)
+        assertEquals(200L, repo.approachCircleLeadTimeMs.value)
         assertEquals(3000L, repo.countdownMs.value)
-        assertEquals(300L, repo.playbackConfig.value.leadTimeMs)
-        assertEquals(200L, repo.playbackConfig.value.highlightTimeMs)
+        assertEquals(300L, repo.playbackConfig.value.noteLeadTimeMs)
+        assertEquals(200L, repo.playbackConfig.value.approachCircleLeadTimeMs)
         assertEquals(false, repo.visualConfig.value.showChordLinks)
         assertEquals(true, repo.visualConfig.value.showChordHalos)
     }
@@ -57,25 +57,36 @@ class SettingsRepositoryTest {
     }
 
     @Test
-    fun `saveLeadTimeMs clamps invalid values`() = runBlocking {
-        val repo = InMemorySettingsRepository()
+    fun `saveNoteLeadTimeMs clamps invalid values and adjusts approachCircleLeadTimeMs`() = runBlocking {
+        val repo = InMemorySettingsRepository(
+            initialNoteLeadTimeMs = 500L,
+            initialApproachCircleLeadTimeMs = 400L
+        )
 
-        repo.saveLeadTimeMs(100L)
-        assertEquals(300L, repo.leadTimeMs.value)
+        // 下限 clamp (300L) かつ approachCircle も 300L 以下に連動追従
+        repo.saveNoteLeadTimeMs(100L)
+        assertEquals(300L, repo.noteLeadTimeMs.value)
+        assertEquals(300L, repo.approachCircleLeadTimeMs.value)
 
-        repo.saveLeadTimeMs(5000L)
-        assertEquals(2000L, repo.leadTimeMs.value)
+        // 上限 clamp (2000L)
+        repo.saveNoteLeadTimeMs(5000L)
+        assertEquals(2000L, repo.noteLeadTimeMs.value)
     }
 
     @Test
-    fun `saveHighlightTimeMs clamps invalid values`() = runBlocking {
-        val repo = InMemorySettingsRepository()
+    fun `saveApproachCircleLeadTimeMs clamps invalid values and enforces invariant`() = runBlocking {
+        val repo = InMemorySettingsRepository(
+            initialNoteLeadTimeMs = 300L,
+            initialApproachCircleLeadTimeMs = 200L
+        )
 
-        repo.saveHighlightTimeMs(50L)
-        assertEquals(100L, repo.highlightTimeMs.value)
+        // 下限 clamp (100L)
+        repo.saveApproachCircleLeadTimeMs(50L)
+        assertEquals(100L, repo.approachCircleLeadTimeMs.value)
 
-        repo.saveHighlightTimeMs(2000L)
-        assertEquals(1000L, repo.highlightTimeMs.value)
+        // 上限 clamp かつ noteLeadTimeMs (300L) を超えない
+        repo.saveApproachCircleLeadTimeMs(500L)
+        assertEquals(300L, repo.approachCircleLeadTimeMs.value)
     }
 
     @Test
@@ -109,21 +120,21 @@ class SettingsRepositoryTest {
     }
 
     @Test
-    fun `savePlaybackConfig updates all fields`() = runBlocking {
+    fun `savePlaybackConfig updates all fields with normalization`() = runBlocking {
         val repo = InMemorySettingsRepository()
-        repo.savePlaybackConfig(PlaybackConfig(speed = 1.5f, leadTimeMs = 1500L, highlightTimeMs = 500L, countdownMs = 1000L))
+        repo.savePlaybackConfig(PlaybackConfig(speed = 1.5f, noteLeadTimeMs = 1500L, approachCircleLeadTimeMs = 500L, countdownMs = 1000L))
 
         assertEquals(1.5f, repo.speed.value, 0.001f)
-        assertEquals(1500L, repo.leadTimeMs.value)
-        assertEquals(500L, repo.highlightTimeMs.value)
+        assertEquals(1500L, repo.noteLeadTimeMs.value)
+        assertEquals(500L, repo.approachCircleLeadTimeMs.value)
         assertEquals(1000L, repo.countdownMs.value)
     }
 
     @Test
     fun `partial playback update preserves unrelated fields`() = runBlocking {
         val repo = InMemorySettingsRepository(
-            initialLeadTimeMs = 1500L,
-            initialHighlightTimeMs = 750L,
+            initialNoteLeadTimeMs = 1500L,
+            initialApproachCircleLeadTimeMs = 750L,
             initialCountdownMs = 5000L
         )
 
@@ -136,12 +147,13 @@ class SettingsRepositoryTest {
     }
 
     @Test
-    fun `PlaybackConfig normalization is shared by bulk updates`() = runBlocking {
+    fun `PlaybackConfig normalization is shared by bulk updates and enforces invariant`() = runBlocking {
         val repo = InMemorySettingsRepository()
 
+        // note = 1L (clamped to 300), circle = 9000L (clamped to min(1000, 300) = 300)
         repo.savePlaybackConfig(PlaybackConfig(9f, 1L, 9_000L, -1L))
 
-        assertEquals(PlaybackConfig(2f, 300L, 1000L, 0L), repo.playbackConfig.value)
+        assertEquals(PlaybackConfig(2f, 300L, 300L, 0L), repo.playbackConfig.value)
     }
 
     @Test
@@ -264,5 +276,89 @@ class SettingsRepositoryTest {
         )
         repo.saveMidiMappingSettings(newSettings)
         assertEquals(newSettings, repo.midiMappingSettings.value)
+    }
+
+    @Test
+    fun `SharedPreferences backwards compatibility with legacy keys`() {
+        val legacyPrefs = createFakePrefs(
+            mapOf(
+                "lead_time_ms" to 700L,
+                "highlight_time_ms" to 300L
+            )
+        )
+        val repo = SharedPreferencesSettingsRepository(legacyPrefs)
+
+        assertEquals(700L, repo.noteLeadTimeMs.value)
+        assertEquals(300L, repo.approachCircleLeadTimeMs.value)
+        assertEquals(700L, repo.playbackConfig.value.noteLeadTimeMs)
+        assertEquals(300L, repo.playbackConfig.value.approachCircleLeadTimeMs)
+    }
+
+    @Test
+    fun `SharedPreferences normalizes inconsistent legacy saved values where circle exceeds note`() {
+        val inconsistentPrefs = createFakePrefs(
+            mapOf(
+                "lead_time_ms" to 300L,
+                "highlight_time_ms" to 400L
+            )
+        )
+        val repo = SharedPreferencesSettingsRepository(inconsistentPrefs)
+
+        // 0 <= approachCircleLeadTimeMs <= noteLeadTimeMs の不変条件が保証される
+        assertEquals(300L, repo.noteLeadTimeMs.value)
+        assertEquals(300L, repo.approachCircleLeadTimeMs.value)
+        assertEquals(300L, repo.playbackConfig.value.approachCircleLeadTimeMs)
+    }
+
+    @Test
+    fun `SharedPreferences defaults to 300ms note and 200ms approach circle when empty`() {
+        val emptyPrefs = createFakePrefs(emptyMap())
+        val repo = SharedPreferencesSettingsRepository(emptyPrefs)
+
+        assertEquals(300L, repo.noteLeadTimeMs.value)
+        assertEquals(200L, repo.approachCircleLeadTimeMs.value)
+        assertEquals(PlaybackConfig.DEFAULT_NOTE_LEAD_TIME_MS, repo.noteLeadTimeMs.value)
+        assertEquals(PlaybackConfig.DEFAULT_APPROACH_CIRCLE_LEAD_TIME_MS, repo.approachCircleLeadTimeMs.value)
+    }
+
+    private fun createFakePrefs(initialData: Map<String, Any>): android.content.SharedPreferences {
+        val map = HashMap<String, Any>(initialData)
+        return java.lang.reflect.Proxy.newProxyInstance(
+            android.content.SharedPreferences::class.java.classLoader,
+            arrayOf(android.content.SharedPreferences::class.java)
+        ) { _, method, args ->
+            when (method.name) {
+                "getLong" -> {
+                    val key = args[0] as String
+                    val def = args[1] as Long
+                    (map[key] as? Long) ?: def
+                }
+                "getFloat" -> {
+                    val key = args[0] as String
+                    val def = args[1] as Float
+                    (map[key] as? Float) ?: def
+                }
+                "getString" -> {
+                    val key = args[0] as String
+                    val def = if (args != null && args.size > 1) args[1] as? String else null
+                    (map[key] as? String) ?: def
+                }
+                "getBoolean" -> {
+                    val key = args[0] as String
+                    val def = args[1] as Boolean
+                    (map[key] as? Boolean) ?: def
+                }
+                "getInt" -> {
+                    val key = args[0] as String
+                    val def = args[1] as Int
+                    (map[key] as? Int) ?: def
+                }
+                "contains" -> {
+                    map.containsKey(args[0] as String)
+                }
+                "registerOnSharedPreferenceChangeListener", "unregisterOnSharedPreferenceChangeListener" -> null
+                else -> null
+            }
+        } as android.content.SharedPreferences
     }
 }

@@ -10,7 +10,7 @@ import com.onigiri.keycue.playback.FallingNoteCalculator
 import com.onigiri.keycue.playback.GuideFrame
 
 /**
- * 演奏ガイド上へ降下してくるノーツ（落下ノーツ）の描画を担当するレンダラー。
+ * 演奏ガイド上へ降下してくるノート（落下ノート）の描画を担当するレンダラー。
  *
  * キーの位置（段）に応じた幾何学形状で描画します:
  * - 上段キー (Key 0..4): ○ (円形)
@@ -45,7 +45,7 @@ class FallingNotesRenderer(
     private val tempPath = Path()
 
     /**
-     * ノーツの色設定を更新する。
+     * ノートの色設定を更新する。
      */
     fun updateColors(topColor: Int, middleColor: Int, bottomColor: Int) {
         noteFillPaintTop.color = Color.argb(
@@ -69,7 +69,7 @@ class FallingNotesRenderer(
     }
 
     /**
-     * 落下ノーツ群を描画する。
+     * 落下ノート群を描画する。
      */
     fun drawFallingNotes(
         canvas: Canvas,
@@ -88,7 +88,7 @@ class FallingNotesRenderer(
             val progress = FallingNoteCalculator.calculateProgress(
                 eventTimeMs = note.timeMs,
                 currentTimeMs = frame.currentTimeMs,
-                leadTimeMs = frame.leadTimeMs
+                noteLeadTimeMs = frame.noteLeadTimeMs
             )
 
             if (!FallingNoteCalculator.shouldDraw(progress)) continue

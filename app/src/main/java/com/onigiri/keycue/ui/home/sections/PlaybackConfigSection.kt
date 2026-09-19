@@ -18,21 +18,23 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
+import com.onigiri.keycue.model.PlaybackConfig
+
 /**
- * 再生速度・先読み時間・事前ハイライト・開始カウントダウンの設定コンテンツ。
+ * 再生速度・ノート先読み時間・タイミングサークル先読み時間・開始カウントダウンの設定コンテンツ。
  */
 @Composable
 fun PlaybackConfigContent(
     speed: Float,
-    leadTimeMs: Long,
-    highlightTimeMs: Long,
+    noteLeadTimeMs: Long,
+    approachCircleLeadTimeMs: Long,
     countdownMs: Long,
     onSpeedDecrease: () -> Unit,
     onSpeedIncrease: () -> Unit,
-    onLeadTimeDecrease: () -> Unit,
-    onLeadTimeIncrease: () -> Unit,
-    onHighlightTimeDecrease: () -> Unit,
-    onHighlightTimeIncrease: () -> Unit,
+    onNoteLeadTimeDecrease: () -> Unit,
+    onNoteLeadTimeIncrease: () -> Unit,
+    onApproachCircleLeadTimeDecrease: () -> Unit,
+    onApproachCircleLeadTimeIncrease: () -> Unit,
     onCountdownChange: (Long) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -73,11 +75,16 @@ fun PlaybackConfigContent(
             }
         }
 
-        // 先読み時間
+        // ノート先読み時間
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(
-                text = "先読み時間",
+                text = "ノート先読み時間",
                 style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = "ノートが打鍵位置へ到達する何ms前から表示するか",
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Row(
@@ -86,14 +93,14 @@ fun PlaybackConfigContent(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 FilledTonalIconButton(
-                    onClick = onLeadTimeDecrease,
-                    enabled = leadTimeMs > 300L
+                    onClick = onNoteLeadTimeDecrease,
+                    enabled = noteLeadTimeMs > PlaybackConfig.MIN_NOTE_LEAD_TIME_MS
                 ) {
                     Text(text = "－", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 }
 
                 Text(
-                    text = "${leadTimeMs}ms",
+                    text = "${noteLeadTimeMs}ms",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.SemiBold,
                     textAlign = TextAlign.Center,
@@ -101,19 +108,24 @@ fun PlaybackConfigContent(
                 )
 
                 FilledTonalIconButton(
-                    onClick = onLeadTimeIncrease,
-                    enabled = leadTimeMs < 2000L
+                    onClick = onNoteLeadTimeIncrease,
+                    enabled = noteLeadTimeMs < PlaybackConfig.MAX_NOTE_LEAD_TIME_MS
                 ) {
                     Text(text = "＋", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 }
             }
         }
 
-        // 事前ハイライト時間
+        // タイミングサークル先読み時間
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(
-                text = "事前ハイライト時間",
+                text = "タイミングサークル先読み時間",
                 style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = "タイミングサークルを打鍵タイミングの何ms前から表示するか",
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Row(
@@ -122,14 +134,14 @@ fun PlaybackConfigContent(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 FilledTonalIconButton(
-                    onClick = onHighlightTimeDecrease,
-                    enabled = highlightTimeMs > 100L
+                    onClick = onApproachCircleLeadTimeDecrease,
+                    enabled = approachCircleLeadTimeMs > PlaybackConfig.MIN_APPROACH_CIRCLE_LEAD_TIME_MS
                 ) {
                     Text(text = "－", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 }
 
                 Text(
-                    text = "${highlightTimeMs}ms",
+                    text = "${approachCircleLeadTimeMs}ms",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.SemiBold,
                     textAlign = TextAlign.Center,
@@ -137,8 +149,9 @@ fun PlaybackConfigContent(
                 )
 
                 FilledTonalIconButton(
-                    onClick = onHighlightTimeIncrease,
-                    enabled = highlightTimeMs < 1000L
+                    onClick = onApproachCircleLeadTimeIncrease,
+                    enabled = approachCircleLeadTimeMs < noteLeadTimeMs &&
+                            approachCircleLeadTimeMs < PlaybackConfig.MAX_APPROACH_CIRCLE_LEAD_TIME_MS
                 ) {
                     Text(text = "＋", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 }

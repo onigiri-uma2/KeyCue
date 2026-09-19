@@ -7,7 +7,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 楽曲終了時（Finished状態）におけるノーツおよびキーハイライトの消去動作を検証する単体テスト。
+ * 楽曲終了時（Finished状態）におけるノートおよびキーハイライトの消去動作を検証する単体テスト。
  */
 class PlaybackFinishGuideTest {
 
@@ -17,7 +17,7 @@ class PlaybackFinishGuideTest {
         events = listOf(
             NoteEvent(timeMs = 1000L, key = 0),
             NoteEvent(timeMs = 3000L, key = 5),
-            NoteEvent(timeMs = 5000L, key = 14) // 最後のノーツ
+            NoteEvent(timeMs = 5000L, key = 14) // 最後のノート
         )
     )
 
@@ -36,19 +36,19 @@ class PlaybackFinishGuideTest {
                 highlightedKeys = emptySet(),
                 justKeys = emptySet(),
                 countdownText = null,
-                leadTimeMs = configLeadTimeMs
+                noteLeadTimeMs = configLeadTimeMs
             )
         } else {
             noteScheduler.scheduleFrame(
                 events = sampleSong.events,
                 currentTimeMs = state.currentPositionMs,
-                leadTimeMs = configLeadTimeMs,
-                highlightTimeMs = 300L,
+                noteLeadTimeMs = configLeadTimeMs,
+                approachCircleLeadTimeMs = 300L,
                 countdownText = null
             )
         }
 
-        // 最後のノーツが画面に残らないよう、ノーツおよびハイライトが空であることを検証
+        // 最後のノートが画面に残らないよう、ノートおよびハイライトが空であることを検証
         assertTrue(frame.upcomingNotes.isEmpty())
         assertTrue(frame.highlightedKeys.isEmpty())
         assertTrue(frame.justKeys.isEmpty())
@@ -76,15 +76,15 @@ class PlaybackFinishGuideTest {
 
     @Test
     fun playingAtDuration_withoutFinishedCheck_wouldKeepLastNote() {
-        // 参考検証: もし Finished のチェックを怠って scheduleFrame を呼んだ場合、最後のノーツが残ってしまうことを確認
+        // 参考検証: もし Finished のチェックを怠って scheduleFrame を呼んだ場合、最後のノートが残ってしまうことを確認
         val frame = noteScheduler.scheduleFrame(
             events = sampleSong.events,
             currentTimeMs = 5000L,
-            leadTimeMs = 700L,
-            highlightTimeMs = 300L
+            noteLeadTimeMs = 700L,
+            approachCircleLeadTimeMs = 300L
         )
 
-        // 修正前は最後のノーツ (key 14) が残っていた
+        // 修正前は最後のノート (key 14) が残っていた
         assertEquals(1, frame.upcomingNotes.size)
         assertEquals(14, frame.upcomingNotes.first().key)
         assertTrue(frame.highlightedKeys.contains(14))

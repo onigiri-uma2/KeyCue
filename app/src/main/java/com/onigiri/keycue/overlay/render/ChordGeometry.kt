@@ -159,10 +159,10 @@ object ChordGeometry {
     }
 
     /**
-     * 各ノーツ中心点の周囲に、外周サンプル点（Support Points）を生成する。
+     * 各ノート中心点の周囲に、外周サンプル点（Support Points）を生成する。
      *
-     * @param centers 各ノーツの中心座標
-     * @param radius 外周半径 (ノーツ視覚半径 + haloMarginPx)
+     * @param centers 各ノートの中心座標
+     * @param radius 外周半径 (ノート視覚半径 + haloMarginPx)
      * @param angles サンプル点のラジアン角配列（デフォルト 8 方向）
      * @return 全中心点から展開された Support Points 一覧
      */

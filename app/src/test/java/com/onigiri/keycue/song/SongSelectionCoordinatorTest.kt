@@ -49,8 +49,8 @@ class SongSelectionCoordinatorTest {
         contentResolver = FakeContentResolver()
         settingsRepository = InMemorySettingsRepository(
             initialSpeed = 1.25f,
-            initialLeadTimeMs = 800L,
-            initialHighlightTimeMs = 400L,
+            initialNoteLeadTimeMs = 800L,
+            initialApproachCircleLeadTimeMs = 400L,
             initialCountdownMs = 2000L
         )
         sessionRepository = InMemoryPlaybackSessionRepository()
@@ -64,8 +64,8 @@ class SongSelectionCoordinatorTest {
             landscape = true
         )
         val initialSong = SongData("OldSong.mid", 120000L, emptyList())
-        val customConfig = PlaybackConfig(speed = 1.5f, leadTimeMs = 900L, highlightTimeMs = 350L, countdownMs = 1000L)
-        val staleConfig = PlaybackConfig(speed = 0.5f, leadTimeMs = 400L)
+        val customConfig = PlaybackConfig(speed = 1.5f, noteLeadTimeMs = 900L, approachCircleLeadTimeMs = 350L, countdownMs = 1000L)
+        val staleConfig = PlaybackConfig(speed = 0.5f, noteLeadTimeMs = 400L)
         val staleProfile = FitProfile.createDefaultTestProfile()
         sessionRepository.setSession(initialSong, staleConfig, staleProfile)
         settingsRepository.savePlaybackConfig(customConfig)

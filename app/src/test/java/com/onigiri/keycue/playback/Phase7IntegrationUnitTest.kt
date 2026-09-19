@@ -13,7 +13,7 @@ import org.junit.Test
  *
  * 以下の振る舞いを検証します:
  * - 和音（同一時刻・複数キーの同時打鍵イベント）の同時抽出
- * - シーク操作直後のスケジューラ更新と先読みノーツの整合性
+ * - シーク操作直後のスケジューラ更新と先読みノートの整合性
  * - 一時停止（pause）中に再生位置が進まないことの確認
  */
 class Phase7IntegrationUnitTest {
@@ -41,11 +41,11 @@ class Phase7IntegrationUnitTest {
             NoteEvent(timeMs = 3000L, key = 4)
         )
 
-        // currentTime = 1500L, leadTime = 700L -> 和音(2000L)は先読み範囲内
+        // currentTime = 1500L, noteLeadTime = 700L -> 和音(2000L)は先読み範囲内
         val frameUpcoming = scheduler.scheduleFrame(
             events = events,
             currentTimeMs = 1500L,
-            leadTimeMs = 700L
+            noteLeadTimeMs = 700L
         )
         val upcomingKeys = frameUpcoming.upcomingNotes.map { it.key }.toSet()
         assertTrue(upcomingKeys.contains(2))
@@ -56,7 +56,7 @@ class Phase7IntegrationUnitTest {
         val frameJust = scheduler.scheduleFrame(
             events = events,
             currentTimeMs = 2000L,
-            leadTimeMs = 700L
+            noteLeadTimeMs = 700L
         )
         assertTrue(frameJust.justKeys.contains(2))
         assertTrue(frameJust.justKeys.contains(7))
@@ -66,7 +66,7 @@ class Phase7IntegrationUnitTest {
 
     /**
      * シーク操作後のスケジューリング更新
-     * 巻き戻しやスキップ操作直後に、新しい再生時刻に応じたノーツが即座に抽出されることを検証。
+     * 巻き戻しやスキップ操作直後に、新しい再生時刻に応じたノートが即座に抽出されることを検証。
      */
     @Test
     fun test9_seek_updatesScheduledNotesImmediately() {
@@ -78,17 +78,17 @@ class Phase7IntegrationUnitTest {
         )
 
         // 1. 最初は 5000ms 付近にいたとする (currentTime = 4800ms, leadTime = 700ms -> key 5 が先読み)
-        val frameInitial = scheduler.scheduleFrame(events, currentTimeMs = 4800L, leadTimeMs = 700L)
+        val frameInitial = scheduler.scheduleFrame(events, currentTimeMs = 4800L, noteLeadTimeMs = 700L)
         assertEquals(1, frameInitial.upcomingNotes.size)
         assertEquals(5, frameInitial.upcomingNotes.first().key)
 
         // 2. 10000ms 付近へシーク (currentTime = 9800ms)
-        val frameSeekForward = scheduler.scheduleFrame(events, currentTimeMs = 9800L, leadTimeMs = 700L)
+        val frameSeekForward = scheduler.scheduleFrame(events, currentTimeMs = 9800L, noteLeadTimeMs = 700L)
         assertEquals(1, frameSeekForward.upcomingNotes.size)
         assertEquals(10, frameSeekForward.upcomingNotes.first().key)
 
         // 3. 10秒巻き戻し (currentTime = 0ms)
-        val frameSeekBack = scheduler.scheduleFrame(events, currentTimeMs = 500L, leadTimeMs = 700L)
+        val frameSeekBack = scheduler.scheduleFrame(events, currentTimeMs = 500L, noteLeadTimeMs = 700L)
         assertEquals(1, frameSeekBack.upcomingNotes.size)
         assertEquals(0, frameSeekBack.upcomingNotes.first().key)
     }

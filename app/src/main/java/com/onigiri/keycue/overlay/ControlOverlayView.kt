@@ -55,7 +55,7 @@ class ControlOverlayView(
         onSeekBack: () -> Unit = {},
         onSeekForward: () -> Unit = {},
         onSpeedChange: (Float) -> Unit = {},
-        onLeadTimeChange: (Long) -> Unit = {},
+        onNoteLeadTimeChange: (Long) -> Unit = {},
         onStartFitting: () -> Unit = {}
     ) : this(
         context = context,
@@ -74,7 +74,7 @@ class ControlOverlayView(
             onSeekBack = onSeekBack,
             onSeekForward = onSeekForward,
             onSpeedChange = onSpeedChange,
-            onLeadTimeChange = onLeadTimeChange,
+            onNoteLeadTimeChange = onNoteLeadTimeChange,
             onStartFitting = onStartFitting
         )
     )
@@ -88,12 +88,12 @@ class ControlOverlayView(
 
     private var isExpanded = false
 
-    // 再生速度・先読み時間の設定候補
+    // 再生速度・ノート先読み時間の設定候補
     private val speedPresets = listOf(0.50f, 0.75f, 1.00f, 1.25f, 1.50f)
-    private val leadTimePresets = listOf(300L, 400L, 500L, 700L, 1000L, 1500L)
+    private val noteLeadTimePresets = listOf(300L, 400L, 500L, 700L, 1000L, 1500L)
 
     private var currentSpeed: Float = 1.0f
-    private var currentLeadTimeMs: Long = 300L
+    private var currentNoteLeadTimeMs: Long = 300L
     private var isPlayingState: Boolean = false
 
     // UIコンポーネント
@@ -103,7 +103,7 @@ class ControlOverlayView(
     private lateinit var timeText: TextView
     private lateinit var playPauseButton: Button
     private lateinit var speedValueText: TextView
-    private lateinit var leadTimeValueText: TextView
+    private lateinit var noteLeadTimeValueText: TextView
     private lateinit var guideToggleButton: Button
 
     init {
@@ -178,7 +178,7 @@ class ControlOverlayView(
 
             // 速度・先読み設定
             addView(buildSpeedControls())
-            addView(buildLeadTimeControls())
+            addView(buildNoteLeadTimeControls())
 
             // アクションボタン群
             buildActionButtons().forEach { addView(it) }
@@ -349,7 +349,7 @@ class ControlOverlayView(
         }
     }
 
-    private fun buildLeadTimeControls(): View {
+    private fun buildNoteLeadTimeControls(): View {
         return LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -361,28 +361,28 @@ class ControlOverlayView(
             }
 
             val leadLabel = TextView(context).apply {
-                text = "Lead"
+                text = "Note"
                 setTextColor(Color.parseColor("#CFD8DC"))
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
                 layoutParams = LinearLayout.LayoutParams(dpToPx(42), LinearLayout.LayoutParams.WRAP_CONTENT)
             }
             addView(leadLabel)
 
-            leadTimeValueText = TextView(context).apply {
-                text = "700ms"
+            noteLeadTimeValueText = TextView(context).apply {
+                text = "300ms"
                 setTextColor(Color.parseColor("#80CBC4"))
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
                 typeface = android.graphics.Typeface.DEFAULT_BOLD
                 gravity = Gravity.CENTER
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             }
-            addView(leadTimeValueText)
+            addView(noteLeadTimeValueText)
 
             val leadMinusBtn = createSmallAdjustButton("－") {
-                adjustLeadTimeStep(-1)
+                adjustNoteLeadTimeStep(-1)
             }
             val leadPlusBtn = createSmallAdjustButton("＋") {
-                adjustLeadTimeStep(+1)
+                adjustNoteLeadTimeStep(+1)
             }
             addView(leadMinusBtn)
             addView(createHorizontalSpacer(4))
@@ -477,16 +477,16 @@ class ControlOverlayView(
         callbacks.onSpeedChange(target)
     }
 
-    private fun adjustLeadTimeStep(direction: Int) {
-        val currentIndex = leadTimePresets.indexOfFirst { it == currentLeadTimeMs }
+    private fun adjustNoteLeadTimeStep(direction: Int) {
+        val currentIndex = noteLeadTimePresets.indexOfFirst { it == currentNoteLeadTimeMs }
         val nextIndex = if (currentIndex >= 0) {
-            (currentIndex + direction).coerceIn(0, leadTimePresets.size - 1)
+            (currentIndex + direction).coerceIn(0, noteLeadTimePresets.size - 1)
         } else {
-            if (direction > 0) leadTimePresets.indexOfFirst { it > currentLeadTimeMs }.coerceAtLeast(0)
-            else leadTimePresets.indexOfLast { it < currentLeadTimeMs }.coerceAtLeast(0)
+            if (direction > 0) noteLeadTimePresets.indexOfFirst { it > currentNoteLeadTimeMs }.coerceAtLeast(0)
+            else noteLeadTimePresets.indexOfLast { it < currentNoteLeadTimeMs }.coerceAtLeast(0)
         }
-        val target = leadTimePresets[nextIndex]
-        callbacks.onLeadTimeChange(target)
+        val target = noteLeadTimePresets[nextIndex]
+        callbacks.onNoteLeadTimeChange(target)
     }
 
     /**
@@ -498,11 +498,11 @@ class ControlOverlayView(
         durationMs: Long,
         speed: Float,
         songTitle: String?,
-        leadTimeMs: Long = currentLeadTimeMs
+        noteLeadTimeMs: Long = currentNoteLeadTimeMs
     ) {
         isPlayingState = isPlaying
         currentSpeed = speed
-        currentLeadTimeMs = leadTimeMs
+        currentNoteLeadTimeMs = noteLeadTimeMs
 
         if (!songTitle.isNullOrEmpty()) {
             songTitleText.text = songTitle
@@ -520,7 +520,7 @@ class ControlOverlayView(
 
         val percent = (speed * 100).toInt()
         speedValueText.text = "$percent%"
-        leadTimeValueText.text = "${leadTimeMs}ms"
+        noteLeadTimeValueText.text = "${noteLeadTimeMs}ms"
     }
 
     private fun createMiniButton(text: String, bgColor: Int, onClick: () -> Unit): Button {

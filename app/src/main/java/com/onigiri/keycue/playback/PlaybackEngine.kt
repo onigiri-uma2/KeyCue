@@ -90,7 +90,7 @@ class PlaybackEngine(
      * カウントダウンを開始する。
      *
      * 【重要設計】曲開始前（負の仮想時間）も設定された再生速度 (speed) に従ってクロックを進めます。
-     * これにより、曲冒頭（0ms付近）の落下ノーツがカウントダウン中から再生速度通りのスピードで落下し、
+     * これにより、曲冒頭（0ms付近）の落下ノートがカウントダウン中から再生速度通りのスピードで落下し、
      * 仮想時間0ms（カウント終了の瞬間）に正確にジャストタイミングとなります。
      */
     private fun startCountdown() {
@@ -115,7 +115,7 @@ class PlaybackEngine(
                 val remainingRealMs = if (speed > 0f) (-currentPos / speed).toLong().coerceAtLeast(0L) else 0L
                 val sec = ((remainingRealMs + 999L) / 1000L).toInt().coerceAtLeast(1)
                 _state.value = PlaybackState.CountingDown(remainingMs = remainingRealMs, countNumber = sec)
-                delay(16L) // 約60fpsで状態更新し、滑らかな落下ノーツ描画を担保
+                delay(16L) // 約60fpsで状態更新し、滑らかな落下ノート描画を担保
             }
             startPlayback(startPositionMs = 0L)
         }

@@ -33,8 +33,8 @@ data class ControlOverlayCallbacks(
     val onSeekForward: () -> Unit = {},
     /** 再生速度（0.5x〜2.0x等）を変更する */
     val onSpeedChange: (Float) -> Unit = {},
-    /** 先読み時間（ms）を変更する */
-    val onLeadTimeChange: (Long) -> Unit = {},
+    /** ノート先読み時間（ms）を変更する */
+    val onNoteLeadTimeChange: (Long) -> Unit = {},
     /** ゲーム画面上でのキー位置手動調整（フィッティング）を開始する */
     val onStartFitting: () -> Unit = {},
     /** 調整されたキー位置プロファイルを保存する */

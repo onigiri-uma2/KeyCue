@@ -16,7 +16,7 @@ import kotlin.math.min
  * - **インパクトフラッシュ**: ジャスト打鍵瞬間の白〜高輝度ゴールドによるキー内部の発光。
  * - **ジャスト二重リング**: 打鍵キー外周の太枠メインリングおよびソフトグロー発光。
  * - **バースト・リップル波紋**: 打鍵直後から約200msかけて外側へ弾け広がる衝撃波アニメーション。
- * - **アプローチサークル**: 先読み時間に応じて外側からキー境界へ縮小していくタイミングガイド円。
+ * - **アプローチサークル**: タイミングサークル先読み時間（approachCircleLeadTimeMs）に応じて外側からキー境界へ縮小していくタイミングガイド円。
  *
  * Paint等の描画オブジェクトは事前に確保し、描画ループ内でのアロケーションを完全に回避しています。
  */
@@ -187,7 +187,7 @@ class TimingEffectRenderer(
                 approachCirclePaint.strokeWidth = (2.0f + progress * 1.5f) * density
                 canvas.drawCircle(center.x, center.y, approachRadius, approachCirclePaint)
 
-                // 連続音カウントバッジ（オプション有効時かつ showRepeatBadge が有効な直近ノーツにのみキー右上に表示）
+                // 連続音カウントバッジ（オプション有効時かつ showRepeatBadge が有効な直近ノートにのみキー右上に表示）
                 if (showRepeatCountBadge && circle.showRepeatBadge) {
                     val badgeRadius = (keyRadiusPx * 0.36f).coerceAtLeast(9f * density)
                     val badgeCenterX = center.x + keyRadiusPx * 0.72f

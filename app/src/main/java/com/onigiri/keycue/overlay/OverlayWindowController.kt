@@ -19,7 +19,7 @@ import kotlin.math.max
  *   - 再生/停止/シークや設定変更、最小化/展開を提供。
  * - **Guide Overlay ([GuideOverlayView])**:
  *   - `FLAG_NOT_TOUCHABLE` によりタッチ完全透過の全画面オーバーレイ。
- *   - キー配置ガイド、落下ノーツ、ジャスト演出を描画。
+ *   - キー配置ガイド、落下ノート、ジャスト演出を描画。
  * - **Fitting Overlay ([FittingOverlayView])**:
  *   - 手動位置微調整時に前面を覆い、背後へのタッチを遮断してキー位置を調整。
  */
@@ -41,7 +41,7 @@ class OverlayWindowController(
         onSeekBack: () -> Unit = {},
         onSeekForward: () -> Unit = {},
         onSpeedChange: (Float) -> Unit = {},
-        onLeadTimeChange: (Long) -> Unit = {},
+        onNoteLeadTimeChange: (Long) -> Unit = {},
         onSaveFitProfile: (FitProfile) -> Unit = {}
     ) : this(
         context = context,
@@ -56,7 +56,7 @@ class OverlayWindowController(
             onSeekBack = onSeekBack,
             onSeekForward = onSeekForward,
             onSpeedChange = onSpeedChange,
-            onLeadTimeChange = onLeadTimeChange,
+            onNoteLeadTimeChange = onNoteLeadTimeChange,
             onSaveFitProfile = onSaveFitProfile
         )
     )
@@ -262,7 +262,7 @@ class OverlayWindowController(
         durationMs: Long,
         speed: Float,
         songTitle: String?,
-        leadTimeMs: Long = com.onigiri.keycue.model.PlaybackConfig.DEFAULT_LEAD_TIME_MS
+        noteLeadTimeMs: Long = com.onigiri.keycue.model.PlaybackConfig.DEFAULT_NOTE_LEAD_TIME_MS
     ) {
         controlOverlayView?.updatePlaybackStatus(
             isPlaying = isPlaying,
@@ -270,7 +270,7 @@ class OverlayWindowController(
             durationMs = durationMs,
             speed = speed,
             songTitle = songTitle,
-            leadTimeMs = leadTimeMs
+            noteLeadTimeMs = noteLeadTimeMs
         )
     }
 

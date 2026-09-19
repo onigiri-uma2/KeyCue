@@ -10,8 +10,8 @@ import com.onigiri.keycue.model.SongFormat
  * @param songTitle 選択中の曲名（未選択時はnull）
  * @param durationMs 楽曲の総演奏時間（ミリ秒）
  * @param speed 再生速度比率 (1.0f = 100%)
- * @param leadTimeMs 先読み時間（ミリ秒）
- * @param highlightTimeMs 事前ハイライト時間（ミリ秒）
+ * @param noteLeadTimeMs ノート先読み時間（ミリ秒）
+ * @param approachCircleLeadTimeMs タイミングサークル先読み時間（ミリ秒）
  * @param countdownMs 開始前カウントダウン時間（ミリ秒）
  * @param fitConfigured ボタン位置が設定済みかどうか
  * @param overlayPermissionGranted オーバーレイ権限が付与されているかどうか
@@ -22,15 +22,15 @@ import com.onigiri.keycue.model.SongFormat
  * @param selectedFileName 選択されたファイルの表示名
  * @param selectedMimeType 選択されたファイルの MIME type
  * @param songFormat 判定された楽曲フォーマット
- * @param noteCount 演奏イベント（ノーツ）数
+ * @param noteCount 演奏イベント（ノート）数
  * @param songData 解析済みの楽曲データ
  */
 data class HomeUiState(
     val songTitle: String? = null,
     val durationMs: Long = 0L,
     val speed: Float = 1.0f,
-    val leadTimeMs: Long = 300L,
-    val highlightTimeMs: Long = 200L,
+    val noteLeadTimeMs: Long = com.onigiri.keycue.model.PlaybackConfig.DEFAULT_NOTE_LEAD_TIME_MS,
+    val approachCircleLeadTimeMs: Long = com.onigiri.keycue.model.PlaybackConfig.DEFAULT_APPROACH_CIRCLE_LEAD_TIME_MS,
     val countdownMs: Long = 3000L,
     val fitConfigured: Boolean = false,
     val overlayPermissionGranted: Boolean = false,

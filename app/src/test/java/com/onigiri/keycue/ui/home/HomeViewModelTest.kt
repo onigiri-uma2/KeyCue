@@ -30,8 +30,10 @@ class HomeViewModelTest {
         assertNull(state.songTitle)
         assertEquals(0L, state.durationMs)
         assertEquals(1.0f, state.speed, 0.001f)
-        assertEquals(300L, state.leadTimeMs)
-        assertEquals(200L, state.highlightTimeMs)
+        assertEquals(300L, state.noteLeadTimeMs)
+        assertEquals(200L, state.approachCircleLeadTimeMs)
+        assertEquals(PlaybackConfig.DEFAULT_NOTE_LEAD_TIME_MS, state.noteLeadTimeMs)
+        assertEquals(PlaybackConfig.DEFAULT_APPROACH_CIRCLE_LEAD_TIME_MS, state.approachCircleLeadTimeMs)
         assertEquals(3000L, state.countdownMs)
         assertFalse(state.fitConfigured)
         assertFalse(state.overlayPermissionGranted)
@@ -165,35 +167,58 @@ class HomeViewModelTest {
     }
 
     @Test
-    fun adjustLeadTime_increasesAndDecreasesWithinRange() {
-        viewModel.adjustLeadTime(100L)
-        assertEquals(400L, viewModel.uiState.value.leadTimeMs)
+    fun adjustNoteLeadTime_increasesAndDecreasesWithinRange() {
+        viewModel.adjustNoteLeadTime(100L)
+        assertEquals(400L, viewModel.uiState.value.noteLeadTimeMs)
 
-        viewModel.adjustLeadTime(-50L)
-        assertEquals(350L, viewModel.uiState.value.leadTimeMs)
+        viewModel.adjustNoteLeadTime(-50L)
+        assertEquals(350L, viewModel.uiState.value.noteLeadTimeMs)
 
         // 下限クランプ (300ms)
-        viewModel.adjustLeadTime(-1000L)
-        assertEquals(300L, viewModel.uiState.value.leadTimeMs)
+        viewModel.adjustNoteLeadTime(-1000L)
+        assertEquals(300L, viewModel.uiState.value.noteLeadTimeMs)
 
         // 上限クランプ (2000ms)
-        viewModel.adjustLeadTime(3000L)
-        assertEquals(2000L, viewModel.uiState.value.leadTimeMs)
+        viewModel.adjustNoteLeadTime(3000L)
+        assertEquals(2000L, viewModel.uiState.value.noteLeadTimeMs)
     }
 
     @Test
-    fun adjustHighlightTime_and_setCountdownMs_updateState() {
-        viewModel.adjustHighlightTime(50L)
-        assertEquals(250L, viewModel.uiState.value.highlightTimeMs)
+    fun adjustApproachCircleLeadTime_and_setCountdownMs_updateState() {
+        viewModel.adjustApproachCircleLeadTime(50L)
+        assertEquals(250L, viewModel.uiState.value.approachCircleLeadTimeMs)
 
-        viewModel.adjustHighlightTime(-500L)
-        assertEquals(100L, viewModel.uiState.value.highlightTimeMs) // 下限 100ms
+        viewModel.adjustApproachCircleLeadTime(-500L)
+        assertEquals(100L, viewModel.uiState.value.approachCircleLeadTimeMs) // 下限 100ms
 
         viewModel.setCountdownMs(1000L)
         assertEquals(1000L, viewModel.uiState.value.countdownMs)
 
         viewModel.setCountdownMs(0L)
         assertEquals(0L, viewModel.uiState.value.countdownMs)
+    }
+
+    @Test
+    fun adjustNoteLeadTime_followsApproachCircleWhenNoteDecreasesBelowCircle() {
+        // note = 500, circle = 400
+        viewModel.adjustNoteLeadTime(200L) // 500L
+        viewModel.adjustApproachCircleLeadTime(200L) // 400L
+        assertEquals(500L, viewModel.uiState.value.noteLeadTimeMs)
+        assertEquals(400L, viewModel.uiState.value.approachCircleLeadTimeMs)
+
+        // note を 300L に下げる -> circle も 300L に安全に追従
+        viewModel.adjustNoteLeadTime(-200L)
+        assertEquals(300L, viewModel.uiState.value.noteLeadTimeMs)
+        assertEquals(300L, viewModel.uiState.value.approachCircleLeadTimeMs)
+        assertTrue(viewModel.uiState.value.approachCircleLeadTimeMs <= viewModel.uiState.value.noteLeadTimeMs)
+    }
+
+    @Test
+    fun adjustApproachCircleLeadTime_cannotExceedNoteLeadTime() {
+        // note = 300L の状態で circle を 500L に上げようとしても 300L に制限される
+        viewModel.adjustApproachCircleLeadTime(500L)
+        assertEquals(300L, viewModel.uiState.value.noteLeadTimeMs)
+        assertEquals(300L, viewModel.uiState.value.approachCircleLeadTimeMs)
     }
 
     @Test
@@ -228,10 +253,10 @@ class HomeViewModelTest {
         assertEquals(1200L, note.timeMs)
         assertEquals(14, note.key)
 
-        val config = PlaybackConfig(speed = 1.25f, leadTimeMs = 500L)
+        val config = PlaybackConfig(speed = 1.25f, noteLeadTimeMs = 500L)
         assertEquals(1.25f, config.speed, 0.001f)
-        assertEquals(500L, config.leadTimeMs)
-        assertEquals(200L, config.highlightTimeMs)
+        assertEquals(500L, config.noteLeadTimeMs)
+        assertEquals(200L, config.approachCircleLeadTimeMs)
         assertEquals(3000L, config.countdownMs)
     }
 

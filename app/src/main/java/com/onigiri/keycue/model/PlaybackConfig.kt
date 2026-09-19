@@ -4,34 +4,77 @@ package com.onigiri.keycue.model
  * 演奏支援の再生設定を表すデータクラス。
  *
  * @param speed 再生速度比率 (1.0f = 100%)
- * @param leadTimeMs 先読み落下ノーツ表示時間（ミリ秒）
- * @param highlightTimeMs 対象キーの事前ハイライト時間（ミリ秒）
+ * @param noteLeadTimeMs 落下ノート（Falling Notes）の先読み表示時間（ミリ秒）
+ * @param approachCircleLeadTimeMs タイミングサークル（Approach Circle）の表示・縮小開始時間（ミリ秒）
  * @param countdownMs 開始前カウントダウン時間（ミリ秒）
  */
 data class PlaybackConfig(
     val speed: Float = 1.0f,
-    val leadTimeMs: Long = DEFAULT_LEAD_TIME_MS,
-    val highlightTimeMs: Long = DEFAULT_HIGHLIGHT_TIME_MS,
+    val noteLeadTimeMs: Long = DEFAULT_NOTE_LEAD_TIME_MS,
+    val approachCircleLeadTimeMs: Long = DEFAULT_APPROACH_CIRCLE_LEAD_TIME_MS,
     val countdownMs: Long = 3000L
 ) {
-    fun normalized(): PlaybackConfig = copy(
-        speed = speed.coerceIn(MIN_SPEED, MAX_SPEED),
-        leadTimeMs = leadTimeMs.coerceIn(MIN_LEAD_TIME_MS, MAX_LEAD_TIME_MS),
-        highlightTimeMs = highlightTimeMs.coerceIn(MIN_HIGHLIGHT_TIME_MS, MAX_HIGHLIGHT_TIME_MS),
-        countdownMs = countdownMs.coerceIn(MIN_COUNTDOWN_MS, MAX_COUNTDOWN_MS)
+    /**
+     * 設定値を正規化し、不変条件 (0 <= approachCircleLeadTimeMs <= noteLeadTimeMs) を保証した新しいインスタンスを返す。
+     */
+    fun normalized(): PlaybackConfig = normalize(
+        speed = speed,
+        noteLeadTimeMs = noteLeadTimeMs,
+        approachCircleLeadTimeMs = approachCircleLeadTimeMs,
+        countdownMs = countdownMs
     )
 
     companion object {
-        const val DEFAULT_LEAD_TIME_MS = 300L
-        const val DEFAULT_HIGHLIGHT_TIME_MS = 200L
+        const val DEFAULT_NOTE_LEAD_TIME_MS = 300L
+        const val DEFAULT_APPROACH_CIRCLE_LEAD_TIME_MS = 200L
 
         const val MIN_SPEED = 0.25f
         const val MAX_SPEED = 2.0f
-        const val MIN_LEAD_TIME_MS = 300L
-        const val MAX_LEAD_TIME_MS = 2000L
-        const val MIN_HIGHLIGHT_TIME_MS = 100L
-        const val MAX_HIGHLIGHT_TIME_MS = 1000L
+        const val MIN_NOTE_LEAD_TIME_MS = 300L
+        const val MAX_NOTE_LEAD_TIME_MS = 2000L
+        const val MIN_APPROACH_CIRCLE_LEAD_TIME_MS = 100L
+        const val MAX_APPROACH_CIRCLE_LEAD_TIME_MS = 1000L
         const val MIN_COUNTDOWN_MS = 0L
         const val MAX_COUNTDOWN_MS = 5000L
+
+        /**
+         * 再生設定値の正規化を一元管理する。
+         *
+         * 不変条件:
+         * - MIN_SPEED <= speed <= MAX_SPEED
+         * - MIN_NOTE_LEAD_TIME_MS <= noteLeadTimeMs <= MAX_NOTE_LEAD_TIME_MS
+         * - MIN_APPROACH_CIRCLE_LEAD_TIME_MS <= approachCircleLeadTimeMs <= min(noteLeadTimeMs, MAX_APPROACH_CIRCLE_LEAD_TIME_MS)
+         * - MIN_COUNTDOWN_MS <= countdownMs <= MAX_COUNTDOWN_MS
+         */
+        /**
+         * ノート先読み時間とタイミングサークル先読み時間の正規化ペアを算出する。
+         * 不変条件: 0 <= approachCircleLeadTimeMs <= noteLeadTimeMs
+         */
+        fun normalizeLeadTimes(
+            noteLeadTimeMs: Long,
+            approachCircleLeadTimeMs: Long
+        ): Pair<Long, Long> {
+            val clampedNote = noteLeadTimeMs.coerceIn(MIN_NOTE_LEAD_TIME_MS, MAX_NOTE_LEAD_TIME_MS)
+            val maxCircle = minOf(MAX_APPROACH_CIRCLE_LEAD_TIME_MS, clampedNote)
+            val clampedCircle = approachCircleLeadTimeMs.coerceIn(MIN_APPROACH_CIRCLE_LEAD_TIME_MS, maxCircle)
+            return Pair(clampedNote, clampedCircle)
+        }
+
+        fun normalize(
+            speed: Float = 1.0f,
+            noteLeadTimeMs: Long = DEFAULT_NOTE_LEAD_TIME_MS,
+            approachCircleLeadTimeMs: Long = DEFAULT_APPROACH_CIRCLE_LEAD_TIME_MS,
+            countdownMs: Long = 3000L
+        ): PlaybackConfig {
+            val clampedSpeed = speed.coerceIn(MIN_SPEED, MAX_SPEED)
+            val (clampedNote, clampedCircle) = normalizeLeadTimes(noteLeadTimeMs, approachCircleLeadTimeMs)
+            val clampedCountdown = countdownMs.coerceIn(MIN_COUNTDOWN_MS, MAX_COUNTDOWN_MS)
+            return PlaybackConfig(
+                speed = clampedSpeed,
+                noteLeadTimeMs = clampedNote,
+                approachCircleLeadTimeMs = clampedCircle,
+                countdownMs = clampedCountdown
+            )
+        }
     }
 }

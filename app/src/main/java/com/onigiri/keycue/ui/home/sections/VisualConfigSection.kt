@@ -77,7 +77,7 @@ fun VisualConfigContent(
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
 
-        // スイッチ項目群（ガイド番号、落下ノーツ、タイミングサークル、連打バッジ、和音リンク、和音ハロー、ジャスト演出）
+        // スイッチ項目群（ガイド番号、落下ノート、タイミングサークル、連打バッジ、和音リンク、和音ハロー、ジャスト演出）
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             SettingSwitchRow(
                 label = "ガイド番号表示 (0..14)",
@@ -85,7 +85,7 @@ fun VisualConfigContent(
                 onCheckedChange = onShowKeyNumbersChange
             )
             SettingSwitchRow(
-                label = "落下ノーツ表示",
+                label = "落下ノート表示",
                 checked = visualConfig.showFallingNotes,
                 onCheckedChange = onShowFallingNotesChange
             )
@@ -135,10 +135,10 @@ fun VisualConfigContent(
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
 
-        // ノーツ色（上段・中段・下段）
+        // ノート色（上段・中段・下段）
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(
-                text = "ノーツ色（段別）",
+                text = "ノート色（段別）",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontWeight = FontWeight.Bold

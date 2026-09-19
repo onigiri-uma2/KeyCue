@@ -30,8 +30,8 @@ data class PlaybackPreviewUiState(
     val durationMs: Long = 0L,
     val noteCount: Int = 0,
     val speed: Float = 1.0f,
-    val leadTimeMs: Long = com.onigiri.keycue.model.PlaybackConfig.DEFAULT_LEAD_TIME_MS,
-    val highlightTimeMs: Long = com.onigiri.keycue.model.PlaybackConfig.DEFAULT_HIGHLIGHT_TIME_MS,
+    val noteLeadTimeMs: Long = PlaybackConfig.DEFAULT_NOTE_LEAD_TIME_MS,
+    val approachCircleLeadTimeMs: Long = PlaybackConfig.DEFAULT_APPROACH_CIRCLE_LEAD_TIME_MS,
     val hasSong: Boolean = false
 )
 
@@ -89,8 +89,8 @@ class PlaybackPreviewViewModel(
         engine.setSpeed(config.speed)
         _uiState.value = _uiState.value.copy(
             speed = config.speed,
-            leadTimeMs = config.leadTimeMs,
-            highlightTimeMs = config.highlightTimeMs
+            noteLeadTimeMs = config.noteLeadTimeMs,
+            approachCircleLeadTimeMs = config.approachCircleLeadTimeMs
         )
     }
 
@@ -143,8 +143,8 @@ class PlaybackPreviewViewModel(
         return scheduler.schedule(
             events = events,
             currentTimeMs = currentTimeMs,
-            leadTimeMs = _uiState.value.leadTimeMs,
-            highlightTimeMs = _uiState.value.highlightTimeMs
+            noteLeadTimeMs = _uiState.value.noteLeadTimeMs,
+            approachCircleLeadTimeMs = _uiState.value.approachCircleLeadTimeMs
         )
     }
 

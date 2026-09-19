@@ -24,10 +24,10 @@ fun SettingsAccordionSection(
     onRequestPermissionClick: () -> Unit,
     onSpeedDecrease: () -> Unit,
     onSpeedIncrease: () -> Unit,
-    onLeadTimeDecrease: () -> Unit,
-    onLeadTimeIncrease: () -> Unit,
-    onHighlightTimeDecrease: () -> Unit,
-    onHighlightTimeIncrease: () -> Unit,
+    onNoteLeadTimeDecrease: () -> Unit,
+    onNoteLeadTimeIncrease: () -> Unit,
+    onApproachCircleLeadTimeDecrease: () -> Unit,
+    onApproachCircleLeadTimeIncrease: () -> Unit,
     onCountdownChange: (Long) -> Unit,
     onGuideRadiusChange: (Float) -> Unit,
     onShowKeyNumbersChange: (Boolean) -> Unit,
@@ -83,7 +83,7 @@ fun SettingsAccordionSection(
 
     // 1. 再生・タイミング設定
     val speedPercent = (uiState.speed * 100).toInt()
-    val timingSummary = "$speedPercent% / 先読み${uiState.leadTimeMs}ms"
+    val timingSummary = "$speedPercent% / ノート先読み${uiState.noteLeadTimeMs}ms"
     ExpandableCard(
         title = "再生・タイミング設定",
         summary = timingSummary,
@@ -92,24 +92,24 @@ fun SettingsAccordionSection(
     ) {
         PlaybackConfigContent(
             speed = uiState.speed,
-            leadTimeMs = uiState.leadTimeMs,
-            highlightTimeMs = uiState.highlightTimeMs,
+            noteLeadTimeMs = uiState.noteLeadTimeMs,
+            approachCircleLeadTimeMs = uiState.approachCircleLeadTimeMs,
             countdownMs = uiState.countdownMs,
             onSpeedDecrease = onSpeedDecrease,
             onSpeedIncrease = onSpeedIncrease,
-            onLeadTimeDecrease = onLeadTimeDecrease,
-            onLeadTimeIncrease = onLeadTimeIncrease,
-            onHighlightTimeDecrease = onHighlightTimeDecrease,
-            onHighlightTimeIncrease = onHighlightTimeIncrease,
+            onNoteLeadTimeDecrease = onNoteLeadTimeDecrease,
+            onNoteLeadTimeIncrease = onNoteLeadTimeIncrease,
+            onApproachCircleLeadTimeDecrease = onApproachCircleLeadTimeDecrease,
+            onApproachCircleLeadTimeIncrease = onApproachCircleLeadTimeIncrease,
             onCountdownChange = onCountdownChange
         )
     }
 
-    // 2. ガイド・ノーツ表示設定
+    // 2. ガイド・ノート表示設定
     val radiusPercentStr = String.format(Locale.US, "%.1f", uiState.visualConfig.guideRadiusRatio * 100)
-    val visualSummary = "サイズ $radiusPercentStr% / ノーツ${if (uiState.visualConfig.showFallingNotes) "ON" else "OFF"}"
+    val visualSummary = "サイズ $radiusPercentStr% / ノート${if (uiState.visualConfig.showFallingNotes) "ON" else "OFF"}"
     ExpandableCard(
-        title = "ガイド・ノーツ表示",
+        title = "ガイド・ノート表示",
         summary = visualSummary,
         expanded = visualExpanded,
         onExpandedChange = { visualExpanded = it }

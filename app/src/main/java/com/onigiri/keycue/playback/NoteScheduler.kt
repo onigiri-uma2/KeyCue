@@ -16,32 +16,32 @@ class NoteScheduler {
      *
      * @param events 演奏イベント一覧（timeMs昇順）
      * @param currentTimeMs 現在の楽曲再生位置（ミリ秒）
-     * @param leadTimeMs 先読み時間（ミリ秒、例: 700ms）
-     * @param highlightTimeMs 発光許容時間（ミリ秒、例: 100ms）
+     * @param noteLeadTimeMs ノート先読み時間（ミリ秒、例: 300ms）
+     * @param approachCircleLeadTimeMs タイミングサークル先読み時間（ミリ秒、例: 200ms）
      * @return [ScheduledNotes]
      */
     fun schedule(
         events: List<NoteEvent>,
         currentTimeMs: Long,
-        leadTimeMs: Long = PlaybackConfig.DEFAULT_LEAD_TIME_MS,
-        highlightTimeMs: Long = 100L
+        noteLeadTimeMs: Long = PlaybackConfig.DEFAULT_NOTE_LEAD_TIME_MS,
+        approachCircleLeadTimeMs: Long = PlaybackConfig.DEFAULT_APPROACH_CIRCLE_LEAD_TIME_MS
     ): ScheduledNotes {
         if (events.isEmpty()) {
             return ScheduledNotes(currentTimeMs, emptyList(), emptyList(), emptySet())
         }
 
-        // 1. ハイライト範囲: [currentTimeMs - highlightTimeMs, currentTimeMs + highlightTimeMs]
-        val hlStart = (currentTimeMs - highlightTimeMs).coerceAtLeast(0L)
-        val hlEnd = currentTimeMs + highlightTimeMs
+        // 1. ハイライト範囲: [currentTimeMs - approachCircleLeadTimeMs, currentTimeMs + approachCircleLeadTimeMs]
+        val hlStart = (currentTimeMs - approachCircleLeadTimeMs).coerceAtLeast(0L)
+        val hlEnd = currentTimeMs + approachCircleLeadTimeMs
         val highlighted = if (hlEnd >= 0L && hlStart <= hlEnd) {
             findEventsInRange(events, hlStart, hlEnd)
         } else {
             emptyList()
         }
 
-        // 2. 先読み範囲: (currentTimeMs, currentTimeMs + leadTimeMs]
+        // 2. 先読み範囲: (currentTimeMs, currentTimeMs + noteLeadTimeMs]
         val upStart = (currentTimeMs + 1L).coerceAtLeast(0L)
-        val upEnd = currentTimeMs + leadTimeMs
+        val upEnd = currentTimeMs + noteLeadTimeMs
         val upcoming = if (upEnd >= 0L && upStart <= upEnd) {
             findEventsInRange(events, upStart, upEnd)
         } else {
@@ -63,19 +63,21 @@ class NoteScheduler {
      *
      * @param events 演奏イベント一覧（timeMs昇順）
      * @param currentTimeMs 現在の楽曲再生位置（ミリ秒）。カウントダウン中は負の値（例: -1500ms）を取り得る。
-     * @param leadTimeMs 先読み時間（ミリ秒、例: 300ms）
-     * @param highlightTimeMs 事前ハイライト時間（ミリ秒、例: 200ms）
+     * @param noteLeadTimeMs ノート先読み時間（ミリ秒、例: 300ms）
+     * @param approachCircleLeadTimeMs タイミングサークル先読み時間（ミリ秒、例: 200ms）
      * @param justThresholdMs ジャスト判定幅（ミリ秒、例: 80ms）
      * @param countdownText カウントダウン中テキスト（例: "3", "START" 等）
+     * @param repeatSequenceMaxIntervalMs 同一キー連打系列と判定する最大ノート間隔（ミリ秒、例: 500ms）
      * @return 描画に必要な情報を含む [GuideFrame]
      */
     fun scheduleFrame(
         events: List<NoteEvent>,
         currentTimeMs: Long,
-        leadTimeMs: Long = PlaybackConfig.DEFAULT_LEAD_TIME_MS,
-        highlightTimeMs: Long = PlaybackConfig.DEFAULT_HIGHLIGHT_TIME_MS,
+        noteLeadTimeMs: Long = PlaybackConfig.DEFAULT_NOTE_LEAD_TIME_MS,
+        approachCircleLeadTimeMs: Long = PlaybackConfig.DEFAULT_APPROACH_CIRCLE_LEAD_TIME_MS,
         justThresholdMs: Long = FallingNoteCalculator.DEFAULT_JUST_THRESHOLD_MS,
-        countdownText: String? = null
+        countdownText: String? = null,
+        repeatSequenceMaxIntervalMs: Long = DEFAULT_REPEAT_SEQUENCE_MAX_INTERVAL_MS
     ): GuideFrame {
         if (events.isEmpty()) {
             return GuideFrame(
@@ -84,16 +86,17 @@ class NoteScheduler {
                 highlightedKeys = emptySet(),
                 justKeys = emptySet(),
                 countdownText = countdownText,
-                leadTimeMs = leadTimeMs,
-                highlightTimeMs = highlightTimeMs
+                noteLeadTimeMs = noteLeadTimeMs,
+                approachCircleLeadTimeMs = approachCircleLeadTimeMs
             )
         }
 
-        // 描画対象ノーツ範囲: 判定線を通過した直後のノーツに描画の余韻を残すため、
-        // わずかに過去 (-5% leadTime、最低50ms) から未来の出現境界 (+leadTime) までを対象とする
-        val pastMargin = (leadTimeMs * 0.05f).toLong().coerceAtLeast(50L)
+        // 描画対象ノート範囲: 判定線を通過した直後のノートに描画の余韻を残すため、
+        // わずかに過去 (-5% noteLeadTime、最低50ms) から未来の出現境界までを対象とする。
+        // Schedulerが生成する各視覚要素のうち、最も長い先読み時間までイベントを探索する。
+        val pastMargin = (noteLeadTimeMs * 0.05f).toLong().coerceAtLeast(50L)
         val startTimeMs = (currentTimeMs - pastMargin).coerceAtLeast(0L)
-        val lookaheadMs = maxOf(leadTimeMs, highlightTimeMs)
+        val lookaheadMs = maxOf(noteLeadTimeMs, approachCircleLeadTimeMs)
         val endTimeMs = currentTimeMs + lookaheadMs
 
         // 全イベントの総当たりを避け、二分探索でO(log N)の範囲抽出
@@ -110,17 +113,17 @@ class NoteScheduler {
         val tempCircles = ArrayList<ApproachCircle>()
         val seenKeyTimes = HashSet<Long>()
 
-        // 和音グループ (ChordGroup) 収集用: leadTimeMs 範囲内のノーツから同一 timeMs のユニークキーを集計
+        // 和音グループ (ChordGroup) 収集用: noteLeadTimeMs 範囲内のノートから同一 timeMs のユニークキーを集計
         val chordKeysByTime = LinkedHashMap<Long, MutableList<Int>>()
         val seenChordKeyTimes = HashSet<Long>()
 
         for (note in candidateNotes) {
-            val progress = FallingNoteCalculator.calculateProgress(note.timeMs, currentTimeMs, leadTimeMs)
+            val progress = FallingNoteCalculator.calculateProgress(note.timeMs, currentTimeMs, noteLeadTimeMs)
             if (FallingNoteCalculator.shouldDraw(progress)) {
                 upcomingNotes.add(note)
             }
 
-            if (FallingNoteCalculator.isHighlighted(note.timeMs, currentTimeMs, highlightTimeMs)) {
+            if (FallingNoteCalculator.isHighlighted(note.timeMs, currentTimeMs, approachCircleLeadTimeMs)) {
                 highlightedKeys.add(note.key)
             }
 
@@ -130,16 +133,16 @@ class NoteScheduler {
 
             // 既存互換: KEY_COUNT 範囲内の直近未来ノートを記録
             if (note.key in 0 until GuideFrame.KEY_COUNT) {
-                if (note.timeMs in currentTimeMs..(currentTimeMs + highlightTimeMs)) {
+                if (note.timeMs in currentTimeMs..(currentTimeMs + approachCircleLeadTimeMs)) {
                     if (closestFutureNote[note.key] == null) {
                         closestFutureNote[note.key] = note
                     }
                 }
             }
 
-            // 和音グループ対象ノーツ (leadTimeMs 範囲内、負数でない全キー対象)
+            // 和音グループ対象ノート (noteLeadTimeMs 範囲内、負数でない全キー対象)
             // 同一 (key, timeMs) の重複を除去し、同一時刻のキーを集約
-            if (note.key >= 0 && note.timeMs in currentTimeMs..(currentTimeMs + leadTimeMs)) {
+            if (note.key >= 0 && note.timeMs in currentTimeMs..(currentTimeMs + noteLeadTimeMs)) {
                 val chordPairKey = (note.timeMs shl 16) or (note.key.toLong() and 0xFFFFL)
                 if (seenChordKeyTimes.add(chordPairKey)) {
                     val keyList = chordKeysByTime.getOrPut(note.timeMs) { ArrayList() }
@@ -147,14 +150,14 @@ class NoteScheduler {
                 }
             }
 
-            // アプローチサークル対象ノーツ (highlightTimeMs 範囲内)
+            // アプローチサークル対象ノート (approachCircleLeadTimeMs 範囲内)
             // 同一 key かつ同一 timeMs の重複のみ除外し、同一時刻の異なる key（和音）はすべて残す
-            if (note.key >= 0 && note.timeMs in currentTimeMs..(currentTimeMs + highlightTimeMs)) {
+            if (note.key >= 0 && note.timeMs in currentTimeMs..(currentTimeMs + approachCircleLeadTimeMs)) {
                 val pairKey = (note.timeMs shl 16) or (note.key.toLong() and 0xFFFFL)
                 if (seenKeyTimes.add(pairKey)) {
                     val remaining = note.timeMs - currentTimeMs
-                    val circleProgress = if (highlightTimeMs > 0L) {
-                        (1f - remaining.toFloat() / highlightTimeMs.toFloat()).coerceIn(0f, 1f)
+                    val circleProgress = if (approachCircleLeadTimeMs > 0L) {
+                        (1f - remaining.toFloat() / approachCircleLeadTimeMs.toFloat()).coerceIn(0f, 1f)
                     } else {
                         1f
                     }
@@ -183,7 +186,7 @@ class NoteScheduler {
         val firstIndexByKey = HashMap<Int, Int>()
         val firstFutureTimeByKey = HashMap<Int, Long>()
         for (note in candidateNotes) {
-            if (note.key >= 0 && note.timeMs in currentTimeMs..(currentTimeMs + highlightTimeMs)) {
+            if (note.key >= 0 && note.timeMs in currentTimeMs..(currentTimeMs + approachCircleLeadTimeMs)) {
                 if (!firstFutureTimeByKey.containsKey(note.key)) {
                     firstFutureTimeByKey[note.key] = note.timeMs
                 }
@@ -196,10 +199,10 @@ class NoteScheduler {
             }
         }
 
-        // 過去 highlight 範囲のイベントから各キーの最後のノート時刻を取得（現在時刻ちょうどを含めない）
+        // 過去 repeatSequenceMaxIntervalMs 範囲のイベントから各キーの最後のノート時刻を取得（現在時刻ちょうどを含めない）
         val lastPastTimeByKey = HashMap<Int, Long>()
         val pastRangeEnd = currentTimeMs - 1L
-        val pastRangeStart = (currentTimeMs - highlightTimeMs).coerceAtLeast(0L)
+        val pastRangeStart = (currentTimeMs - repeatSequenceMaxIntervalMs).coerceAtLeast(0L)
         if (pastRangeEnd >= pastRangeStart) {
             val pastEvents = findEventsInRange(events, pastRangeStart, pastRangeEnd)
             for (pNote in pastEvents) {
@@ -215,8 +218,8 @@ class NoteScheduler {
             val note = closestFutureNote[k]
             if (note != null) {
                 val remaining = note.timeMs - currentTimeMs
-                val progress = if (highlightTimeMs > 0L) {
-                    (1f - remaining.toFloat() / highlightTimeMs.toFloat()).coerceIn(0f, 1f)
+                val progress = if (approachCircleLeadTimeMs > 0L) {
+                    (1f - remaining.toFloat() / approachCircleLeadTimeMs.toFloat()).coerceIn(0f, 1f)
                 } else {
                     1f
                 }
@@ -224,7 +227,7 @@ class NoteScheduler {
             }
         }
 
-        // candidateNotes は時系列昇順（直近ノーツが先、未来ノーツが後）のため、
+        // candidateNotes は時系列昇順（直近ノートが先、未来ノートが後）のため、
         // tempCircles は直近（progress大）から未来（progress小）の順で追加されている。
         // progress が小さい（遠い未来・大きい円）ものから先に描画し、
         // progress が大きい（直近・小さい円）ものを最後に描画（最前面に重ねる）するため、
@@ -247,7 +250,7 @@ class NoteScheduler {
                     val prevTime = lastPastTimeByKey[circle.key]
                     val futureTime = firstFutureTimeByKey[circle.key]
                     showRepeatBadge = prevTime != null && futureTime != null &&
-                            (futureTime - prevTime <= highlightTimeMs)
+                            (futureTime - prevTime <= repeatSequenceMaxIntervalMs)
                 }
             } else {
                 remainingCount = 1
@@ -270,12 +273,17 @@ class NoteScheduler {
             highlightedKeys = highlightedKeys,
             justKeys = justKeys,
             countdownText = countdownText,
-            leadTimeMs = leadTimeMs,
-            highlightTimeMs = highlightTimeMs,
+            noteLeadTimeMs = noteLeadTimeMs,
+            approachCircleLeadTimeMs = approachCircleLeadTimeMs,
             keyHighlightProgress = keyHighlightProgress,
             approachCircles = approachCircles,
             chordGroups = chordGroups
         )
+    }
+
+    companion object {
+        /** 同一キー連打系列と判定する最大ノート間隔（ミリ秒）。サークル表示時間と独立して譜面判定を行う。 */
+        const val DEFAULT_REPEAT_SEQUENCE_MAX_INTERVAL_MS = 500L
     }
 
     /**

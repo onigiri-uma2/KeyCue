@@ -17,12 +17,12 @@ import com.onigiri.keycue.playback.GuideFrame
 import kotlin.math.min
 
 /**
- * ゲーム画面上にキーの演奏ガイドおよび落下ノーツをタッチ透過で重ねて表示する全画面オーバーレイView。
+ * ゲーム画面上にキーの演奏ガイドおよび落下ノートをタッチ透過で重ねて表示する全画面オーバーレイView。
  *
  * 設計方針:
  * - **タッチ完全透過**: 演奏操作を妨げないようタッチイベントは一切処理せず、背後のゲームアプリへ透過させます。
  * - **単一責任（描画専用）**: 再生時計やサービスを直接参照せず、[GuideFrame] および [VisualConfig] を受け取って画面を描画します。
- * - **レンダラー委譲**: 落下ノーツ描画は [FallingNotesRenderer]、ジャスト演出等は [TimingEffectRenderer]、和音リンク/ハローは [ChordVisualRenderer] に委譲し保守性を確保しています。
+ * - **レンダラー委譲**: 落下ノート描画は [FallingNotesRenderer]、ジャスト演出等は [TimingEffectRenderer]、和音リンク/ハローは [ChordVisualRenderer] に委譲し保守性を確保しています。
  * - **ゼロアロケーション描画**: 60fps以上の滑らかな描画を維持するため、Paint等の描画オブジェクトは事前に確保し、onDraw 内でのメモリアロケーションを完全に回避しています。
  */
 @SuppressLint("ViewConstructor")
@@ -234,7 +234,7 @@ class GuideOverlayView(
                 showChordHalos = visualConfig.showChordHalos,
                 showFallingNotes = visualConfig.showFallingNotes,
                 viewHeight = height,
-                highlightTimeMs = frame.highlightTimeMs
+                chordVisibilityLeadTimeMs = ChordVisualRenderer.DEFAULT_CHORD_VISIBILITY_LEAD_TIME_MS
             )
         }
 
@@ -250,7 +250,7 @@ class GuideOverlayView(
             )
         }
 
-        // 3. 落下ノーツ描画（レンダラーへ委譲）
+        // 3. 落下ノート描画（レンダラーへ委譲）
         if (visualConfig.showFallingNotes && frame != null && frame.upcomingNotes.isNotEmpty()) {
             fallingNotesRenderer.drawFallingNotes(
                 canvas = canvas,

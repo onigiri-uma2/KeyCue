@@ -3,7 +3,7 @@ package com.onigiri.keycue.playback
 import kotlin.math.abs
 
 /**
- * 落下ノーツ（Falling Notes）の降下進行度、Y座標、キー行判定、ジャストタイミング判定を行う純粋計算オブジェクト。
+ * 落下ノート（Falling Notes）の降下進行度、Y座標、キー行判定、ジャストタイミング判定を行う純粋計算オブジェクト。
  *
  * Android View や Canvas、システム時刻に直接依存せず、引数として渡された時間とパラメータのみを用いて
  * 決定論的に計算を行うため、高速かつJVM単体テストが容易です。
@@ -21,7 +21,7 @@ object FallingNoteCalculator {
     const val DEFAULT_FALL_DISTANCE_RATIO: Float = 0.35f
 
     /**
-     * 落下ノーツの描画を許容する最大進行度（1.0を超えた直後の余韻を持たせる）。
+     * 落下ノートの描画を許容する最大進行度（1.0を超えた直後の余韻を持たせる）。
      */
     const val MAX_DRAWABLE_PROGRESS: Float = 1.05f
 
@@ -29,26 +29,26 @@ object FallingNoteCalculator {
      * ノートイベントと現在時刻、先読み時間から進行度 (progress) を算出する。
      *
      * remainingTime = eventTimeMs - currentTimeMs
-     * progress = 1.0 - remainingTime / leadTimeMs
+     * progress = 1.0 - remainingTime / noteLeadTimeMs
      *
      * @param eventTimeMs ノートの打鍵目標時刻（ミリ秒）
      * @param currentTimeMs 現在の楽曲再生位置（ミリ秒）
-     * @param leadTimeMs 先読み時間（ミリ秒、例: 700ms）
+     * @param noteLeadTimeMs ノート先読み時間（ミリ秒、例: 300ms）
      * @return 0.0 (出現位置) 〜 1.0 (判定位置) の progress
      */
     fun calculateProgress(
         eventTimeMs: Long,
         currentTimeMs: Long,
-        leadTimeMs: Long
+        noteLeadTimeMs: Long
     ): Float {
-        if (leadTimeMs <= 0L) return 1.0f
+        if (noteLeadTimeMs <= 0L) return 1.0f
         val remainingTime = eventTimeMs - currentTimeMs
-        return 1.0f - (remainingTime.toFloat() / leadTimeMs.toFloat())
+        return 1.0f - (remainingTime.toFloat() / noteLeadTimeMs.toFloat())
     }
 
     /**
-     * 指定された progress のノーツが画面上に描画対象となるかを判定する。
-     * 0未満（出現前）または1を大きく超えたノーツ（通過後）は除外する。
+     * 指定された progress のノートが画面上に描画対象となるかを判定する。
+     * 0未満（出現前）または1を大きく超えたノート（通過後）は除外する。
      */
     fun shouldDraw(progress: Float): Boolean {
         return progress in 0.0f..MAX_DRAWABLE_PROGRESS
@@ -72,7 +72,7 @@ object FallingNoteCalculator {
     fun getColumn(key: Int): Int = com.onigiri.keycue.profile.GameProfileRegistry.current.getColumn(key)
 
     /**
-     * 落下ノーツの現在Y座標（ピクセル）を線形補間 (lerp) で算出する。
+     * 落下ノートの現在Y座標（ピクセル）を線形補間 (lerp) で算出する。
      *
      * startY = targetY - fallDistancePx
      * currentY = lerp(startY, targetY, progress)
@@ -88,17 +88,17 @@ object FallingNoteCalculator {
     }
 
     /**
-     * 指定されたイベントが現在時刻においてキー事前ハイライト範囲内かを判定する。
+     * 指定されたイベントが現在時刻においてタイミングサークル表示・縮小開始範囲内かを判定する。
      *
-     * 例: highlightTimeMs = 300ms の場合、イベントまで300ms以内かつ通過直後(-50ms)までハイライトする。
+     * 例: approachCircleLeadTimeMs = 200ms の場合、イベントまで200ms以内かつ通過直後(-50ms)まで対象とする。
      */
     fun isHighlighted(
         eventTimeMs: Long,
         currentTimeMs: Long,
-        highlightTimeMs: Long
+        approachCircleLeadTimeMs: Long
     ): Boolean {
         val delta = eventTimeMs - currentTimeMs
-        return delta in -50L..highlightTimeMs
+        return delta in -50L..approachCircleLeadTimeMs
     }
 
     /**
