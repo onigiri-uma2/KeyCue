@@ -8,23 +8,29 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
+import com.onigiri.keycue.profile.GameProfile
+import com.onigiri.keycue.profile.GameProfileRegistry
+
 /**
- * 検出されたボタン候補点群を 5列 × 3段 = 15キーの幾何構造へフィッティングするクラス。
+ * 検出されたボタン候補点群を [GameProfile] の幾何構造（行・列・キー数）へフィッティングするクラス。
  *
  * 候補点からの4隅アンカー推定や外れ値除去、ホモグラフィ/射影歪みを考慮した格子整合性スコアリングを行います。
  * OpenCV等のネイティブ依存を含まない純粋なKotlinロジックであり、JVM環境での完全な単体テストが可能です。
  */
-class GridFitter {
+class GridFitter(
+    private val profile: GameProfile = GameProfileRegistry.current
+) {
+
+    private val columns: Int get() = profile.columnCount
+    private val rows: Int get() = profile.rowCount
+    private val keyCount: Int get() = profile.keyCount
 
     companion object {
         const val MIN_CANDIDATE_POINTS = 4
-        const val COLUMNS = 5
-        const val ROWS = 3
-        const val KEY_COUNT = COLUMNS * ROWS // 15
     }
 
     /**
-     * 候補点群から 5×3 格子をフィッティングし、[FitResult] を生成する。
+     * 候補点群から格子をフィッティングし、[FitResult] を生成する。
      *
      * @param candidates 検出された候補点リスト（ピクセル座標）
      * @param imageWidth 解析画像の幅（ピクセル）
@@ -91,7 +97,7 @@ class GridFitter {
                 errorMessage = "格子のピッチ・基準位置の推定に失敗しました"
             )
 
-        // 4. 15点の均等格子ピクセル座標算出と候補点との整合度評価
+        // 4. 均等格子ピクセル座標算出と候補点との整合度評価
         val (gridPixelPoints, matchedCount, avgDistanceError) = evaluateGrid(
             gridParams,
             validPoints
@@ -100,7 +106,7 @@ class GridFitter {
         // 5. 信頼度 (Confidence: 0.0f..1.0f) の計算
         val confidence = calculateConfidence(
             matchedCount = matchedCount,
-            totalKeys = KEY_COUNT,
+            totalKeys = keyCount,
             avgDistanceError = avgDistanceError,
             expectedSpacing = gridParams.dx,
             candidateCount = validPoints.size
@@ -147,7 +153,7 @@ class GridFitter {
 
     /**
      * 4隅のキー座標（Key0:左上, Key4:右上, Key10:左下, Key14:右下）から
-     * バイリニア補間（双線形補間）によって内部11点を含む全15キーの正規化座標リストを生成する。
+     * バイリニア補間（双線形補間）によって内部点を含む全キーの正規化座標リストを生成する。
      *
      * 画面の傾きや遠近感による台形歪みがある場合でも、均等に分割された格子点を正確に補間します。
      */
@@ -157,12 +163,12 @@ class GridFitter {
         bottomLeft: NormalizedPoint,  // Key 10
         bottomRight: NormalizedPoint  // Key 14
     ): List<NormalizedPoint> {
-        val result = ArrayList<NormalizedPoint>(KEY_COUNT)
+        val result = ArrayList<NormalizedPoint>(keyCount)
 
-        for (row in 0 until ROWS) {
-            val v = row / (ROWS - 1.0f) // 0.0, 0.5, 1.0
-            for (col in 0 until COLUMNS) {
-                val u = col / (COLUMNS - 1.0f) // 0.0, 0.25, 0.5, 0.75, 1.0
+        for (row in 0 until rows) {
+            val v = row / (rows - 1.0f) // 0.0, 0.5, 1.0
+            for (col in 0 until columns) {
+                val u = col / (columns - 1.0f) // 0.0, 0.25, 0.5, 0.75, 1.0
 
                 // Bilinear interpolation
                 val x = (1f - u) * (1f - v) * topLeft.x +
@@ -232,7 +238,7 @@ class GridFitter {
         val top3 = candidateGroups.sortedByDescending { cluster ->
             val spanX = cluster.maxOf { it.x } - cluster.minOf { it.x }
             cluster.size * 100f + spanX
-        }.take(ROWS)
+        }.take(rows)
 
         // Y座標昇順（上段・中段・下段）に並べ替えて返す
         return top3.sortedBy { cluster -> cluster.map { p -> p.y }.average() }
@@ -306,8 +312,9 @@ class GridFitter {
         val sortedKbX = keyboardPoints.map { it.x }.sorted()
         val centerX = sortedKbX[sortedKbX.size / 2]
 
-        // 5列あるので中央列（列2）は centerX に近い。よって startX (列0) = centerX - 2 * dx
-        val estimatedStartX = centerX - 2f * dx
+        // 中央列は centerX に近い。よって startX (列0) = centerX - centerCol * dx
+        val centerCol = columns / 2
+        val estimatedStartX = centerX - centerCol.toFloat() * dx
 
         // Y基準位置 (startY): 上段クラスタの中央値Y
         val startY = rowMeansY[0]
@@ -324,9 +331,9 @@ class GridFitter {
         while (testStartX <= endStartX) {
             var matches = 0
             var totalErr = 0f
-            for (r in 0 until ROWS) {
+            for (r in 0 until rows) {
                 val py = startY + r * dy
-                for (c in 0 until COLUMNS) {
+                for (c in 0 until columns) {
                     val px = testStartX + c * dx
                     val nearest = allPoints.minByOrNull { p ->
                         (p.x - px) * (p.x - px) + (p.y - py) * (p.y - py)
@@ -358,7 +365,7 @@ class GridFitter {
     }
 
     /**
-     * 推定されたグリッドパラメータで15個の均等格子座標を生成し、候補点との整合度を評価する。
+     * 推定されたグリッドパラメータで均等格子座標を生成し、候補点との整合度を評価する。
      * ゲーム画面上のキーボードは完全な均等グリッドであるため、個々の検出点に座標をずらすことはせず
      * 正確な幾何格子座標を維持します。
      */
@@ -366,15 +373,15 @@ class GridFitter {
         params: GridParameters,
         points: List<DetectedPoint>
     ): Triple<List<Pair<Float, Float>>, Int, Float> {
-        val gridPoints = ArrayList<Pair<Float, Float>>(KEY_COUNT)
+        val gridPoints = ArrayList<Pair<Float, Float>>(keyCount)
         var matchedCount = 0
         var totalDistanceError = 0f
 
         val matchThreshold = params.dx * 0.45f
 
-        for (r in 0 until ROWS) {
+        for (r in 0 until rows) {
             val y = params.startY + r * params.dy
-            for (c in 0 until COLUMNS) {
+            for (c in 0 until columns) {
                 val x = params.startX + c * params.dx
 
                 // 距離閾値内の最寄り候補点を探して整合度を評価
@@ -404,7 +411,7 @@ class GridFitter {
      * 信頼度スコア (0.0f..1.0f) を計算する。
      *
      * 評価要素:
-     * - マッチしたキー数 (15個中何個か)
+     * - マッチしたキー数 (全キー中何個か)
      * - 格子点と候補点の平均距離誤差
      * - 候補点全体のノイズ率
      */
@@ -422,7 +429,7 @@ class GridFitter {
         val errorRatio = (avgDistanceError / (expectedSpacing * 0.5f)).coerceIn(0f, 1f)
         val distanceScore = (1.0f - errorRatio).coerceIn(0f, 1f)
 
-        // 3. 余剰ノイズペナルティ (候補点が15点より多すぎる場合の外れ値率)
+        // 3. 余剰ノイズペナルティ (候補点がキー数より多すぎる場合の外れ値率)
         val noiseScore = if (candidateCount > totalKeys) {
             val excess = (candidateCount - totalKeys).toFloat()
             (1.0f - (excess / 30f)).coerceIn(0.7f, 1.0f)

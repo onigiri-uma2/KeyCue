@@ -16,6 +16,8 @@ import com.onigiri.keycue.fitting.KeyDetector
 import com.onigiri.keycue.fitting.OpenCvKeyDetector
 import com.onigiri.keycue.model.FitProfile
 import com.onigiri.keycue.model.NormalizedPoint
+import com.onigiri.keycue.profile.GameProfile
+import com.onigiri.keycue.profile.GameProfileRegistry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -36,6 +38,7 @@ class FittingViewModel(
     private val settingsRepository: SettingsRepository,
     private val keyDetector: KeyDetector = OpenCvKeyDetector(),
     private val gridFitter: GridFitter = GridFitter(),
+    private val gameProfile: GameProfile = GameProfileRegistry.current,
     externalScope: kotlinx.coroutines.CoroutineScope? = null
 ) : ViewModel() {
 
@@ -145,7 +148,7 @@ class FittingViewModel(
                 // 1. OpenCV による候補点検出
                 val candidates = keyDetector.detect(bitmap)
 
-                // 2. GridFitter による 5×3 格子フィッティング
+                // 2. GridFitter による格子フィッティング
                 val fitResult = gridFitter.fit(
                     candidates = candidates,
                     imageWidth = bitmap.width,
@@ -162,10 +165,10 @@ class FittingViewModel(
                                 detectedPoints = candidates,
                                 currentProfile = profile,
                                 confidence = fitResult.confidence,
-                                manualTopLeft = centers[0],
-                                manualTopRight = centers[4],
-                                manualBottomLeft = centers[10],
-                                manualBottomRight = centers[14],
+                                manualTopLeft = centers[gameProfile.topLeftKeyIndex],
+                                manualTopRight = centers[gameProfile.topRightKeyIndex],
+                                manualBottomLeft = centers[gameProfile.bottomLeftKeyIndex],
+                                manualBottomRight = centers[gameProfile.bottomRightKeyIndex],
                                 errorMessage = null
                             )
                         }
@@ -208,10 +211,10 @@ class FittingViewModel(
             it.copy(
                 step = FittingStep.ManualAdjust,
                 currentProfile = profile,
-                manualTopLeft = centers[0],
-                manualTopRight = centers[4],
-                manualBottomLeft = centers[10],
-                manualBottomRight = centers[14]
+                manualTopLeft = centers[gameProfile.topLeftKeyIndex],
+                manualTopRight = centers[gameProfile.topRightKeyIndex],
+                manualBottomLeft = centers[gameProfile.bottomLeftKeyIndex],
+                manualBottomRight = centers[gameProfile.bottomRightKeyIndex]
             )
         }
     }
@@ -234,9 +237,9 @@ class FittingViewModel(
     }
 
     /**
-     * 手動調整ハンドルの移動差分（delta）を現在位置に累積加算し、15キーを再算出する。
+     * 手動調整ハンドルの移動差分（delta）を現在位置に累積加算し、全キー配置を再算出する。
      *
-     * @param cornerIndex 0: 左上(Key 0), 1: 右上(Key 4), 2: 左下(Key 10), 3: 右下(Key 14)
+     * @param cornerIndex 0: 左上, 1: 右上, 2: 左下, 3: 右下
      * @param deltaNormX 正規化Xの移動量
      * @param deltaNormY 正規化Yの移動量
      */
@@ -256,9 +259,9 @@ class FittingViewModel(
     }
 
     /**
-     * 手動調整ハンドルの座標を更新し、バイリニア補間で全15キーを即座に再算出する。
+     * 手動調整ハンドルの座標を更新し、バイリニア補間で全キーを即座に再算出する。
      *
-     * @param cornerIndex 0: 左上(Key 0), 1: 右上(Key 4), 2: 左下(Key 10), 3: 右下(Key 14)
+     * @param cornerIndex 0: 左上, 1: 右上, 2: 左下, 3: 右下
      * @param normX 新しい正規化X座標 (0.0..1.0)
      * @param normY 新しい正規化Y座標 (0.0..1.0)
      */
@@ -273,7 +276,7 @@ class FittingViewModel(
         val bl = if (cornerIndex == 2) newPoint else current.manualBottomLeft
         val br = if (cornerIndex == 3) newPoint else current.manualBottomRight
 
-        // 4隅から全15キーをバイリニア補間
+        // 4隅から全キーをバイリニア補間
         val interpolated = gridFitter.interpolateGridFromCorners(tl, tr, bl, br)
         val updatedProfile = FitProfile(
             keyCenters = interpolated,

@@ -463,7 +463,7 @@ private fun FittingControlsPanel(
                     }
 
                     Text(
-                        text = "ゲーム画面のスクリーンショットを選択すると、15キーの位置を自動検出します。\n手動での微調整は、オーバーレイ側の「位置微調整」で行えます。",
+                        text = "ゲーム画面のスクリーンショットを選択すると、キーの位置を自動検出します。\n手動での微調整は、オーバーレイ側の「位置微調整」で行えます。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -627,7 +627,7 @@ private fun FittingControlsPanel(
 }
 
 /**
- * スクリーンショットと 15キーオーバーレイ / 手動ドラッグハンドルを描画するコンポーザブル。
+ * スクリーンショットとキーオーバーレイ / 手動ドラッグハンドルを描画するコンポーザブル。
  * ピンチズーム＆パン操作をサポートし、小さなキーでも拡大して精密に微調整可能。
  */
 @Composable
@@ -714,7 +714,7 @@ private fun FittingImagePreview(
                 }
             }
 
-            // 2. 候補点 & 15キーのオーバーレイ描画 Canvas
+            // 2. 候補点 & キーのオーバーレイ描画 Canvas
             Canvas(
                 modifier = Modifier.fillMaxSize()
             ) {
@@ -732,7 +732,7 @@ private fun FittingImagePreview(
                     )
                 }
 
-                // 15キーの描画（円 + 番号）
+                // キーの描画（円 + 番号）
                 profile?.let { prof ->
                     val radiusPx = cHeight * prof.keyRadiusRatio
 

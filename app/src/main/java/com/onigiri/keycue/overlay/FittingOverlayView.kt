@@ -27,7 +27,7 @@ import kotlin.math.min
 import kotlin.math.sqrt
 
 /**
- * ゲーム画面上で15キー位置を直接微調整するための全画面オーバーレイView。
+ * ゲーム画面上でキー位置を直接微調整するための全画面オーバーレイView。
  *
  * 主な機能とUI仕様:
  * 1. **全画面タッチ遮断**: 下層のゲーム画面へのタッチ伝播を完全に遮断し、誤操作を防ぎます。
@@ -35,7 +35,7 @@ import kotlin.math.sqrt
  * 3. **4点個別調整モード**:
  *    - OFF (矩形連動モード): 角を動かすと対向する軸も連動し、長方形の比率・平行度を維持。
  *    - ON (個別調整モード): 選択したCornerのみ独立移動し、台形歪みや斜め配置に対応。
- * 4. **バイリニア補間リアルタイム追従**: 4隅の移動に連動して内部の11キーが即座に再計算・再描画されます。
+ * 4. **バイリニア補間リアルタイム追従**: 4隅の移動に連動して内部キーが即座に再計算・再描画されます。
  * 5. **保存 / キャンセル**: 確定操作でプロファイルを永続化し、キャンセル時は元の位置へ戻します。
  */
 @SuppressLint("ViewConstructor")
@@ -543,13 +543,13 @@ class FittingOverlayView(
 
             if (keyPixelCenters.size < FitProfile.KEY_COUNT) return
 
-            // 1. 全15キーの描画
+            // 1. 全キーの描画
             for (i in 0 until FitProfile.KEY_COUNT) {
                 val pt = keyPixelCenters[i]
                 canvas.drawCircle(pt.x, pt.y, keyRadiusPx, circleFillPaint)
                 canvas.drawCircle(pt.x, pt.y, keyRadiusPx, circleStrokePaint)
 
-                // 番号 (0..14)
+                // 番号 (0-indexed)
                 val textY = pt.y - (textPaint.descent() + textPaint.ascent()) / 2f
                 canvas.drawText(i.toString(), pt.x, textY, textPaint)
             }

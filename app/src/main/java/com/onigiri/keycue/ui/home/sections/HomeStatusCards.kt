@@ -204,7 +204,7 @@ fun FittingConfigContent(
         }
 
         Text(
-            text = "ゲーム画面のスクリーンショットを選択すると、15キーの位置を自動検出して設定します。手動での微調整はオーバーレイの「位置微調整」で行えます。",
+            text = "ゲーム画面のスクリーンショットを選択すると、キーの位置を自動検出して設定します。手動での微調整はオーバーレイの「位置微調整」で行えます。",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

@@ -19,7 +19,7 @@ import kotlin.math.max
  *   - 再生/停止/シークや設定変更、最小化/展開を提供。
  * - **Guide Overlay ([GuideOverlayView])**:
  *   - `FLAG_NOT_TOUCHABLE` によりタッチ完全透過の全画面オーバーレイ。
- *   - 15キー配置ガイド、落下ノーツ、ジャスト演出を描画。
+ *   - キー配置ガイド、落下ノーツ、ジャスト演出を描画。
  * - **Fitting Overlay ([FittingOverlayView])**:
  *   - 手動位置微調整時に前面を覆い、背後へのタッチを遮断してキー位置を調整。
  */
@@ -285,7 +285,7 @@ class OverlayWindowController(
     // --- Manual Fitting Overlay 管理 ---
 
     /**
-     * ゲーム画面上での15キー手動微調整モードを開始する。
+     * ゲーム画面上でのキー手動微調整モードを開始する。
      * 全画面でタッチを遮断し、背後のゲームへのタッチ伝播を完全にブロックする。
      */
     fun startManualFitting() {

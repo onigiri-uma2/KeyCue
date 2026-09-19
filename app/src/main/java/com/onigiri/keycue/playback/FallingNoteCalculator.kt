@@ -55,22 +55,21 @@ object FallingNoteCalculator {
     }
 
     /**
-     * キー番号 (0..14) から行段（段）を取得する。
+     * キー番号から行段（段）を取得する。
+     *
+     * ゲームプロファイル（[com.onigiri.keycue.profile.GameProfileRegistry]）の行計算に委譲します。
      * - 0..4  : 0 (上段 -> ○)
      * - 5..9  : 1 (中段 -> □)
      * - 10..14: 2 (下段 -> △)
      */
-    fun getRow(key: Int): Int {
-        return (key.coerceIn(0, 14)) / 5
-    }
+    fun getRow(key: Int): Int = com.onigiri.keycue.profile.GameProfileRegistry.current.getRow(key)
 
     /**
-     * キー番号 (0..14) から列 (0..4) を取得する。
-     * column = key % 5
+     * キー番号から列 (0..4) を取得する。
+     *
+     * ゲームプロファイル（[com.onigiri.keycue.profile.GameProfileRegistry]）の列計算に委譲します。
      */
-    fun getColumn(key: Int): Int {
-        return (key.coerceIn(0, 14)) % 5
-    }
+    fun getColumn(key: Int): Int = com.onigiri.keycue.profile.GameProfileRegistry.current.getColumn(key)
 
     /**
      * 落下ノーツの現在Y座標（ピクセル）を線形補間 (lerp) で算出する。

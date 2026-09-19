@@ -40,7 +40,7 @@ class FitProfileTest {
     }
 
     @Test
-    fun fitProfile_defaultTestProfile_hasExactly15Keys() {
+    fun fitProfile_defaultTestProfile_hasExpectedKeyCount() {
         val profile = FitProfile.createDefaultTestProfile(landscape = true)
 
         assertEquals(15, profile.keyCenters.size)
@@ -49,7 +49,7 @@ class FitProfileTest {
     }
 
     @Test
-    fun fitProfile_defaultTestProfile_matches5x3GridCoordinates() {
+    fun fitProfile_defaultTestProfile_matchesBaseGridCoordinates() {
         val profile = FitProfile.createDefaultTestProfile()
 
         val expectedXs = floatArrayOf(0.20f, 0.35f, 0.50f, 0.65f, 0.80f)

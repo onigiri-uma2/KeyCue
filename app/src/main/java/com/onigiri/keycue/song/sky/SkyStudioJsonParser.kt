@@ -17,7 +17,7 @@ import java.nio.charset.StandardCharsets
  * - トップレベル配列 `[ { ... } ]` および 単一オブジェクト `{ ... }` の両方
  * - `isEncrypted: true` 検出時の [EncryptedSkyStudioException]
  * - `songNotes` 配列からの絶対時間（ms）およびキー表現の抽出
- * - [SkyKeyMapper] による 15 キー (0..14) への変換
+ * - [SkyKeyMapper] によるキーインデックス (0..14) への変換
  * - 和音の保持（同一時刻の異なるキーをすべて残す）
  * - 同一キー・同一時刻の完全重複ノートの deduplicate
  * - 曲名 (`name`) の取得（未設定時はデフォルトタイトル使用）
@@ -83,7 +83,7 @@ class SkyStudioJsonParser(
         val songNotesArray = rootObject.optJSONArray("songNotes")
             ?: throw InvalidSkyStudioJsonException("Sky Studio譜面に必要な 'songNotes' が見つかりません")
 
-        // 4. ノートの抽出と15キー変換
+        // 4. ノートの抽出とキーインデックス変換
         val rawNotes = mutableListOf<RawSkyStudioNote>()
         for (i in 0 until songNotesArray.length()) {
             val noteObj = songNotesArray.optJSONObject(i) ?: continue

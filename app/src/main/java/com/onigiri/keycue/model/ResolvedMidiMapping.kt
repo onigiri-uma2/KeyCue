@@ -6,8 +6,8 @@ package com.onigiri.keycue.model
  * @param root マッピングのRoot音
  * @param scale マッピングのスケール種別
  * @param baseOctave マッピングの開始オクターブ
- * @param midiNotes 15キー（0..14）に対応するMIDIノート番号のリスト
- * @param mappedEventCount 15キーへ割り当てられたNote Onイベント数
+ * @param midiNotes 各キーに対応するMIDIノート番号のリスト
+ * @param mappedEventCount 各キーへ割り当てられたNote Onイベント数
  * @param totalEventCount 評価対象となった総Note Onイベント数（Percussion除外）
  */
 data class ResolvedMidiMapping(
@@ -30,7 +30,7 @@ data class ResolvedMidiMapping(
         }
 
     /**
-     * 指定されたMIDIノート番号がマッピングに含まれている場合、そのキーインデックス (0..14) を返す。
+     * 指定されたMIDIノート番号がマッピングに含まれている場合、そのキーインデックスを返す。
      * 存在しない場合は null を返す。
      */
     fun keyOf(midiNote: Int): Int? {
@@ -39,7 +39,7 @@ data class ResolvedMidiMapping(
     }
 
     /**
-     * 15音それぞれの音名表記リスト（例: ["C4", "D4", "E4", ...]）を返す。
+     * 各音それぞれの音名表記リスト（例: ["C4", "D4", "E4", ...]）を返す。
      */
     fun getFormattedNoteNames(): List<String> {
         return midiNotes.map { PitchClass.formatMidiNote(it) }

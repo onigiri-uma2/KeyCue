@@ -228,7 +228,7 @@ private fun PlaybackPreviewPortraitContent(
             )
         }
 
-        // 中央: 15キー配置 & カウントダウン表示
+        // 中央: キーパッド配置 & カウントダウン表示
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -274,7 +274,7 @@ private fun PlaybackPreviewPortraitContent(
 
 /**
  * 横画面 (Landscape) レイアウト
- * ゲーム画面に模した、左側操作パネル ＋ 右側15キー演奏エリアの2カラム構成。
+ * ゲーム画面に模した、左側操作パネル ＋ 右側キー演奏エリアの2カラム構成。
  */
 @Composable
 private fun PlaybackPreviewLandscapeContent(
@@ -347,7 +347,7 @@ private fun PlaybackPreviewLandscapeContent(
             )
         }
 
-        // 右カラム: 15キー演奏グリッド (幅比率: 約60%)
+        // 右カラム: キー演奏グリッド (幅比率: 約60%)
         Box(
             modifier = Modifier
                 .weight(0.60f)
@@ -438,25 +438,26 @@ private fun SongHeaderCard(
 }
 
 /**
- * 15キー (3段 × 5列) グリッド
+ * キーパッドグリッド
  */
 @Composable
 private fun Keypad15(
     activeKeys: Set<Int>,
     modifier: Modifier = Modifier
 ) {
+    val profile = com.onigiri.keycue.profile.GameProfileRegistry.current
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        for (row in 0..2) {
+        for (row in 0 until profile.rowCount) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                for (col in 0..4) {
-                    val keyIndex = row * 5 + col // 0..14
-                    val displayNumber = keyIndex + 1 // 1..15
+                for (col in 0 until profile.columnCount) {
+                    val keyIndex = row * profile.columnCount + col
+                    val displayNumber = keyIndex + 1
                     val isActive = activeKeys.contains(keyIndex)
 
                     KeypadButton(
@@ -471,7 +472,7 @@ private fun Keypad15(
 }
 
 /**
- * 個別の15キーボタン
+ * 個別のキーパッドボタン
  */
 @Composable
 private fun KeypadButton(

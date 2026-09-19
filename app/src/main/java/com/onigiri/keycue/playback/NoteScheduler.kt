@@ -121,7 +121,7 @@ class NoteScheduler {
                 justKeys.add(note.key)
             }
 
-            // 既存互換: KEY_COUNT (15) 範囲内の直近未来ノートを記録
+            // 既存互換: KEY_COUNT 範囲内の直近未来ノートを記録
             if (note.key in 0 until GuideFrame.KEY_COUNT) {
                 if (note.timeMs in currentTimeMs..(currentTimeMs + highlightTimeMs)) {
                     if (closestFutureNote[note.key] == null) {

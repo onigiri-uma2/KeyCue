@@ -31,7 +31,7 @@ import com.onigiri.keycue.song.midi.MidiKeyMapper
 import java.util.Locale
 
 /**
- * MIDIマッピング設定コンテンツ（AUTO/MANUAL切り替え、Root音、スケール、オクターブ、15キー配置音）。
+ * MIDIマッピング設定コンテンツ（AUTO/MANUAL切り替え、Root音、スケール、オクターブ、キー配置音）。
  */
 @Composable
 fun MidiMappingConfigContent(
@@ -246,7 +246,7 @@ fun MidiMappingConfigContent(
             }
         }
 
-        // 15音ミニ鍵盤グリッド表示
+        // ミニ鍵盤グリッド表示
         val noteNames = resolvedMapping?.getFormattedNoteNames()
             ?: MidiKeyMapper.createMapping(
                 midiMappingSettings.manualRoot,
@@ -254,24 +254,24 @@ fun MidiMappingConfigContent(
                 midiMappingSettings.manualBaseOctave
             )?.map { PitchClass.formatMidiNote(it) }
 
-        if (noteNames != null && noteNames.size == 15) {
+        val profile = com.onigiri.keycue.profile.GameProfileRegistry.current
+        if (noteNames != null && noteNames.size == profile.keyCount) {
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
 
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
-                    text = "15キー配置音",
+                    text = "キー配置音",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                // 3段 × 5列
-                for (rowIdx in 0..2) {
+                for (rowIdx in 0 until profile.rowCount) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        for (colIdx in 0..4) {
-                            val keyIdx = rowIdx * 5 + colIdx
+                        for (colIdx in 0 until profile.columnCount) {
+                            val keyIdx = rowIdx * profile.columnCount + colIdx
                             val noteName = noteNames[keyIdx]
                             Box(
                                 modifier = Modifier

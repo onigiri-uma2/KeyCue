@@ -20,7 +20,7 @@ object FitProfileSerializer {
 
     /**
      * JSON文字列から [FitProfile] を復元する。
-     * フォーマット不正や要素数が15個でない場合は null を返す。
+     * フォーマット不正やキー要素数が不正な場合は null を返す。
      */
     fun fromJson(json: String?): FitProfile? {
         if (json.isNullOrBlank()) return null

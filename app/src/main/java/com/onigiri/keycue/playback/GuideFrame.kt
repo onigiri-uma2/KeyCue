@@ -10,8 +10,8 @@ import com.onigiri.keycue.model.NoteEvent
  *
  * @param currentTimeMs 現在の楽曲再生位置（ミリ秒）
  * @param upcomingNotes 現在画面上に描画すべき先読み落下ノーツ一覧
- * @param highlightedKeys 事前ハイライトすべきキーインデックス (0..14) のセット
- * @param justKeys ジャストタイミングリングを表示すべきキーインデックス (0..14) のセット
+ * @param highlightedKeys 事前ハイライトすべきキーインデックスのセット
+ * @param justKeys ジャストタイミングリングを表示すべきキーインデックスのセット
  * @param countdownText カウントダウン中または開始時の表示文字列 ("3", "2", "1", "START" 等)
  * @param leadTimeMs 先読み時間（ミリ秒、位置計算用）
  */
@@ -26,6 +26,7 @@ data class GuideFrame(
     val approachCircles: List<ApproachCircle> = emptyList()
 ) {
     companion object {
+        // Legacy compatibility constant.
         const val KEY_COUNT = 15
     }
 

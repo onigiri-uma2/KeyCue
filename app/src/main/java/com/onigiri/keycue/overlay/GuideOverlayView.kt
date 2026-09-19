@@ -16,7 +16,7 @@ import com.onigiri.keycue.playback.GuideFrame
 import kotlin.math.min
 
 /**
- * ゲーム画面上に15キーの演奏ガイドおよび落下ノーツをタッチ透過で重ねて表示する全画面オーバーレイView。
+ * ゲーム画面上にキーの演奏ガイドおよび落下ノーツをタッチ透過で重ねて表示する全画面オーバーレイView。
  *
  * 設計方針:
  * - **タッチ完全透過**: 演奏操作を妨げないようタッチイベントは一切処理せず、背後のゲームアプリへ透過させます。
@@ -37,7 +37,7 @@ class GuideOverlayView(
     private val fallingNotesRenderer = FallingNotesRenderer(density)
     private val timingEffectRenderer = TimingEffectRenderer(density)
 
-    // --- 15キー基本描画用 Paint ---
+    // --- キー基本描画用 Paint ---
     private val circleStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeWidth = 2.5f * density

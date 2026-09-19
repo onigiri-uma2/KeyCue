@@ -1,10 +1,10 @@
 package com.onigiri.keycue.model
 
 /**
- * 15キーのダイアトニック音階を生成するためのスケール種別。
+ * ダイアトニック音階を生成するためのスケール種別。
  *
  * @param displayName UI表示名
- * @param intervals ルート音からの半音インターバル（15要素）
+ * @param intervals ルート音からの半音インターバル
  */
 enum class ScaleType(
     val displayName: String,

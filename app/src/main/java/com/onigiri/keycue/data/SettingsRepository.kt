@@ -47,7 +47,7 @@ interface SettingsRepository {
     val overlayPosition: StateFlow<Pair<Int, Int>?>
     suspend fun saveOverlayPosition(x: Int, y: Int)
 
-    /** 15キーの画面上配置プロファイル (FitProfile) */
+    /** 画面上のキー配置プロファイル (FitProfile) */
     val fitProfile: StateFlow<com.onigiri.keycue.model.FitProfile?>
     suspend fun saveFitProfile(profile: com.onigiri.keycue.model.FitProfile?)
 

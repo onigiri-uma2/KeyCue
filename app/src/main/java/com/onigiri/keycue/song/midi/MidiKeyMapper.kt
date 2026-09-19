@@ -8,23 +8,23 @@ import com.onigiri.keycue.model.MidiMappingSettings
 import kotlin.math.abs
 
 /**
- * MIDIノート番号を15キー（5列×3段、0..14）へマッピングするインターフェース。
+ * MIDIノート番号をキーへマッピングするインターフェース。
  */
 interface KeyMapper {
     /**
-     * MIDIノート番号を15キーのインデックス (0..14) に変換する。
+     * MIDIノート番号をキーインデックスに変換する。
      * マッピング対象外のノートは null を返す。
      *
      * @param midiNote MIDIノート番号 (0..127)
-     * @return 15キーのインデックス (0..14)、または対象外の場合 null
+     * @return キーインデックス、または対象外の場合 null
      */
     fun map(midiNote: Int): Int?
 }
 
 /**
- * 15キー用 MIDI ノートマッパー。
+ * MIDI ノートマッパー。
  *
- * ダイアトニック15音（0..14）へのノートマッピング、手動生成、
+ * ダイアトニック音階へのノートマッピング、手動生成、
  * およびMIDIイベント解析に基づくAUTO自動選択を提供する。
  */
 class MidiKeyMapper(
@@ -62,24 +62,20 @@ class MidiKeyMapper(
             root = PitchClass.C,
             scale = ScaleType.MAJOR,
             baseOctave = 4,
-            midiNotes = listOf(
-                60, 62, 64, 65, 67,
-                69, 71, 72, 74, 76,
-                77, 79, 81, 83, 84
-            ),
+            midiNotes = com.onigiri.keycue.profile.SkyProfile.defaultMidiNotes,
             mappedEventCount = 0,
             totalEventCount = 0
         )
 
         /**
-         * Root音、スケール、開始オクターブから15音のMIDIノート番号リストを生成する。
+         * Root音、スケール、開始オクターブからMIDIノート番号リストを生成する。
          *
          * 生成されたノートが 0..127 の範囲を超える場合は null を返す。
          *
          * @param root ルート音
          * @param scale スケール種別
          * @param baseOctave 開始オクターブ
-         * @return 15要素のMIDIノート番号リスト、または範囲外の場合 null
+         * @return MIDIノート番号リスト、または範囲外の場合 null
          */
         fun createMapping(
             root: PitchClass,

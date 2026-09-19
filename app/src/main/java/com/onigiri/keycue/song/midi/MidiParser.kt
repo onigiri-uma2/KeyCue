@@ -18,7 +18,7 @@ import kotlin.math.max
  * - Set Tempo メタイベント (0xFF 0x51)
  * - End of Track メタイベント (0xFF 0x2F)
  *
- * @param keyMapper MIDIノートを15キーへマッピングする [KeyMapper]
+ * @param keyMapper MIDIノートをキーへマッピングする [KeyMapper]
  */
 class MidiParser(
     private val keyMapper: KeyMapper = MidiKeyMapper()

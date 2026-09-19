@@ -46,7 +46,7 @@ class FittingViewModelTest {
     }
 
     @Test
-    fun `manual adjust mode updates corners and recalculates 15 points with bilinear interpolation`() {
+    fun `manual adjust mode updates corners and recalculates points with bilinear interpolation`() {
         viewModel.startManualAdjust()
 
         val state1 = viewModel.uiState.value

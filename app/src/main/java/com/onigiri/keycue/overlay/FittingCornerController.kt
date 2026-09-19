@@ -2,9 +2,10 @@ package com.onigiri.keycue.overlay
 
 import com.onigiri.keycue.fitting.Corner
 import com.onigiri.keycue.model.NormalizedPoint
+import com.onigiri.keycue.profile.GameProfileRegistry
 
 /**
- * 15キーグリッド位置調整における4隅（Anchor Corner）の移動および連動計算を担うコントローラー。
+ * キーグリッド位置調整における4隅（Anchor Corner）の移動および連動計算を担うコントローラー。
  *
  * ユーザーによる4隅ハンドルのドラッグや十字キー操作を受け、
  * 矩形連動モード（水平・垂直の対角点連動）または4点個別調整モード（台形・傾き対応の独立移動）に応じて
@@ -12,10 +13,10 @@ import com.onigiri.keycue.model.NormalizedPoint
  * Android View に依存しない純粋なKotlinロジックとして設計されており、JVM単体テストが可能です。
  */
 class FittingCornerController(
-    initialTopLeft: NormalizedPoint = NormalizedPoint(0.20f, 0.65f),
-    initialTopRight: NormalizedPoint = NormalizedPoint(0.80f, 0.65f),
-    initialBottomLeft: NormalizedPoint = NormalizedPoint(0.20f, 0.85f),
-    initialBottomRight: NormalizedPoint = NormalizedPoint(0.80f, 0.85f),
+    initialTopLeft: NormalizedPoint = GameProfileRegistry.current.baseKeyCenters[GameProfileRegistry.current.topLeftKeyIndex],
+    initialTopRight: NormalizedPoint = GameProfileRegistry.current.baseKeyCenters[GameProfileRegistry.current.topRightKeyIndex],
+    initialBottomLeft: NormalizedPoint = GameProfileRegistry.current.baseKeyCenters[GameProfileRegistry.current.bottomLeftKeyIndex],
+    initialBottomRight: NormalizedPoint = GameProfileRegistry.current.baseKeyCenters[GameProfileRegistry.current.bottomRightKeyIndex],
     var isIndividualMode: Boolean = false
 ) {
     var topLeft: NormalizedPoint = initialTopLeft

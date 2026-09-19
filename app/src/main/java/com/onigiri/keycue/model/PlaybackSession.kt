@@ -7,7 +7,7 @@ import android.net.Uri
  *
  * @param song 再生対象の楽曲データ
  * @param config 再生設定（速度、先読み、ハイライト時間、カウントダウン等）
- * @param fitProfile 15キー配置プロファイル
+ * @param fitProfile キー配置プロファイル
  * @param uri 楽曲ファイルの content:// URI
  * @param format 判定された楽曲フォーマット
  */
