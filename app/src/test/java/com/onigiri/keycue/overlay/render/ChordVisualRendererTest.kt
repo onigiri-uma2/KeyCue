@@ -1,6 +1,7 @@
 package com.onigiri.keycue.overlay.render
 
 import com.onigiri.keycue.model.NoteEvent
+import com.onigiri.keycue.playback.FallingNoteCalculator
 import com.onigiri.keycue.playback.NoteScheduler
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -10,145 +11,133 @@ import org.junit.Test
 /**
  * [ChordVisualRenderer] の和音表示判定ロジックに関する単体テスト。
  *
- * - Falling Notes ON: Chord Link/Halo は落下ノートに追従するため [noteLeadTimeMs] を使用する。
- * - Falling Notes OFF: Chord Link/Halo はキー上の Approach Circle を視覚的にグループ化するため [approachCircleLeadTimeMs] を使用する。
+ * Falling Notes OFF 時はキー上の Approach Circle を視覚的にグループ化するため、
+ * [ChordVisualRenderer.isChordVisibleWhenFallingNotesOff] を実描画処理とテストで一元的に使用する。
  */
 class ChordVisualRendererTest {
 
     private val chordTimeMs = 1000L
 
     @Test
-    fun isChordVisible_fallingNotesOn_boundaryAtNoteLeadTimeMs() {
-        val noteLeadTimeMs = 300L
+    fun isChordVisibleWhenFallingNotesOff_default200Ms_boundary() {
         val approachCircleLeadTimeMs = 200L
 
-        // 300ms前 (currentTimeMs = 700) -> 落下ノート追従のため表示対象
-        val visibleAt300MsBefore = ChordVisualRenderer.isChordVisible(
-            chordTimeMs = chordTimeMs,
-            currentTimeMs = 700L,
-            noteLeadTimeMs = noteLeadTimeMs,
-            approachCircleLeadTimeMs = approachCircleLeadTimeMs,
-            showFallingNotes = true
-        )
-        assertTrue("Falling Notes ON: 300ms前は表示対象", visibleAt300MsBefore)
-
-        // 301ms前 (currentTimeMs = 699) -> 非表示
-        val hiddenAt301MsBefore = ChordVisualRenderer.isChordVisible(
-            chordTimeMs = chordTimeMs,
-            currentTimeMs = 699L,
-            noteLeadTimeMs = noteLeadTimeMs,
-            approachCircleLeadTimeMs = approachCircleLeadTimeMs,
-            showFallingNotes = true
-        )
-        assertFalse("Falling Notes ON: 301ms前は非表示", hiddenAt301MsBefore)
-    }
-
-    @Test
-    fun isChordVisible_fallingNotesOff_boundaryAtApproachCircleLeadTimeMs() {
-        val noteLeadTimeMs = 300L
-        val approachCircleLeadTimeMs = 200L
-
-        // 200ms前 (currentTimeMs = 800) -> Approach Circle グループ化のため表示対象
-        val visibleAt200MsBefore = ChordVisualRenderer.isChordVisible(
+        // remainingTime = 200ms (currentTimeMs = 800) -> true
+        val visibleAt200Ms = ChordVisualRenderer.isChordVisibleWhenFallingNotesOff(
             chordTimeMs = chordTimeMs,
             currentTimeMs = 800L,
-            noteLeadTimeMs = noteLeadTimeMs,
-            approachCircleLeadTimeMs = approachCircleLeadTimeMs,
-            showFallingNotes = false
+            approachCircleLeadTimeMs = approachCircleLeadTimeMs
         )
-        assertTrue("Falling Notes OFF: 200ms前は表示対象", visibleAt200MsBefore)
+        assertTrue("remainingTime = 200ms は表示対象 (true)", visibleAt200Ms)
 
-        // 201ms前 (currentTimeMs = 799) -> 非表示
-        val hiddenAt201MsBefore = ChordVisualRenderer.isChordVisible(
+        // remainingTime = 201ms (currentTimeMs = 799) -> false
+        val hiddenAt201Ms = ChordVisualRenderer.isChordVisibleWhenFallingNotesOff(
             chordTimeMs = chordTimeMs,
             currentTimeMs = 799L,
-            noteLeadTimeMs = noteLeadTimeMs,
-            approachCircleLeadTimeMs = approachCircleLeadTimeMs,
-            showFallingNotes = false
+            approachCircleLeadTimeMs = approachCircleLeadTimeMs
         )
-        assertFalse("Falling Notes OFF: 201ms前は非表示", hiddenAt201MsBefore)
+        assertFalse("remainingTime = 201ms は非表示 (false)", hiddenAt201Ms)
+    }
 
-        // 300ms前 (currentTimeMs = 700) -> OFF 時は Approach Circle 未出現のため非表示
-        val hiddenAt300MsBefore = ChordVisualRenderer.isChordVisible(
+    @Test
+    fun isChordVisibleWhenFallingNotesOff_custom300Ms_tracksSetting() {
+        val approachCircleLeadTimeMs = 300L
+
+        // remainingTime = 300ms (currentTimeMs = 700) -> true
+        val visibleAt300Ms = ChordVisualRenderer.isChordVisibleWhenFallingNotesOff(
             chordTimeMs = chordTimeMs,
             currentTimeMs = 700L,
-            noteLeadTimeMs = noteLeadTimeMs,
-            approachCircleLeadTimeMs = approachCircleLeadTimeMs,
-            showFallingNotes = false
+            approachCircleLeadTimeMs = approachCircleLeadTimeMs
         )
-        assertFalse("Falling Notes OFF: 300ms前は非表示", hiddenAt300MsBefore)
+        assertTrue("remainingTime = 300ms は表示対象 (true)", visibleAt300Ms)
+
+        // remainingTime = 301ms (currentTimeMs = 699) -> false
+        val hiddenAt301Ms = ChordVisualRenderer.isChordVisibleWhenFallingNotesOff(
+            chordTimeMs = chordTimeMs,
+            currentTimeMs = 699L,
+            approachCircleLeadTimeMs = approachCircleLeadTimeMs
+        )
+        assertFalse("remainingTime = 301ms は非表示 (false)", hiddenAt301Ms)
     }
 
     @Test
-    fun isChordVisible_fallingNotesOn_tracksCustomNoteLeadTimeMs() {
-        val noteLeadTimeMs = 500L
-        val approachCircleLeadTimeMs = 200L
+    fun chordVisibility_noteLeadTimeMs_separationAndIndependence() {
+        val approachCircleLeadTimeMs = 100L
 
-        // 500ms前 (currentTimeMs = 500) -> ON 時は表示対象
+        // 1. noteLeadTimeMs = 300ms の場合
+        // Falling Notes OFF の表示開始は approachCircleLeadTimeMs (100ms前) に従う
         assertTrue(
-            "Falling Notes ON: 500ms前は表示対象",
-            ChordVisualRenderer.isChordVisible(
+            "OFF時: 100ms前は表示対象",
+            ChordVisualRenderer.isChordVisibleWhenFallingNotesOff(
+                chordTimeMs = chordTimeMs,
+                currentTimeMs = 900L,
+                approachCircleLeadTimeMs = approachCircleLeadTimeMs
+            )
+        )
+        assertFalse(
+            "OFF時: 101ms前は非表示",
+            ChordVisualRenderer.isChordVisibleWhenFallingNotesOff(
+                chordTimeMs = chordTimeMs,
+                currentTimeMs = 899L,
+                approachCircleLeadTimeMs = approachCircleLeadTimeMs
+            )
+        )
+        assertFalse(
+            "OFF時: 300ms前は非表示",
+            ChordVisualRenderer.isChordVisibleWhenFallingNotesOff(
+                chordTimeMs = chordTimeMs,
+                currentTimeMs = 700L,
+                approachCircleLeadTimeMs = approachCircleLeadTimeMs
+            )
+        )
+
+        // 2. noteLeadTimeMs = 500ms へ変更しても、OFF時の表示開始は 100ms 前のまま不変
+        assertTrue(
+            "OFF時 (noteLeadTimeMs=500ms変更後も): 100ms前は表示対象のまま",
+            ChordVisualRenderer.isChordVisibleWhenFallingNotesOff(
+                chordTimeMs = chordTimeMs,
+                currentTimeMs = 900L,
+                approachCircleLeadTimeMs = approachCircleLeadTimeMs
+            )
+        )
+        assertFalse(
+            "OFF時 (noteLeadTimeMs=500ms変更後も): 101ms前は非表示",
+            ChordVisualRenderer.isChordVisibleWhenFallingNotesOff(
+                chordTimeMs = chordTimeMs,
+                currentTimeMs = 899L,
+                approachCircleLeadTimeMs = approachCircleLeadTimeMs
+            )
+        )
+        assertFalse(
+            "OFF時 (noteLeadTimeMs=500ms変更後も): 500ms前は非表示",
+            ChordVisualRenderer.isChordVisibleWhenFallingNotesOff(
                 chordTimeMs = chordTimeMs,
                 currentTimeMs = 500L,
-                noteLeadTimeMs = noteLeadTimeMs,
-                approachCircleLeadTimeMs = approachCircleLeadTimeMs,
-                showFallingNotes = true
+                approachCircleLeadTimeMs = approachCircleLeadTimeMs
             )
         )
 
-        // 501ms前 (currentTimeMs = 499) -> ON 時は非表示
-        assertFalse(
-            "Falling Notes ON: 501ms前は非表示",
-            ChordVisualRenderer.isChordVisible(
-                chordTimeMs = chordTimeMs,
-                currentTimeMs = 499L,
-                noteLeadTimeMs = noteLeadTimeMs,
-                approachCircleLeadTimeMs = approachCircleLeadTimeMs,
-                showFallingNotes = true
-            )
+        // 3. 一方で Falling Notes ON 側は noteLeadTimeMs に従う責務分離を確認
+        val progressOn300At300Ms = FallingNoteCalculator.calculateProgress(
+            eventTimeMs = chordTimeMs,
+            currentTimeMs = 700L,
+            noteLeadTimeMs = 300L
         )
+        assertTrue("ON時 (noteLeadTimeMs=300ms): 300ms前は表示対象", FallingNoteCalculator.shouldDraw(progressOn300At300Ms))
 
-        // OFF 時は 500ms 前は非表示（200ms 前から表示されるため）
-        assertFalse(
-            "Falling Notes OFF: 500ms前は非表示",
-            ChordVisualRenderer.isChordVisible(
-                chordTimeMs = chordTimeMs,
-                currentTimeMs = 500L,
-                noteLeadTimeMs = noteLeadTimeMs,
-                approachCircleLeadTimeMs = approachCircleLeadTimeMs,
-                showFallingNotes = false
-            )
+        val progressOn300At301Ms = FallingNoteCalculator.calculateProgress(
+            eventTimeMs = chordTimeMs,
+            currentTimeMs = 699L,
+            noteLeadTimeMs = 300L
         )
-    }
+        assertFalse("ON時 (noteLeadTimeMs=300ms): 301ms前は非表示", FallingNoteCalculator.shouldDraw(progressOn300At301Ms))
 
-    @Test
-    fun isChordVisible_fallingNotesOff_tracksCustomApproachCircleLeadTimeMs() {
-        val noteLeadTimeMs = 500L
-        val approachCircleLeadTimeMs = 350L
-
-        // 350ms前 (currentTimeMs = 650) -> OFF 時に表示対象
-        assertTrue(
-            "Falling Notes OFF: 350ms前は表示対象",
-            ChordVisualRenderer.isChordVisible(
-                chordTimeMs = chordTimeMs,
-                currentTimeMs = 650L,
-                noteLeadTimeMs = noteLeadTimeMs,
-                approachCircleLeadTimeMs = approachCircleLeadTimeMs,
-                showFallingNotes = false
-            )
+        val progressOn500At500Ms = FallingNoteCalculator.calculateProgress(
+            eventTimeMs = chordTimeMs,
+            currentTimeMs = 500L,
+            noteLeadTimeMs = 500L
         )
-
-        // 351ms前 (currentTimeMs = 649) -> OFF 時に非表示
-        assertFalse(
-            "Falling Notes OFF: 351ms前は非表示",
-            ChordVisualRenderer.isChordVisible(
-                chordTimeMs = chordTimeMs,
-                currentTimeMs = 649L,
-                noteLeadTimeMs = noteLeadTimeMs,
-                approachCircleLeadTimeMs = approachCircleLeadTimeMs,
-                showFallingNotes = false
-            )
-        )
+        assertTrue("ON時 (noteLeadTimeMs=500ms): 500ms前は表示対象", FallingNoteCalculator.shouldDraw(progressOn500At500Ms))
     }
 
     @Test
@@ -172,14 +161,12 @@ class ChordVisualRendererTest {
         assertEquals(1, frameAt200Ms.chordGroups.size)
         assertEquals(2, frameAt200Ms.approachCircles.size)
 
-        val visibleOff200 = ChordVisualRenderer.isChordVisible(
+        val visibleOff200 = ChordVisualRenderer.isChordVisibleWhenFallingNotesOff(
             chordTimeMs = frameAt200Ms.chordGroups[0].timeMs,
             currentTimeMs = frameAt200Ms.currentTimeMs,
-            noteLeadTimeMs = frameAt200Ms.noteLeadTimeMs,
-            approachCircleLeadTimeMs = frameAt200Ms.approachCircleLeadTimeMs,
-            showFallingNotes = false
+            approachCircleLeadTimeMs = frameAt200Ms.approachCircleLeadTimeMs
         )
-        assertTrue("Falling Notes OFF: 200ms前は表示対象", visibleOff200)
+        assertTrue("Falling Notes OFF: 200ms前はChord表示対象", visibleOff200)
 
         // 250ms前 (750ms):
         val frameAt250Ms = scheduler.scheduleFrame(
@@ -192,22 +179,11 @@ class ChordVisualRendererTest {
         assertEquals(1, frameAt250Ms.chordGroups.size)
         assertTrue(frameAt250Ms.approachCircles.isEmpty())
 
-        val visibleOff250 = ChordVisualRenderer.isChordVisible(
+        val visibleOff250 = ChordVisualRenderer.isChordVisibleWhenFallingNotesOff(
             chordTimeMs = frameAt250Ms.chordGroups[0].timeMs,
             currentTimeMs = frameAt250Ms.currentTimeMs,
-            noteLeadTimeMs = frameAt250Ms.noteLeadTimeMs,
-            approachCircleLeadTimeMs = frameAt250Ms.approachCircleLeadTimeMs,
-            showFallingNotes = false
+            approachCircleLeadTimeMs = frameAt250Ms.approachCircleLeadTimeMs
         )
         assertFalse("Falling Notes OFF: Approach Circle 未出現の250ms前はChordも非表示", visibleOff250)
-
-        val visibleOn250 = ChordVisualRenderer.isChordVisible(
-            chordTimeMs = frameAt250Ms.chordGroups[0].timeMs,
-            currentTimeMs = frameAt250Ms.currentTimeMs,
-            noteLeadTimeMs = frameAt250Ms.noteLeadTimeMs,
-            approachCircleLeadTimeMs = frameAt250Ms.approachCircleLeadTimeMs,
-            showFallingNotes = true
-        )
-        assertTrue("Falling Notes ON: 落下追従中の250ms前はChord表示対象", visibleOn250)
     }
 }

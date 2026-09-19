@@ -53,36 +53,24 @@ class ChordVisualRenderer(context: Context) {
         private const val HALO_ALPHA = 90
 
         /**
-         * 和音（Chord Link / Chord Halo）が画面上に描画対象となるかを判定する。
+         * Falling Notes OFF 時において、和音（Chord Link / Chord Halo）が未来側表示開始範囲にあるかを判定する。
          *
-         * - Falling Notes ON: Chord Link/Halo は落下ノートに追従するため noteLeadTimeMs を使用する。
-         * - Falling Notes OFF: Chord Link/Halo はキー上の Approach Circle を視覚的にグループ化するため approachCircleLeadTimeMs を使用する。
+         * Falling Notes OFF 時は、Chord Link / Halo はキー上の Approach Circle を視覚的にグループ化する補助表示となる。
+         * そのため未来側の表示開始時間は approachCircleLeadTimeMs に従う。
+         * この関数は未来側の表示開始境界のみを判定し、打鍵後の表示終了仕様は変更しない。
          *
          * @param chordTimeMs 和音の打鍵目標時刻（ミリ秒）
          * @param currentTimeMs 現在の楽曲再生位置（ミリ秒）
-         * @param noteLeadTimeMs ノート先読み時間（ミリ秒、Falling Notes ON 時に使用）
-         * @param approachCircleLeadTimeMs タイミングサークル先読み時間（ミリ秒、Falling Notes OFF 時に使用）
-         * @param showFallingNotes Falling Notes 表示が有効かどうか
-         * @return 描画対象であれば true
+         * @param approachCircleLeadTimeMs タイミングサークル先読み時間（ミリ秒）
+         * @return 未来側表示開始範囲内であれば true
          */
-        fun isChordVisible(
+        fun isChordVisibleWhenFallingNotesOff(
             chordTimeMs: Long,
             currentTimeMs: Long,
-            noteLeadTimeMs: Long,
-            approachCircleLeadTimeMs: Long,
-            showFallingNotes: Boolean
+            approachCircleLeadTimeMs: Long
         ): Boolean {
-            return if (showFallingNotes) {
-                val fallingProgress = FallingNoteCalculator.calculateProgress(
-                    eventTimeMs = chordTimeMs,
-                    currentTimeMs = currentTimeMs,
-                    noteLeadTimeMs = noteLeadTimeMs
-                )
-                FallingNoteCalculator.shouldDraw(fallingProgress)
-            } else {
-                val remainingTime = chordTimeMs - currentTimeMs
-                remainingTime <= approachCircleLeadTimeMs
-            }
+            val remainingTimeMs = chordTimeMs - currentTimeMs
+            return remainingTimeMs <= approachCircleLeadTimeMs
         }
     }
 
@@ -125,10 +113,16 @@ class ChordVisualRenderer(context: Context) {
         // そのまま順次描画することで、遠い未来が背面に、直近が最前面に重なる。
         for (chord in frame.chordGroups) {
             // Falling Notes OFF 時は、キー上の Approach Circle を視覚的にグループ化するため、
-            // approachCircleLeadTimeMs を基準として表示する。
+            // approachCircleLeadTimeMs を基準として表示判定する（テストと共通の純粋判定関数を使用）。
             if (!showFallingNotes) {
-                val remainingTime = chord.timeMs - frame.currentTimeMs
-                if (remainingTime > frame.approachCircleLeadTimeMs) continue
+                if (!isChordVisibleWhenFallingNotesOff(
+                        chordTimeMs = chord.timeMs,
+                        currentTimeMs = frame.currentTimeMs,
+                        approachCircleLeadTimeMs = frame.approachCircleLeadTimeMs
+                    )
+                ) {
+                    continue
+                }
             }
 
             tempChordPoints.clear()
