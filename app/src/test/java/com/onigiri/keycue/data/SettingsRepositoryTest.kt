@@ -175,7 +175,7 @@ class SettingsRepositoryTest {
 
         // 1. デフォルト値の検証
         val defaultConfig = repo.visualConfig.value
-        assertEquals(false, defaultConfig.showKeyNumbers)
+        assertEquals(false, defaultConfig.showGuideLabels)
         assertEquals(true, defaultConfig.showFallingNotes)
         assertEquals(true, defaultConfig.showApproachCircles)
         assertEquals(false, defaultConfig.showJustEffect)
@@ -188,8 +188,8 @@ class SettingsRepositoryTest {
         assertEquals(true, defaultConfig.showChordHalos)
 
         // 2. 各フィールドの更新
-        repo.saveShowKeyNumbers(true)
-        assertEquals(true, repo.visualConfig.value.showKeyNumbers)
+        repo.saveShowGuideLabels(true)
+        assertEquals(true, repo.visualConfig.value.showGuideLabels)
 
         repo.saveShowFallingNotes(false)
         assertEquals(false, repo.visualConfig.value.showFallingNotes)

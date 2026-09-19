@@ -34,7 +34,7 @@ import java.util.Locale
 fun VisualConfigContent(
     visualConfig: VisualConfig,
     onGuideRadiusChange: (Float) -> Unit,
-    onShowKeyNumbersChange: (Boolean) -> Unit,
+    onShowGuideLabelsChange: (Boolean) -> Unit,
     onShowFallingNotesChange: (Boolean) -> Unit,
     onShowApproachCirclesChange: (Boolean) -> Unit,
     onShowRepeatCountBadgeChange: (Boolean) -> Unit,
@@ -77,12 +77,13 @@ fun VisualConfigContent(
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
 
-        // スイッチ項目群（ガイド番号、落下ノート、タイミングサークル、連打バッジ、和音リンク、和音ハロー、ジャスト演出）
+        // スイッチ項目群（ガイドラベル、落下ノート、タイミングサークル、連打バッジ、和音リンク、和音ハロー、ジャスト演出）
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             SettingSwitchRow(
-                label = "ガイド番号表示 (0..14)",
-                checked = visualConfig.showKeyNumbers,
-                onCheckedChange = onShowKeyNumbersChange
+                label = "ガイドラベル表示",
+                description = "通常はガイド番号、MIDIではMIDIノート番号を表示します",
+                checked = visualConfig.showGuideLabels,
+                onCheckedChange = onShowGuideLabelsChange
             )
             SettingSwitchRow(
                 label = "落下ノート表示",

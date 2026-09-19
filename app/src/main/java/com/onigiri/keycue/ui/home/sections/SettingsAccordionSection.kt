@@ -30,7 +30,7 @@ fun SettingsAccordionSection(
     onApproachCircleLeadTimeIncrease: () -> Unit,
     onCountdownChange: (Long) -> Unit,
     onGuideRadiusChange: (Float) -> Unit,
-    onShowKeyNumbersChange: (Boolean) -> Unit,
+    onShowGuideLabelsChange: (Boolean) -> Unit,
     onShowFallingNotesChange: (Boolean) -> Unit,
     onShowApproachCirclesChange: (Boolean) -> Unit,
     onShowRepeatCountBadgeChange: (Boolean) -> Unit,
@@ -117,7 +117,7 @@ fun SettingsAccordionSection(
         VisualConfigContent(
             visualConfig = uiState.visualConfig,
             onGuideRadiusChange = onGuideRadiusChange,
-            onShowKeyNumbersChange = onShowKeyNumbersChange,
+            onShowGuideLabelsChange = onShowGuideLabelsChange,
             onShowFallingNotesChange = onShowFallingNotesChange,
             onShowApproachCirclesChange = onShowApproachCirclesChange,
             onShowRepeatCountBadgeChange = onShowRepeatCountBadgeChange,

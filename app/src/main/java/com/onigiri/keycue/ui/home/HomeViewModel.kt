@@ -353,7 +353,7 @@ class HomeViewModel(
         }
     }
 
-    fun setShowKeyNumbers(show: Boolean) = updateVisualConfig { it.copy(showKeyNumbers = show) }
+    fun setShowGuideLabels(show: Boolean) = updateVisualConfig { it.copy(showGuideLabels = show) }
     fun setShowFallingNotes(show: Boolean) = updateVisualConfig { it.copy(showFallingNotes = show) }
     fun setShowApproachCircles(show: Boolean) = updateVisualConfig { it.copy(showApproachCircles = show) }
     fun setShowRepeatCountBadge(show: Boolean) = updateVisualConfig { it.copy(showRepeatCountBadge = show) }

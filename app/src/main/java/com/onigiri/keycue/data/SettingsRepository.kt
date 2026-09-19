@@ -57,7 +57,7 @@ interface SettingsRepository {
     suspend fun updateVisualConfig(transform: (com.onigiri.keycue.model.VisualConfig) -> com.onigiri.keycue.model.VisualConfig) =
         saveVisualConfig(transform(visualConfig.value))
 
-    suspend fun saveShowKeyNumbers(show: Boolean) = updateVisualConfig { it.copy(showKeyNumbers = show) }
+    suspend fun saveShowGuideLabels(show: Boolean) = updateVisualConfig { it.copy(showGuideLabels = show) }
     suspend fun saveShowFallingNotes(show: Boolean) = updateVisualConfig { it.copy(showFallingNotes = show) }
     suspend fun saveShowApproachCircles(show: Boolean) = updateVisualConfig { it.copy(showApproachCircles = show) }
     suspend fun saveShowRepeatCountBadge(show: Boolean) = updateVisualConfig { it.copy(showRepeatCountBadge = show) }
@@ -111,7 +111,7 @@ class SharedPreferencesSettingsRepository internal constructor(
         private const val KEY_OVERLAY_PIXEL_X = "overlay_pixel_x"
         private const val KEY_OVERLAY_PIXEL_Y = "overlay_pixel_y"
         private const val KEY_FIT_PROFILE = "fit_profile_json"
-        private const val KEY_SHOW_KEY_NUMBERS = "show_key_numbers"
+        private const val KEY_SHOW_GUIDE_LABELS = "show_key_numbers"
         private const val KEY_SHOW_FALLING_NOTES = "show_falling_notes"
         private const val KEY_SHOW_APPROACH_CIRCLES = "show_approach_circles"
         private const val KEY_SHOW_REPEAT_COUNT_BADGE = "show_repeat_count_badge"
@@ -190,7 +190,7 @@ class SharedPreferencesSettingsRepository internal constructor(
 
     private val _visualConfig: MutableStateFlow<com.onigiri.keycue.model.VisualConfig> = MutableStateFlow(
         com.onigiri.keycue.model.VisualConfig.safe(
-            showKeyNumbers = prefs.getBoolean(KEY_SHOW_KEY_NUMBERS, com.onigiri.keycue.model.VisualConfig.DEFAULT_SHOW_KEY_NUMBERS),
+            showGuideLabels = prefs.getBoolean(KEY_SHOW_GUIDE_LABELS, com.onigiri.keycue.model.VisualConfig.DEFAULT_SHOW_GUIDE_LABELS),
             showFallingNotes = prefs.getBoolean(KEY_SHOW_FALLING_NOTES, com.onigiri.keycue.model.VisualConfig.DEFAULT_SHOW_FALLING_NOTES),
             showApproachCircles = prefs.getBoolean(KEY_SHOW_APPROACH_CIRCLES, com.onigiri.keycue.model.VisualConfig.DEFAULT_SHOW_APPROACH_CIRCLES),
             showRepeatCountBadge = prefs.getBoolean(KEY_SHOW_REPEAT_COUNT_BADGE, com.onigiri.keycue.model.VisualConfig.DEFAULT_SHOW_REPEAT_COUNT_BADGE),
@@ -298,7 +298,7 @@ class SharedPreferencesSettingsRepository internal constructor(
 
     override suspend fun saveVisualConfig(config: com.onigiri.keycue.model.VisualConfig) {
         val safeConfig = com.onigiri.keycue.model.VisualConfig.safe(
-            showKeyNumbers = config.showKeyNumbers,
+            showGuideLabels = config.showGuideLabels,
             showFallingNotes = config.showFallingNotes,
             showApproachCircles = config.showApproachCircles,
             showRepeatCountBadge = config.showRepeatCountBadge,
@@ -313,7 +313,7 @@ class SharedPreferencesSettingsRepository internal constructor(
         )
         _visualConfig.value = safeConfig
         prefs.edit()
-            .putBoolean(KEY_SHOW_KEY_NUMBERS, safeConfig.showKeyNumbers)
+            .putBoolean(KEY_SHOW_GUIDE_LABELS, safeConfig.showGuideLabels)
             .putBoolean(KEY_SHOW_FALLING_NOTES, safeConfig.showFallingNotes)
             .putBoolean(KEY_SHOW_APPROACH_CIRCLES, safeConfig.showApproachCircles)
             .putBoolean(KEY_SHOW_REPEAT_COUNT_BADGE, safeConfig.showRepeatCountBadge)

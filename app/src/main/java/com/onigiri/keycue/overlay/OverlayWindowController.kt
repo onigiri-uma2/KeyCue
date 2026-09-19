@@ -70,6 +70,7 @@ class OverlayWindowController(
 
     private var currentFitProfile: FitProfile = FitProfile.createDefaultTestProfile()
     private var currentVisualConfig: com.onigiri.keycue.model.VisualConfig = com.onigiri.keycue.model.VisualConfig()
+    private var currentGuideLabels: List<String>? = null
 
     // --- Control Overlay 管理 ---
 
@@ -194,7 +195,9 @@ class OverlayWindowController(
         if (guideOverlayView != null) return
 
         val layoutParams = createGuideLayoutParams()
-        val view = GuideOverlayView(context, currentFitProfile, currentVisualConfig)
+        val view = GuideOverlayView(context, currentFitProfile, currentVisualConfig).apply {
+            updateGuideLabels(currentGuideLabels)
+        }
 
         try {
             windowManager.addView(view, layoutParams)
@@ -251,6 +254,14 @@ class OverlayWindowController(
     fun updateVisualConfig(config: com.onigiri.keycue.model.VisualConfig) {
         currentVisualConfig = config
         guideOverlayView?.updateVisualConfig(config)
+    }
+
+    /**
+     * ガイドラベル（通常曲: ガイド番号, MIDI: MIDIノート番号）を更新し、Guide Overlay に反映する。
+     */
+    fun updateGuideLabels(labels: List<String>?) {
+        currentGuideLabels = labels
+        guideOverlayView?.updateGuideLabels(labels)
     }
 
     /**

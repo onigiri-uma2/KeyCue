@@ -19,6 +19,14 @@ data class ResolvedMidiMapping(
     val totalEventCount: Int
 ) {
     /**
+     * 各ガイドキーに対応するMIDIノート番号の文字列表記リスト（例: ["48", "50", ...]）。
+     * [midiNotes] 生成時の順序を保持して一度生成され、以後読み取り専用として扱うラベルList。
+     * [guideLabels] の各要素はそのインデックスに対応するガイドキー用MIDIノート番号の文字列表記であり、
+     * `guideLabels[index] == midiNotes[index].toString()` を保証する。
+     */
+    val guideLabels: List<String> = midiNotes.map { it.toString() }
+
+    /**
      * マッピング成功割合（0.0f〜100.0f）。
      * totalEventCount が 0 の場合は安全に 0.0f を返す。
      */

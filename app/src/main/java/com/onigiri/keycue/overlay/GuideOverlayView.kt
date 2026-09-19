@@ -14,6 +14,7 @@ import com.onigiri.keycue.overlay.render.ChordVisualRenderer
 import com.onigiri.keycue.overlay.render.FallingNotesRenderer
 import com.onigiri.keycue.overlay.render.TimingEffectRenderer
 import com.onigiri.keycue.playback.GuideFrame
+import com.onigiri.keycue.profile.GameProfileRegistry
 import kotlin.math.min
 
 /**
@@ -87,6 +88,9 @@ class GuideOverlayView(
     // 現在描画対象のフレーム
     private var currentFrame: GuideFrame? = null
 
+    // 現在描画対象のガイドラベル（デフォルトはGameProfileRegistry準拠の通常ラベル）
+    private var guideLabels: List<String> = DEFAULT_GUIDE_LABELS
+
     init {
         setBackgroundColor(Color.TRANSPARENT)
         applyVisualConfigPaints()
@@ -118,6 +122,23 @@ class GuideOverlayView(
         applyVisualConfigPaints()
         recalculateKeyPositions(width, height)
         invalidate()
+    }
+
+    /**
+     * ガイドに表示するラベルリストを更新する。
+     *
+     * @param labels 表示するラベル文字列リスト。サイズが [DEFAULT_GUIDE_LABELS] と一致しない場合や null の場合は全体がデフォルトへフォールバックされる。
+     */
+    fun updateGuideLabels(labels: List<String>?) {
+        val normalized = if (labels != null && labels.size == DEFAULT_GUIDE_LABELS.size) {
+            labels
+        } else {
+            DEFAULT_GUIDE_LABELS
+        }
+        if (guideLabels !== normalized) {
+            guideLabels = normalized
+            invalidate()
+        }
     }
 
     private fun applyVisualConfigPaints() {
@@ -207,10 +228,10 @@ class GuideOverlayView(
                 hasActiveRipple = true
             }
 
-            // キー番号（設定で表示が有効な場合のみ）
-            if (visualConfig.showKeyNumbers) {
+            // ガイドラベル（設定で表示が有効な場合のみ）
+            if (visualConfig.showGuideLabels) {
                 canvas.drawText(
-                    i.toString(),
+                    guideLabels[i],
                     center.x,
                     center.y + textYOffset,
                     textPaint
@@ -268,5 +289,11 @@ class GuideOverlayView(
             val centerY = height * 0.40f
             canvas.drawText(countdown, centerX, centerY, countdownPaint)
         }
+    }
+
+    companion object {
+        /** 通常曲用の固定ガイドラベル ("0".."keyCount-1") */
+        private val DEFAULT_GUIDE_LABELS: List<String> =
+            List(GameProfileRegistry.current.keyCount) { it.toString() }
     }
 }

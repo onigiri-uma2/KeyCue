@@ -6,7 +6,7 @@ package com.onigiri.keycue.model
  * キーの位置・配置を保持する [FitProfile] と責務を分離し、
  * ユーザーが調整可能な外観パラメータの Single Source of Truth として機能します。
  *
- * @param showKeyNumbers ガイドのキー番号 (0..14) を表示するかどうか
+ * @param showGuideLabels ガイドのラベル（通常曲: ガイド番号, MIDI: MIDIノート番号）を表示するかどうか
  * @param showFallingNotes 落下ノートを表示するかどうか
  * @param showApproachCircles 音ゲー風アプローチサークル（縮小タイミング円）を表示するかどうか
  * @param showJustEffect ジャストタイミング時の発光演出を表示するかどうか
@@ -17,7 +17,7 @@ package com.onigiri.keycue.model
  * @param noteColorBottom 下段ノート（Row 2, Key 10..14）の描画色 (ARGB Int)
  */
 data class VisualConfig(
-    val showKeyNumbers: Boolean = DEFAULT_SHOW_KEY_NUMBERS,
+    val showGuideLabels: Boolean = DEFAULT_SHOW_GUIDE_LABELS,
     val showFallingNotes: Boolean = DEFAULT_SHOW_FALLING_NOTES,
     val showApproachCircles: Boolean = DEFAULT_SHOW_APPROACH_CIRCLES,
     val showRepeatCountBadge: Boolean = DEFAULT_SHOW_REPEAT_COUNT_BADGE,
@@ -40,7 +40,7 @@ data class VisualConfig(
         const val MIN_GUIDE_RADIUS_RATIO = 0.02f
         const val MAX_GUIDE_RADIUS_RATIO = 0.08f
 
-        const val DEFAULT_SHOW_KEY_NUMBERS = false
+        const val DEFAULT_SHOW_GUIDE_LABELS = false
         const val DEFAULT_SHOW_FALLING_NOTES = true
         const val DEFAULT_SHOW_APPROACH_CIRCLES = true
         const val DEFAULT_SHOW_REPEAT_COUNT_BADGE = true
@@ -73,7 +73,7 @@ data class VisualConfig(
          * 半径比率を安全な範囲にclampして新しいインスタンスを生成する。
          */
         fun safe(
-            showKeyNumbers: Boolean = DEFAULT_SHOW_KEY_NUMBERS,
+            showGuideLabels: Boolean = DEFAULT_SHOW_GUIDE_LABELS,
             showFallingNotes: Boolean = DEFAULT_SHOW_FALLING_NOTES,
             showApproachCircles: Boolean = DEFAULT_SHOW_APPROACH_CIRCLES,
             showRepeatCountBadge: Boolean = DEFAULT_SHOW_REPEAT_COUNT_BADGE,
@@ -87,7 +87,7 @@ data class VisualConfig(
             showChordHalos: Boolean = DEFAULT_SHOW_CHORD_HALOS
         ): VisualConfig {
             return VisualConfig(
-                showKeyNumbers = showKeyNumbers,
+                showGuideLabels = showGuideLabels,
                 showFallingNotes = showFallingNotes,
                 showApproachCircles = showApproachCircles,
                 showRepeatCountBadge = showRepeatCountBadge,

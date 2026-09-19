@@ -16,6 +16,7 @@ import com.onigiri.keycue.playback.NoteScheduler
 import com.onigiri.keycue.playback.PlaybackEngine
 import com.onigiri.keycue.playback.PlaybackState
 import android.net.Uri
+import com.onigiri.keycue.model.PlaybackSession
 import com.onigiri.keycue.model.SongData
 import com.onigiri.keycue.song.SongSelectionCoordinator
 import kotlinx.coroutines.CoroutineScope
@@ -171,6 +172,7 @@ class OverlayService : Service() {
         applyPlaybackConfig(settingsRepository.playbackConfig.value)
         val profile = settingsRepository.fitProfile.value ?: session?.fitProfile
         if (profile != null) windowController?.updateFitProfile(profile)
+        updateGuideLabelsForSession(session)
     }
 
     private fun applySong(song: SongData?) {
@@ -264,9 +266,14 @@ class OverlayService : Service() {
                 applySong(session?.song)
                 val profile = settingsRepository.fitProfile.value ?: session?.fitProfile
                 if (profile != null) windowController?.updateFitProfile(profile)
+                updateGuideLabelsForSession(session)
                 renderCurrentFrame()
             }
         }
+    }
+
+    private fun updateGuideLabelsForSession(session: PlaybackSession?) {
+        windowController?.updateGuideLabels(resolveGuideLabels(session))
     }
 
     private fun handleSelectFile() {
