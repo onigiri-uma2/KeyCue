@@ -27,8 +27,14 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        openedFromOverlay = savedInstanceState?.getBoolean(KEY_OPENED_FROM_OVERLAY)
-            ?: intent.getBooleanExtra(EXTRA_OPENED_FROM_OVERLAY, false)
+        val fromIntent = intent.getBooleanExtra(EXTRA_OPENED_FROM_OVERLAY, false)
+        val fromSaved = savedInstanceState?.getBoolean(KEY_OPENED_FROM_OVERLAY) ?: false
+        val fromOverlay = fromIntent || fromSaved
+        openedFromOverlay = fromOverlay
+
+        if (fromOverlay) {
+            resetToHomeTrigger++
+        }
 
         enableEdgeToEdge()
         setContent {
