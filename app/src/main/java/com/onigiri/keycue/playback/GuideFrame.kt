@@ -87,8 +87,17 @@ data class ApproachCircle(
 /**
  * 同一時刻に複数の異なるキーを押す和音グループの情報。
  *
+ * 【契約 (Canonical Form)】
+ * [keys] は以下の正規化形式を満たすことが保証されます:
+ * - 昇順 (sorted)
+ * - 重複なし (unique)
+ * - 生成後に変更されない (immutable)
+ *
+ * レンダラー（[com.onigiri.keycue.overlay.render.ChordVisualRenderer]）は、
+ * 毎フレームの再ソートや重複排除を行わず、[keys] をそのまま幾何キャッシュのキーとして高速・安全に利用できます。
+ *
  * @param timeMs 和音の発生時刻（ミリ秒）
- * @param keys 構成するユニークなキーインデックスのリスト（昇順）
+ * @param keys 構成するユニークなキーインデックスの不変リスト（昇順）
  */
 data class ChordGroup(
     val timeMs: Long,

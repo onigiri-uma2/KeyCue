@@ -72,7 +72,7 @@ class NoteScheduler {
 
             if (uniqueKeys.size >= 2) {
                 uniqueKeys.sort()
-                chordGroupsList.add(ChordGroup(timeMs = t, keys = uniqueKeys))
+                chordGroupsList.add(ChordGroup(timeMs = t, keys = uniqueKeys.toList()))
             }
 
             i = j

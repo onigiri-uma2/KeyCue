@@ -711,4 +711,39 @@ class NoteSchedulerTest {
         assertEquals(1, frameAt850_201.approachCircles.size)
         assertFalse("間隔201ms (window=200ms超過) の場合はshowRepeatBadge=false", frameAt850_201.approachCircles[0].showRepeatBadge)
     }
+
+    @Test
+    fun prepare_chordGroup_guaranteesCanonicalForm_uniqueSortedAndInputOrderIndependent() {
+        // 重複あり・順序不同の入力 [5, 3, 5, 7] -> [3, 5, 7]
+        val eventsWithDup = listOf(
+            NoteEvent(timeMs = 1000L, key = 5),
+            NoteEvent(timeMs = 1000L, key = 3),
+            NoteEvent(timeMs = 1000L, key = 5),
+            NoteEvent(timeMs = 1000L, key = 7)
+        )
+        scheduler.prepare(eventsWithDup)
+        val frame1 = scheduler.scheduleFrame(eventsWithDup, currentTimeMs = 800L, noteLeadTimeMs = 300L)
+        assertEquals(1, frame1.chordGroups.size)
+        assertEquals(listOf(3, 5, 7), frame1.chordGroups[0].keys)
+
+        // 異なる入力順 [7, 3, 5] -> [3, 5, 7]
+        val eventsOrder2 = listOf(
+            NoteEvent(timeMs = 1000L, key = 7),
+            NoteEvent(timeMs = 1000L, key = 3),
+            NoteEvent(timeMs = 1000L, key = 5)
+        )
+        scheduler.prepare(eventsOrder2)
+        val frame2 = scheduler.scheduleFrame(eventsOrder2, currentTimeMs = 800L, noteLeadTimeMs = 300L)
+        assertEquals(listOf(3, 5, 7), frame2.chordGroups[0].keys)
+
+        // さらに異なる入力順 [5, 7, 3] -> [3, 5, 7]
+        val eventsOrder3 = listOf(
+            NoteEvent(timeMs = 1000L, key = 5),
+            NoteEvent(timeMs = 1000L, key = 7),
+            NoteEvent(timeMs = 1000L, key = 3)
+        )
+        scheduler.prepare(eventsOrder3)
+        val frame3 = scheduler.scheduleFrame(eventsOrder3, currentTimeMs = 800L, noteLeadTimeMs = 300L)
+        assertEquals(listOf(3, 5, 7), frame3.chordGroups[0].keys)
+    }
 }

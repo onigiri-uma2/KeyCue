@@ -58,6 +58,8 @@ class ChordVisualRenderer(context: Context) {
     fun clearCache() {
         staticGeometryCache.clear()
         fallingGeometryCache.clear()
+        cacheHitCount = 0L
+        cacheMissCount = 0L
     }
 
     companion object {
@@ -98,8 +100,19 @@ class ChordVisualRenderer(context: Context) {
         }
     }
 
+    // キャッシュヒット・ミスカウンター（DEBUG/テスト確認用）
+    internal var cacheHitCount: Long = 0L
+        private set
+    internal var cacheMissCount: Long = 0L
+        private set
+
     /**
      * 指定されたキー構成と幾何モードに対応する幾何キャッシュを取得、未生成なら生成してキャッシュする。
+     *
+     * 【Hot Path 最適化】
+     * 渡される [keys] は [com.onigiri.keycue.playback.ChordGroup] の契約により、
+     * すでに昇順・重複なし・immutable な canonical form であることが保証されています。
+     * 毎フレームの distinct() や sorted() は行わず、そのままキャッシュキーとして利用します。
      */
     private fun getOrCreateGeometry(
         keys: List<Int>,
@@ -109,13 +122,16 @@ class ChordVisualRenderer(context: Context) {
         haloMarginPx: Float
     ): CachedChordGeometry? {
         val cache = if (isFalling) fallingGeometryCache else staticGeometryCache
-        val canonicalKey = canonicalizeKey(keys)
-        val existing = cache[canonicalKey]
-        if (existing != null) return existing
+        val existing = cache[keys]
+        if (existing != null) {
+            cacheHitCount++
+            return existing
+        }
+        cacheMissCount++
 
         val validPoints = ArrayList<ChordPoint>()
         val validCenters = ArrayList<GeometryPoint>()
-        for (k in canonicalKey) {
+        for (k in keys) {
             if (k in keyPixelCenters.indices) {
                 val center = keyPixelCenters[k]
                 validPoints.add(ChordPoint(key = k, x = center.x, y = center.y))
@@ -154,7 +170,7 @@ class ChordVisualRenderer(context: Context) {
         }
 
         val geometry = CachedChordGeometry(haloPath = path, linkLines = lines)
-        cache[canonicalKey] = geometry
+        cache[keys] = geometry
         return geometry
     }
 
