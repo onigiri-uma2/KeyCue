@@ -186,6 +186,29 @@ class OverlayWindowController(
         guideOverlayView?.visibility = View.VISIBLE
     }
 
+    private var isHiddenForSettings = false
+
+    /**
+     * 設定画面等のActivity表示中にオーバーレイ全般を一時非表示（GONE）にする。
+     * WindowManagerからの削除は行わず、visibilityのみを切り替えるため二重生成・再生成コストがない。
+     */
+    fun hideForSettings() {
+        if (isHiddenForSettings) return
+        isHiddenForSettings = true
+        controlOverlayView?.visibility = View.GONE
+        guideOverlayView?.visibility = View.GONE
+    }
+
+    /**
+     * 設定画面等のActivity終了後にオーバーレイの表示を復元（VISIBLE）する。
+     */
+    fun restoreAfterSettings() {
+        if (!isHiddenForSettings) return
+        isHiddenForSettings = false
+        controlOverlayView?.visibility = View.VISIBLE
+        guideOverlayView?.visibility = View.VISIBLE
+    }
+
     // --- Guide Overlay 管理 ---
 
     /**

@@ -416,9 +416,9 @@ class ControlOverlayView(
         views.add(minimizeBtn)
         views.add(createSpacer(5))
 
-        // 「KeyCueを開く」ボタン
+        // 「設定」ボタン
         val openBtn = createActionButton(
-            text = "KeyCueを開く",
+            text = "設定",
             bgColor = Color.parseColor("#3F51B5"),
             textColor = Color.WHITE
         ) {

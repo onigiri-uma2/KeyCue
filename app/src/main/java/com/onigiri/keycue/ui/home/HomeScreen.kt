@@ -85,6 +85,8 @@ fun HomeScreen(
     viewModel: HomeViewModel = viewModel(
         factory = HomeViewModel.provideFactory(LocalContext.current.applicationContext)
     ),
+    openedFromOverlay: Boolean = false,
+    onCloseClick: () -> Unit = {},
     onSelectFileClick: () -> Unit = {},
     onFittingClick: () -> Unit = {},
     onStartSupportClick: () -> Unit = {},
@@ -201,6 +203,8 @@ fun HomeScreen(
     HomeScreenContent(
         modifier = modifier,
         uiState = uiState,
+        openedFromOverlay = openedFromOverlay,
+        onCloseClick = onCloseClick,
         onSelectFileClick = handleSelectFile,
         onFittingClick = onFittingClick,
         onStartSupportClick = handleStartSupport,
@@ -241,6 +245,8 @@ fun HomeScreen(
 fun HomeScreenContent(
     modifier: Modifier = Modifier,
     uiState: HomeUiState,
+    openedFromOverlay: Boolean = false,
+    onCloseClick: () -> Unit = {},
     onSelectFileClick: () -> Unit = {},
     onFittingClick: () -> Unit = {},
     onStartSupportClick: () -> Unit = {},
@@ -301,6 +307,16 @@ fun HomeScreenContent(
                             fontWeight = FontWeight.Bold,
                             style = MaterialTheme.typography.titleLarge
                         )
+                    },
+                    navigationIcon = {
+                        if (openedFromOverlay) {
+                            FilledTonalIconButton(
+                                onClick = onCloseClick,
+                                modifier = Modifier.padding(start = 8.dp)
+                            ) {
+                                Text(text = "←", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
                     },
                     colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
                         containerColor = MaterialTheme.colorScheme.background,

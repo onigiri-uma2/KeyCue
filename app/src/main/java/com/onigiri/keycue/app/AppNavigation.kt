@@ -1,6 +1,8 @@
 package com.onigiri.keycue.app
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -26,17 +28,34 @@ object AppDestinations {
 fun AppNavigation(
     modifier: Modifier = Modifier,
     navController: NavHostController = rememberNavController(),
+    openedFromOverlay: Boolean = false,
+    resetToHomeTrigger: Int = 0,
+    onCloseSettings: () -> Unit = {},
     onSelectFileClick: () -> Unit = {},
     onFittingClick: () -> Unit = {},
     onStartSupportClick: () -> Unit = {}
 ) {
+    // Overlay起動の新規Intent受信時にHOME_ROUTEまで強制的に戻す
+    LaunchedEffect(resetToHomeTrigger) {
+        if (resetToHomeTrigger > 0) {
+            navController.popBackStack(AppDestinations.HOME_ROUTE, inclusive = false)
+        }
+    }
+
     NavHost(
         navController = navController,
         startDestination = AppDestinations.HOME_ROUTE,
         modifier = modifier
     ) {
         composable(AppDestinations.HOME_ROUTE) {
+            // オーバーレイから起動された場合のみルートでBackを押したときに設定画面を終了して直前アプリへ戻る
+            BackHandler(enabled = openedFromOverlay) {
+                onCloseSettings()
+            }
+
             HomeScreen(
+                openedFromOverlay = openedFromOverlay,
+                onCloseClick = onCloseSettings,
                 onSelectFileClick = onSelectFileClick,
                 onFittingClick = {
                     onFittingClick()

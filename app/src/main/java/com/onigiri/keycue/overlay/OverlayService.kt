@@ -41,8 +41,22 @@ class OverlayService : Service() {
         const val ACTION_STOP = "com.onigiri.keycue.overlay.ACTION_STOP"
 
         private var isRunning = false
+        private var instance: OverlayService? = null
 
         fun isServiceRunning(): Boolean = isRunning
+
+        /**
+         * 設定画面（MainActivity）表示中のオーバーレイ一時非表示・再表示を設定する。
+         */
+        fun setOverlayVisibleForSettings(visible: Boolean) {
+            instance?.let { service ->
+                if (visible) {
+                    service.windowController?.restoreAfterSettings()
+                } else {
+                    service.windowController?.hideForSettings()
+                }
+            }
+        }
 
         /**
          * OverlayServiceを起動する。
@@ -97,6 +111,7 @@ class OverlayService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        instance = this
         isRunning = true
         OverlayNotificationFactory.createNotificationChannel(this)
 
@@ -444,9 +459,11 @@ class OverlayService : Service() {
     }
 
     private fun openMainActivity() {
-        handleStop()
+        // 設定画面を開く直前にオーバーレイを一時非表示にし、画面遷移中の被りを防ぐ
+        windowController?.hideForSettings()
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra(MainActivity.EXTRA_OPENED_FROM_OVERLAY, true)
         }
         startActivity(intent)
     }
@@ -466,6 +483,7 @@ class OverlayService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        instance = null
         isRunning = false
         stopFrameLoop()
         sessionCollectJob?.cancel()
