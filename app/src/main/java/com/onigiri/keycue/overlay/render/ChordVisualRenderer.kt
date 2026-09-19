@@ -68,13 +68,6 @@ class ChordVisualRenderer(context: Context) {
         // Chord Halo のアルファ値（Chord Link より目立たない薄い外周線）
         private const val HALO_ALPHA = 90
 
-        /**
-         * 和音を構成するキーのリストを正規化し、immutable な不変キャッシュキーを生成する純粋関数。
-         * 重複キーを排除し、昇順に整列された不変リストを返します。
-         */
-        fun canonicalizeKey(keys: List<Int>): List<Int> {
-            return keys.distinct().sorted()
-        }
 
         /**
          * Falling Notes OFF 時において、和音（Chord Link / Chord Halo）が未来側表示開始範囲にあるかを判定する。

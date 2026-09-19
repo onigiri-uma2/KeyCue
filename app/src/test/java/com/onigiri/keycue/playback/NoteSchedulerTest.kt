@@ -726,6 +726,19 @@ class NoteSchedulerTest {
         assertEquals(1, frame1.chordGroups.size)
         assertEquals(listOf(3, 5, 7), frame1.chordGroups[0].keys)
 
+        // 入力: [8, 2, 4, 2, 8, 0] -> 重複除去・昇順ソートされて [0, 2, 4, 8]
+        val eventsMixed = listOf(
+            NoteEvent(timeMs = 1000L, key = 8),
+            NoteEvent(timeMs = 1000L, key = 2),
+            NoteEvent(timeMs = 1000L, key = 4),
+            NoteEvent(timeMs = 1000L, key = 2),
+            NoteEvent(timeMs = 1000L, key = 8),
+            NoteEvent(timeMs = 1000L, key = 0)
+        )
+        scheduler.prepare(eventsMixed)
+        val frameMixed = scheduler.scheduleFrame(eventsMixed, currentTimeMs = 800L, noteLeadTimeMs = 300L)
+        assertEquals(listOf(0, 2, 4, 8), frameMixed.chordGroups.single().keys)
+
         // 異なる入力順 [7, 3, 5] -> [3, 5, 7]
         val eventsOrder2 = listOf(
             NoteEvent(timeMs = 1000L, key = 7),
@@ -745,5 +758,23 @@ class NoteSchedulerTest {
         scheduler.prepare(eventsOrder3)
         val frame3 = scheduler.scheduleFrame(eventsOrder3, currentTimeMs = 800L, noteLeadTimeMs = 300L)
         assertEquals(listOf(3, 5, 7), frame3.chordGroups[0].keys)
+    }
+
+    @Test
+    fun prepare_identicalKeyDuplicatesOnly_doesNotCreateChordGroup() {
+        // 同一キー (key=5) の重複のみ存在する場合、重複排除後のユニークキー数は1個なので和音グループは生成されない
+        val eventsIdentical = listOf(
+            NoteEvent(timeMs = 1000L, key = 5),
+            NoteEvent(timeMs = 1000L, key = 5),
+            NoteEvent(timeMs = 1000L, key = 5)
+        )
+        scheduler.prepare(eventsIdentical)
+        val frame = scheduler.scheduleFrame(eventsIdentical, currentTimeMs = 800L, noteLeadTimeMs = 300L)
+
+        // 和音グループが生成されないこと (unique key >= 2 のみ和音)
+        assertTrue(frame.chordGroups.isEmpty())
+        // ただし ApproachCircle としては key=5 が 1 つ生成される
+        assertEquals(1, frame.approachCircles.size)
+        assertEquals(5, frame.approachCircles[0].key)
     }
 }

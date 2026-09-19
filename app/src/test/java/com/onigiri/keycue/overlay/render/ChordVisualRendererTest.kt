@@ -186,20 +186,4 @@ class ChordVisualRendererTest {
         )
         assertFalse("Falling Notes OFF: Approach Circle 未出現の250ms前はChordも非表示", visibleOff250)
     }
-
-    @Test
-    fun canonicalizeKey_producesSortedDistinctImmutableKey() {
-        // 重複あり・順序不同のリスト
-        val rawKeys = listOf(8, 2, 4, 2, 8, 0)
-        val canonical = ChordVisualRenderer.canonicalizeKey(rawKeys)
-
-        // 昇順かつ重複なしであること
-        assertEquals(listOf(0, 2, 4, 8), canonical)
-
-        // 別順序の同じ構成でも同一のキャッシュキーになること
-        val anotherRawKeys = listOf(4, 0, 8, 2)
-        val anotherCanonical = ChordVisualRenderer.canonicalizeKey(anotherRawKeys)
-        assertEquals(canonical, anotherCanonical)
-        assertEquals(canonical.hashCode(), anotherCanonical.hashCode())
-    }
 }
