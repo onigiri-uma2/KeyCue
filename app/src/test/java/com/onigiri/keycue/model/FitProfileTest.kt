@@ -81,7 +81,22 @@ class FitProfileTest {
         val ex = assertThrows(IllegalArgumentException::class.java) {
             FitProfile(keyCenters = emptyList())
         }
-        assertTrue(ex.message?.contains("empty") == true)
+        assertTrue(ex.message?.contains("exactly 15") == true)
+    }
+
+    @Test
+    fun fitProfile_rejectsInvalidKeyCount() {
+        // 14キー（1つ不足）
+        val fewerKeys = List(14) { NormalizedPoint(0.5f, 0.5f) }
+        assertThrows(IllegalArgumentException::class.java) {
+            FitProfile(keyCenters = fewerKeys)
+        }
+
+        // 16キー（1つ超過）
+        val moreKeys = List(16) { NormalizedPoint(0.5f, 0.5f) }
+        assertThrows(IllegalArgumentException::class.java) {
+            FitProfile(keyCenters = moreKeys)
+        }
     }
 
     @Test

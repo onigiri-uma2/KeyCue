@@ -8,7 +8,7 @@ import com.onigiri.keycue.profile.GameProfileRegistry
  * 画面上の各キー中心位置（0.0〜1.0の正規化座標）および基準半径比率を保持し、
  * 異なる解像度やアスペクト比の端末間で一貫した演奏ガイド表示・当たり判定基準を提供します。
  *
- * @param keyCenters 各キーそれぞれの正規化中心座標（空であってはならない）
+ * @param keyCenters 各キーそれぞれの正規化中心座標（要素数は必ず [KEY_COUNT] と一致）
  * @param keyRadiusRatio 画面短辺に対するキー円の基準半径比率（デフォルト: 0.04f）
  * @param landscape 想定される画面向きが横向き（Landscape）かどうか
  */
@@ -18,8 +18,8 @@ data class FitProfile(
     val landscape: Boolean = true
 ) {
     init {
-        require(keyCenters.isNotEmpty()) {
-            "FitProfile must not have empty keyCenters"
+        require(keyCenters.size == KEY_COUNT) {
+            "FitProfile must contain exactly $KEY_COUNT key centers, but got ${keyCenters.size}"
         }
         require(keyRadiusRatio > 0f) {
             "keyRadiusRatio must be positive, but was $keyRadiusRatio"
@@ -27,6 +27,9 @@ data class FitProfile(
     }
 
     companion object {
+        // Legacy compatibility constant.
+        // Must stay in sync with SkyProfile.keyCount.
+        const val KEY_COUNT = 15
 
         /**
          * 開発・テストおよび初期状態用の標準的な格子FitProfileを生成する。

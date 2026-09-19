@@ -5,6 +5,7 @@ import com.onigiri.keycue.model.ResolvedMidiMapping
 import com.onigiri.keycue.model.ScaleType
 import com.onigiri.keycue.model.MidiMappingMode
 import com.onigiri.keycue.model.MidiMappingSettings
+import com.onigiri.keycue.profile.SkyProfile
 import kotlin.math.abs
 
 /**
@@ -62,7 +63,7 @@ class MidiKeyMapper(
             root = PitchClass.C,
             scale = ScaleType.MAJOR,
             baseOctave = 4,
-            midiNotes = com.onigiri.keycue.profile.SkyProfile.defaultMidiNotes,
+            midiNotes = SkyProfile.defaultMidiNotes,
             mappedEventCount = 0,
             totalEventCount = 0
         )
