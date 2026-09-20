@@ -384,7 +384,7 @@ class ControlOverlayView(
 
             noteLeadTimeValueText = TextView(context).apply {
                 text = "${PlaybackConfig.DEFAULT_NOTE_LEAD_TIME_MS}ms"
-                setTextColor(Color.parseColor("#80CBC4"))
+                setTextColor(Color.parseColor("#90CAF9"))
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
                 typeface = android.graphics.Typeface.DEFAULT_BOLD
                 gravity = Gravity.CENTER
@@ -425,7 +425,7 @@ class ControlOverlayView(
 
             approachCircleLeadTimeValueText = TextView(context).apply {
                 text = "${PlaybackConfig.DEFAULT_APPROACH_CIRCLE_LEAD_TIME_MS}ms"
-                setTextColor(Color.parseColor("#FFB74D"))
+                setTextColor(Color.parseColor("#90CAF9"))
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
                 typeface = android.graphics.Typeface.DEFAULT_BOLD
                 gravity = Gravity.CENTER
