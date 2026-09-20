@@ -62,16 +62,86 @@ class SongFormatDetector {
     /**
      * 文字列コンテンツが Sky Studio JSON 譜面であるかを判定する。
      *
-     * 先頭が JSON の配列またはオブジェクト（`[` または `{`）であり、
-     * かつ "songNotes": キーが存在することを確認する。
+     * 1. UTF BOMおよび先頭空白を除去後、先頭が '{' または '[' であるかを確認。
+     * 2. コンテンツを1パス走査し、JSON文字列リテラル（エスケープ \" や \\ を考慮）の外側にある
+     *    実際の "songNotes" キー（閉じクォートの後にコロン ':' が続くもの）が存在するかを判定。
+     *    文字列値の中に "songNotes": という文言が書かれている場合の誤判定を防止する。
      */
     fun isSkyStudioJson(content: String): Boolean {
-        val trimmed = content.trim().removePrefix("\uFEFF").trim()
-        val isJsonLike = trimmed.startsWith("[") || trimmed.startsWith("{")
-        return isJsonLike && SONG_NOTES_KEY_REGEX.containsMatchIn(trimmed)
+        var i = 0
+        val len = content.length
+
+        // BOM除去
+        if (i < len && content[i] == '\uFEFF') {
+            i++
+        }
+
+        // 先頭空白スキップ
+        while (i < len && content[i].isWhitespace()) {
+            i++
+        }
+
+        if (i >= len) return false
+
+        // 最初の有効文字が '{' または '[' であるか
+        val firstChar = content[i]
+        if (firstChar != '{' && firstChar != '[') {
+            return false
+        }
+
+        // 文字列トークンを走査
+        while (i < len) {
+            val c = content[i]
+            if (c == '"') {
+                val strStart = i + 1
+                i++
+                var escaped = false
+                while (i < len) {
+                    val sc = content[i]
+                    if (escaped) {
+                        escaped = false
+                        i++
+                    } else if (sc == '\\') {
+                        escaped = true
+                        i++
+                    } else if (sc == '"') {
+                        break
+                    } else {
+                        i++
+                    }
+                }
+
+                if (i >= len) {
+                    return false
+                }
+
+                val strEnd = i
+                val tokenLength = strEnd - strStart
+
+                // 文字列内容が厳密に "songNotes" であり、直後に ':' が続くか確認
+                if (tokenLength == TARGET_KEY.length &&
+                    content.regionMatches(strStart, TARGET_KEY, 0, TARGET_KEY.length)
+                ) {
+                    var postIndex = i + 1
+                    while (postIndex < len && content[postIndex].isWhitespace()) {
+                        postIndex++
+                    }
+                    if (postIndex < len && content[postIndex] == ':') {
+                        return true
+                    }
+                }
+                i++
+            } else {
+                i++
+            }
+        }
+
+        return false
     }
 
     companion object {
+        private const val TARGET_KEY = "songNotes"
+
         private val MIDI_EXTENSIONS = setOf(
             "mid",
             "midi"
@@ -96,7 +166,5 @@ class SongFormatDetector {
             "text/json",
             "text/plain"
         )
-
-        private val SONG_NOTES_KEY_REGEX = Regex(""""songNotes"\s*:""")
     }
 }

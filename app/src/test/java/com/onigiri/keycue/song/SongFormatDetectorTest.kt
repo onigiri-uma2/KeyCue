@@ -72,21 +72,34 @@ class SongFormatDetectorTest {
 
     @Test
     fun isSkyStudioJson_checksCorrectly() {
-        // 正常なオブジェクト形式
+        // 1. 通常のsongNotesキー
         org.junit.Assert.assertTrue(detector.isSkyStudioJson("""{"songNotes": []}"""))
-        // 正常な配列形式
+
+        // 2. 空白を含むキー
+        org.junit.Assert.assertTrue(detector.isSkyStudioJson("""{"songNotes"   : []}"""))
+
+        // 配列形式およびBOM付き
         org.junit.Assert.assertTrue(detector.isSkyStudioJson("""[{"songNotes": []}]"""))
-        // BOM付き
         org.junit.Assert.assertTrue(detector.isSkyStudioJson("\uFEFF" + """[{"songNotes": []}]"""))
-        // 空白・改行挟み
-        org.junit.Assert.assertTrue(detector.isSkyStudioJson("""  { "songNotes"  : [] }  """))
+
+        // 3. 文字列値としてsongNotesを含む
+        org.junit.Assert.assertFalse(detector.isSkyStudioJson("""{"description": "songNotes"}"""))
+
+        // 4. 今回の重要な回帰テスト: 文字列値の中に "songNotes": が含まれる場合
+        org.junit.Assert.assertFalse(detector.isSkyStudioJson("""{"description": "example: \"songNotes\": []"}"""))
+
+        // 5. 類似キー
+        org.junit.Assert.assertFalse(detector.isSkyStudioJson("""{"songNotesExample": []}"""))
+
+        // 6. songNotesキーを持つ壊れたJSON (構文途切れでもSky Studio候補としてはtrue)
+        org.junit.Assert.assertTrue(detector.isSkyStudioJson("[\n  {\n    \"songNotes\": [\n"))
 
         // 無関係なJSON（songNotesなし）
         org.junit.Assert.assertFalse(detector.isSkyStudioJson("""{"settings": {}}"""))
-        // "songNotes" がキーではなく文字列値として出現する無関係なJSON
-        org.junit.Assert.assertFalse(detector.isSkyStudioJson("""{"description": "This text mentions \"songNotes\""}"""))
+
         // JSON形式ではないプレーンテキストに "songNotes": が含まれるケース
         org.junit.Assert.assertFalse(detector.isSkyStudioJson("""Notes header: "songNotes": []"""))
+
         // 空文字
         org.junit.Assert.assertFalse(detector.isSkyStudioJson(""))
     }

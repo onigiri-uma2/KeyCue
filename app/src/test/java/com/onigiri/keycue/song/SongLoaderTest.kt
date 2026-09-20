@@ -236,6 +236,26 @@ class SongLoaderTest {
         assertTrue("Expected UnsupportedFormat but got $result", result is SongLoadResult.Failure.UnsupportedFormat)
     }
 
+    @Test
+    fun loadSong_jsonMentioningSongNotesColonInValue_returnsUnsupportedFormat() {
+        val fakeKeyColonJson = """
+            {
+              "description": "example: \"songNotes\": []"
+            }
+        """.trimIndent()
+        val uri = FakeUri("content://keycue/fake_notes.json")
+        val bytes = fakeKeyColonJson.toByteArray(Charsets.UTF_8)
+
+        val result = songLoader.loadFromBytes(
+            bytes = bytes,
+            displayName = "fake_notes.json",
+            mimeType = "application/json",
+            uri = uri
+        )
+
+        assertTrue("Expected UnsupportedFormat but got $result", result is SongLoadResult.Failure.UnsupportedFormat)
+    }
+
     // -------------------------------------------------------------
     // ケース7: 壊れたJSON（"songNotes": キーは存在するが構文が壊れている）
     // -------------------------------------------------------------
