@@ -72,8 +72,40 @@ class SongFormatDetectorTest {
 
     @Test
     fun isSkyStudioJson_checksCorrectly() {
+        // 正常なオブジェクト形式
         org.junit.Assert.assertTrue(detector.isSkyStudioJson("""{"songNotes": []}"""))
+        // 正常な配列形式
+        org.junit.Assert.assertTrue(detector.isSkyStudioJson("""[{"songNotes": []}]"""))
+        // BOM付き
+        org.junit.Assert.assertTrue(detector.isSkyStudioJson("\uFEFF" + """[{"songNotes": []}]"""))
+        // 空白・改行挟み
+        org.junit.Assert.assertTrue(detector.isSkyStudioJson("""  { "songNotes"  : [] }  """))
+
+        // 無関係なJSON（songNotesなし）
         org.junit.Assert.assertFalse(detector.isSkyStudioJson("""{"settings": {}}"""))
+        // "songNotes" がキーではなく文字列値として出現する無関係なJSON
+        org.junit.Assert.assertFalse(detector.isSkyStudioJson("""{"description": "This text mentions \"songNotes\""}"""))
+        // JSON形式ではないプレーンテキストに "songNotes": が含まれるケース
+        org.junit.Assert.assertFalse(detector.isSkyStudioJson("""Notes header: "songNotes": []"""))
+        // 空文字
+        org.junit.Assert.assertFalse(detector.isSkyStudioJson(""))
+    }
+
+    @Test
+    fun detect_skyStudioJson_withLargePadding_detectsCorrectly() {
+        // 2048バイト超（約3000バイトのダミーnotes配列が先行）
+        val padding2048 = (1..300).joinToString(",") { "[$it, 100, \"1\"]" }
+        val contentOver2048 = """[{"name":"LargeSong","notes":[$padding2048],"songNotes":[{"time":100,"key":"1Key0"}]}]"""
+        org.junit.Assert.assertTrue(contentOver2048.indexOf("\"songNotes\"") > 2048)
+        assertEquals(SongFormat.SKY_STUDIO_JSON, detector.detect("song.txt", "text/plain", contentOver2048))
+        assertEquals(SongFormat.SKY_STUDIO_JSON, detector.detect("song.json", "application/json", contentOver2048))
+
+        // 8192バイト超（約10000バイトのダミーnotes配列が先行）
+        val padding8192 = (1..1000).joinToString(",") { "[$it, 100, \"1\"]" }
+        val contentOver8192 = """[{"name":"ExtraLargeSong","notes":[$padding8192],"songNotes":[{"time":100,"key":"1Key0"}]}]"""
+        org.junit.Assert.assertTrue(contentOver8192.indexOf("\"songNotes\"") > 8192)
+        assertEquals(SongFormat.SKY_STUDIO_JSON, detector.detect("song.txt", "text/plain", contentOver8192))
+        assertEquals(SongFormat.SKY_STUDIO_JSON, detector.detect("song.json", "application/json", contentOver8192))
     }
 
     @Test

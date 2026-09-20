@@ -150,14 +150,37 @@ open class SongLoader(
             return@withContext SongLoadResult.Failure.FileReadError(e.localizedMessage ?: "ファイルの読み取り中にエラーが発生しました", e)
         }
 
-        val preview = TextEncodingHelper.decodePreview(bytes, 2048)
+        loadFromBytes(
+            bytes = bytes,
+            displayName = displayName,
+            mimeType = mimeType,
+            uri = uri,
+            midiMappingSettings = midiMappingSettings,
+            initializeManualFromAuto = initializeManualFromAuto
+        )
+    }
 
-        // initialFormatがUNKNOWNでも、ファイル内容プレビューで再判定を試行
-        var format = if (initialFormat == SongFormat.UNKNOWN) {
-            formatDetector.detect(displayName, mimeType, preview)
-        } else {
-            initialFormat
-        }
+    /**
+     * バイト配列およびファイル情報から楽曲フォーマットを判定・解析して [SongLoadResult] を生成する。
+     *
+     * @param bytes 楽曲ファイルのバイト配列
+     * @param displayName ファイル名
+     * @param mimeType MIME type
+     * @param uri 楽曲のURI（省略時はUri.EMPTY）
+     * @param midiMappingSettings MIDIマッピング設定
+     * @param initializeManualFromAuto 新規ファイル選択時にAUTO解析結果を手動設定の初期値へ反映するかどうか
+     * @return 読み込み結果 [SongLoadResult]
+     */
+    fun loadFromBytes(
+        bytes: ByteArray,
+        displayName: String,
+        mimeType: String?,
+        uri: Uri? = null,
+        midiMappingSettings: com.onigiri.keycue.model.MidiMappingSettings? = null,
+        initializeManualFromAuto: Boolean = false
+    ): SongLoadResult {
+        val initialFormat = formatDetector.detect(displayName, mimeType)
+        var format = initialFormat
 
         // もしMIDIヘッダ(MThd)があればMIDIにフォールバック
         if (format == SongFormat.UNKNOWN && bytes.size >= 4 &&
@@ -167,31 +190,33 @@ open class SongLoader(
             format = SongFormat.MIDI
         }
 
+        // Sky Studio JSONの判定:
+        // 拡張子/MIMEタイプからJSON候補、または未判定（.txtや拡張子なし等）の場合、
+        // ファイル全体のテキストからSky Studio形式か判定する（固定長プレビュー依存の解消）。
+        if (format == SongFormat.SKY_STUDIO_JSON || format == SongFormat.UNKNOWN) {
+            val text = TextEncodingHelper.decodeText(bytes)
+            if (formatDetector.isSkyStudioJson(text)) {
+                format = SongFormat.SKY_STUDIO_JSON
+            } else {
+                format = SongFormat.UNKNOWN
+            }
+        }
+
         if (format == SongFormat.UNKNOWN) {
-            return@withContext SongLoadResult.Failure.UnsupportedFormat(
+            return SongLoadResult.Failure.UnsupportedFormat(
                 displayName = displayName,
                 mimeType = mimeType
             )
         }
 
-        // 拡張子/MIMEタイプからJSON/TXTと判定された場合でも、内容がSky Studio形式（songNotes配列やキー形式）を満たすか先頭バイトから精密判定
-        if (format == SongFormat.SKY_STUDIO_JSON) {
-            if (!formatDetector.isSkyStudioJson(preview)) {
-                return@withContext SongLoadResult.Failure.UnsupportedFormat(
-                    displayName = displayName,
-                    mimeType = mimeType
-                )
-            }
-        }
-
         val metadata = SongFileMetadata(
-            uri = uri,
+            uri = uri ?: Uri.EMPTY,
             displayName = displayName,
             mimeType = mimeType,
             format = format
         )
 
-        try {
+        return try {
             val (songData, resolvedMapping, updatedSettings) = when (format) {
                 SongFormat.MIDI -> parseMidi(bytes, displayName, midiMappingSettings, initializeManualFromAuto)
                 SongFormat.SKY_STUDIO_JSON -> {

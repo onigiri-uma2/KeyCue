@@ -10,17 +10,17 @@ import com.onigiri.keycue.model.SongFormat
 class SongFormatDetector {
 
     /**
-     * ファイル名とMIME type（および任意のコンテンツプレビュー）を検証し、[SongFormat] を判定する。
+     * ファイル名とMIME type（および任意のファイルコンテンツ）を検証し、[SongFormat] を判定する。
      *
      * @param fileName 表示ファイル名（例: "Canon.mid", "song.json"）
      * @param mimeType MIME type（例: "audio/midi", "application/json"）
-     * @param contentPreview ファイル先頭の文字列サンプル（省略可能）
+     * @param content ファイル文字列コンテンツ（省略可能）
      * @return 判定された [SongFormat]
      */
     fun detect(
         fileName: String?,
         mimeType: String?,
-        contentPreview: String? = null
+        content: String? = null
     ): SongFormat {
         val extension = fileName?.substringAfterLast('.', "")?.lowercase()
         val normalizedMimeType = mimeType?.lowercase()
@@ -37,14 +37,14 @@ class SongFormatDetector {
         val isJsonMime = normalizedMimeType != null && JSON_MIME_TYPES.any { normalizedMimeType.contains(it) }
 
         if (isJsonExtension || isJsonMime) {
-            if (contentPreview != null) {
-                return if (isSkyStudioJson(contentPreview)) {
+            if (content != null) {
+                return if (isSkyStudioJson(content)) {
                     SongFormat.SKY_STUDIO_JSON
                 } else {
                     SongFormat.UNKNOWN
                 }
             }
-            // プレビューがない場合、.json または json MIME のみ候補とし、.txt は UNKNOWN
+            // コンテンツがない場合、.json または json MIME のみ候補とし、.txt は UNKNOWN
             return if (extension == "json" || normalizedMimeType == "application/json" || normalizedMimeType == "text/json") {
                 SongFormat.SKY_STUDIO_JSON
             } else {
@@ -52,7 +52,7 @@ class SongFormatDetector {
             }
         }
 
-        if (contentPreview != null && isSkyStudioJson(contentPreview)) {
+        if (content != null && isSkyStudioJson(content)) {
             return SongFormat.SKY_STUDIO_JSON
         }
 
@@ -62,11 +62,13 @@ class SongFormatDetector {
     /**
      * 文字列コンテンツが Sky Studio JSON 譜面であるかを判定する。
      *
-     * 通常の無関係なJSON（設定ファイル等）を誤認しないよう、
-     * Sky Studio 特有の "songNotes" キーの存在を確認する。
+     * 先頭が JSON の配列またはオブジェクト（`[` または `{`）であり、
+     * かつ "songNotes": キーが存在することを確認する。
      */
     fun isSkyStudioJson(content: String): Boolean {
-        return content.contains("\"songNotes\"")
+        val trimmed = content.trim().removePrefix("\uFEFF").trim()
+        val isJsonLike = trimmed.startsWith("[") || trimmed.startsWith("{")
+        return isJsonLike && SONG_NOTES_KEY_REGEX.containsMatchIn(trimmed)
     }
 
     companion object {
@@ -94,5 +96,7 @@ class SongFormatDetector {
             "text/json",
             "text/plain"
         )
+
+        private val SONG_NOTES_KEY_REGEX = Regex(""""songNotes"\s*:""")
     }
 }
