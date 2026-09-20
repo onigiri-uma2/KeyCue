@@ -37,6 +37,9 @@ data class PlaybackConfig(
         const val MIN_COUNTDOWN_MS = 0L
         const val MAX_COUNTDOWN_MS = 5000L
 
+        const val NOTE_LEAD_TIME_STEP_MS = 100L
+        const val APPROACH_CIRCLE_LEAD_TIME_STEP_MS = 50L
+
         /**
          * 再生設定値の正規化を一元管理する。
          *

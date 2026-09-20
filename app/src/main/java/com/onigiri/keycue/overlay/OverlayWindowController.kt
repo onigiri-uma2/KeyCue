@@ -42,6 +42,7 @@ class OverlayWindowController(
         onSeekForward: () -> Unit = {},
         onSpeedChange: (Float) -> Unit = {},
         onNoteLeadTimeChange: (Long) -> Unit = {},
+        onApproachCircleLeadTimeChange: (Long) -> Unit = {},
         onSaveFitProfile: (FitProfile) -> Unit = {}
     ) : this(
         context = context,
@@ -57,6 +58,7 @@ class OverlayWindowController(
             onSeekForward = onSeekForward,
             onSpeedChange = onSpeedChange,
             onNoteLeadTimeChange = onNoteLeadTimeChange,
+            onApproachCircleLeadTimeChange = onApproachCircleLeadTimeChange,
             onSaveFitProfile = onSaveFitProfile
         )
     )
@@ -296,7 +298,8 @@ class OverlayWindowController(
         durationMs: Long,
         speed: Float,
         songTitle: String?,
-        noteLeadTimeMs: Long = com.onigiri.keycue.model.PlaybackConfig.DEFAULT_NOTE_LEAD_TIME_MS
+        noteLeadTimeMs: Long = com.onigiri.keycue.model.PlaybackConfig.DEFAULT_NOTE_LEAD_TIME_MS,
+        approachCircleLeadTimeMs: Long = com.onigiri.keycue.model.PlaybackConfig.DEFAULT_APPROACH_CIRCLE_LEAD_TIME_MS
     ) {
         controlOverlayView?.updatePlaybackStatus(
             isPlaying = isPlaying,
@@ -304,7 +307,8 @@ class OverlayWindowController(
             durationMs = durationMs,
             speed = speed,
             songTitle = songTitle,
-            noteLeadTimeMs = noteLeadTimeMs
+            noteLeadTimeMs = noteLeadTimeMs,
+            approachCircleLeadTimeMs = approachCircleLeadTimeMs
         )
     }
 

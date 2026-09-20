@@ -88,4 +88,10 @@ class PlaybackConfigTest {
         assertEquals(500L, normalized.noteLeadTimeMs)
         assertEquals(1500L, normalized.approachCircleLeadTimeMs)
     }
+
+    @Test
+    fun stepConstants_definedConsistently() {
+        assertEquals(100L, PlaybackConfig.NOTE_LEAD_TIME_STEP_MS)
+        assertEquals(50L, PlaybackConfig.APPROACH_CIRCLE_LEAD_TIME_STEP_MS)
+    }
 }

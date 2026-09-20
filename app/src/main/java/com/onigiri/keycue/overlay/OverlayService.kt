@@ -143,6 +143,11 @@ class OverlayService : Service() {
                     settingsRepository.saveNoteLeadTimeMs(newLead)
                 }
             },
+            onApproachCircleLeadTimeChange = { newCircle ->
+                serviceScope.launch {
+                    settingsRepository.saveApproachCircleLeadTimeMs(newCircle)
+                }
+            },
             onSaveFitProfile = { profile ->
                 serviceScope.launch {
                     settingsRepository.saveFitProfile(profile)
@@ -365,7 +370,8 @@ class OverlayService : Service() {
     private var lastControlPlayingState: Boolean? = null
     private var lastControlSongTitle: String? = null
     private var lastControlSpeed: Float = -1f
-    private var lastControlLeadTimeMs: Long = -1L
+    private var lastControlNoteLeadTimeMs: Long = -1L
+    private var lastControlApproachCircleLeadTimeMs: Long = -1L
 
     private fun renderCurrentFrame(forceControlUpdate: Boolean = false) {
         val session = sessionRepository.currentSession.value
@@ -417,14 +423,16 @@ class OverlayService : Service() {
         val isMajorStateChanged = (lastControlPlayingState != isPlaying) ||
                 (lastControlSongTitle != song?.title) ||
                 (lastControlSpeed != config.speed) ||
-                (lastControlLeadTimeMs != config.noteLeadTimeMs)
+                (lastControlNoteLeadTimeMs != config.noteLeadTimeMs) ||
+                (lastControlApproachCircleLeadTimeMs != config.approachCircleLeadTimeMs)
         val isTimeIntervalElapsed = (now - lastControlUpdateTimestamp >= 100L)
 
         if (forceControlUpdate || isMajorStateChanged || isTimeIntervalElapsed) {
             lastControlPlayingState = isPlaying
             lastControlSongTitle = song?.title
             lastControlSpeed = config.speed
-            lastControlLeadTimeMs = config.noteLeadTimeMs
+            lastControlNoteLeadTimeMs = config.noteLeadTimeMs
+            lastControlApproachCircleLeadTimeMs = config.approachCircleLeadTimeMs
             lastControlUpdateTimestamp = now
 
             windowController?.updateControlStatus(
@@ -433,7 +441,8 @@ class OverlayService : Service() {
                 durationMs = song?.durationMs ?: 0L,
                 speed = config.speed,
                 songTitle = song?.title,
-                noteLeadTimeMs = config.noteLeadTimeMs
+                noteLeadTimeMs = config.noteLeadTimeMs,
+                approachCircleLeadTimeMs = config.approachCircleLeadTimeMs
             )
         }
     }

@@ -15,6 +15,7 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import com.onigiri.keycue.model.PlaybackConfig
 import com.onigiri.keycue.playback.TimeFormatter
 import kotlin.math.abs
 import kotlin.math.max
@@ -56,6 +57,7 @@ class ControlOverlayView(
         onSeekForward: () -> Unit = {},
         onSpeedChange: (Float) -> Unit = {},
         onNoteLeadTimeChange: (Long) -> Unit = {},
+        onApproachCircleLeadTimeChange: (Long) -> Unit = {},
         onStartFitting: () -> Unit = {}
     ) : this(
         context = context,
@@ -75,6 +77,7 @@ class ControlOverlayView(
             onSeekForward = onSeekForward,
             onSpeedChange = onSpeedChange,
             onNoteLeadTimeChange = onNoteLeadTimeChange,
+            onApproachCircleLeadTimeChange = onApproachCircleLeadTimeChange,
             onStartFitting = onStartFitting
         )
     )
@@ -88,12 +91,12 @@ class ControlOverlayView(
 
     private var isExpanded = false
 
-    // 再生速度・ノート先読み時間の設定候補
+    // 再生速度の設定候補
     private val speedPresets = listOf(0.50f, 0.75f, 1.00f, 1.25f, 1.50f)
-    private val noteLeadTimePresets = listOf(300L, 400L, 500L, 700L, 1000L, 1500L)
 
     private var currentSpeed: Float = 1.0f
-    private var currentNoteLeadTimeMs: Long = 300L
+    private var currentNoteLeadTimeMs: Long = PlaybackConfig.DEFAULT_NOTE_LEAD_TIME_MS
+    private var currentApproachCircleLeadTimeMs: Long = PlaybackConfig.DEFAULT_APPROACH_CIRCLE_LEAD_TIME_MS
     private var currentIsPlaying: Boolean = false
     private var currentSongTitle: String? = null
     private var currentPositionMs: Long = 0L
@@ -106,7 +109,14 @@ class ControlOverlayView(
     private lateinit var timeText: TextView
     private lateinit var playPauseButton: Button
     private lateinit var speedValueText: TextView
+    private lateinit var speedMinusBtn: Button
+    private lateinit var speedPlusBtn: Button
     private lateinit var noteLeadTimeValueText: TextView
+    private lateinit var noteMinusBtn: Button
+    private lateinit var notePlusBtn: Button
+    private lateinit var approachCircleLeadTimeValueText: TextView
+    private lateinit var circleMinusBtn: Button
+    private lateinit var circlePlusBtn: Button
     private lateinit var guideToggleButton: Button
 
     init {
@@ -182,6 +192,7 @@ class ControlOverlayView(
             // 速度・先読み設定
             addView(buildSpeedControls())
             addView(buildNoteLeadTimeControls())
+            addView(buildApproachCircleLeadTimeControls())
 
             // アクションボタン群
             buildActionButtons().forEach { addView(it) }
@@ -340,10 +351,10 @@ class ControlOverlayView(
             }
             addView(speedValueText)
 
-            val speedMinusBtn = createSmallAdjustButton("－") {
+            speedMinusBtn = createSmallAdjustButton("－") {
                 adjustSpeedStep(-1)
             }
-            val speedPlusBtn = createSmallAdjustButton("＋") {
+            speedPlusBtn = createSmallAdjustButton("＋") {
                 adjustSpeedStep(+1)
             }
             addView(speedMinusBtn)
@@ -360,7 +371,7 @@ class ControlOverlayView(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                bottomMargin = dpToPx(10)
+                bottomMargin = dpToPx(6)
             }
 
             val leadLabel = TextView(context).apply {
@@ -372,7 +383,7 @@ class ControlOverlayView(
             addView(leadLabel)
 
             noteLeadTimeValueText = TextView(context).apply {
-                text = "300ms"
+                text = "${PlaybackConfig.DEFAULT_NOTE_LEAD_TIME_MS}ms"
                 setTextColor(Color.parseColor("#80CBC4"))
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
                 typeface = android.graphics.Typeface.DEFAULT_BOLD
@@ -381,15 +392,56 @@ class ControlOverlayView(
             }
             addView(noteLeadTimeValueText)
 
-            val leadMinusBtn = createSmallAdjustButton("－") {
+            noteMinusBtn = createSmallAdjustButton("－") {
                 adjustNoteLeadTimeStep(-1)
             }
-            val leadPlusBtn = createSmallAdjustButton("＋") {
+            notePlusBtn = createSmallAdjustButton("＋") {
                 adjustNoteLeadTimeStep(+1)
             }
-            addView(leadMinusBtn)
+            addView(noteMinusBtn)
             addView(createHorizontalSpacer(4))
-            addView(leadPlusBtn)
+            addView(notePlusBtn)
+        }
+    }
+
+    private fun buildApproachCircleLeadTimeControls(): View {
+        return LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomMargin = dpToPx(10)
+            }
+
+            val circleLabel = TextView(context).apply {
+                text = "Circle"
+                setTextColor(Color.parseColor("#CFD8DC"))
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                layoutParams = LinearLayout.LayoutParams(dpToPx(42), LinearLayout.LayoutParams.WRAP_CONTENT)
+            }
+            addView(circleLabel)
+
+            approachCircleLeadTimeValueText = TextView(context).apply {
+                text = "${PlaybackConfig.DEFAULT_APPROACH_CIRCLE_LEAD_TIME_MS}ms"
+                setTextColor(Color.parseColor("#FFB74D"))
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
+                gravity = Gravity.CENTER
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            }
+            addView(approachCircleLeadTimeValueText)
+
+            circleMinusBtn = createSmallAdjustButton("－") {
+                adjustApproachCircleLeadTimeStep(-1)
+            }
+            circlePlusBtn = createSmallAdjustButton("＋") {
+                adjustApproachCircleLeadTimeStep(+1)
+            }
+            addView(circleMinusBtn)
+            addView(createHorizontalSpacer(4))
+            addView(circlePlusBtn)
         }
     }
 
@@ -481,15 +533,45 @@ class ControlOverlayView(
     }
 
     private fun adjustNoteLeadTimeStep(direction: Int) {
-        val currentIndex = noteLeadTimePresets.indexOfFirst { it == currentNoteLeadTimeMs }
-        val nextIndex = if (currentIndex >= 0) {
-            (currentIndex + direction).coerceIn(0, noteLeadTimePresets.size - 1)
-        } else {
-            if (direction > 0) noteLeadTimePresets.indexOfFirst { it > currentNoteLeadTimeMs }.coerceAtLeast(0)
-            else noteLeadTimePresets.indexOfLast { it < currentNoteLeadTimeMs }.coerceAtLeast(0)
+        val next = (currentNoteLeadTimeMs + direction * PlaybackConfig.NOTE_LEAD_TIME_STEP_MS)
+            .coerceIn(PlaybackConfig.MIN_NOTE_LEAD_TIME_MS, PlaybackConfig.MAX_NOTE_LEAD_TIME_MS)
+        if (next != currentNoteLeadTimeMs) {
+            callbacks.onNoteLeadTimeChange(next)
         }
-        val target = noteLeadTimePresets[nextIndex]
-        callbacks.onNoteLeadTimeChange(target)
+    }
+
+    private fun adjustApproachCircleLeadTimeStep(direction: Int) {
+        val next = (currentApproachCircleLeadTimeMs + direction * PlaybackConfig.APPROACH_CIRCLE_LEAD_TIME_STEP_MS)
+            .coerceIn(PlaybackConfig.MIN_APPROACH_CIRCLE_LEAD_TIME_MS, PlaybackConfig.MAX_APPROACH_CIRCLE_LEAD_TIME_MS)
+        if (next != currentApproachCircleLeadTimeMs) {
+            callbacks.onApproachCircleLeadTimeChange(next)
+        }
+    }
+
+    /**
+     * 各種調整ボタン（Speed, Note, Circle）の境界値に応じた有効/無効およびアルファ値を更新する。
+     */
+    private fun updateAdjustButtonsEnabled() {
+        if (::noteMinusBtn.isInitialized && ::notePlusBtn.isInitialized) {
+            noteMinusBtn.isEnabled = currentNoteLeadTimeMs > PlaybackConfig.MIN_NOTE_LEAD_TIME_MS
+            noteMinusBtn.alpha = if (noteMinusBtn.isEnabled) 1.0f else 0.4f
+            notePlusBtn.isEnabled = currentNoteLeadTimeMs < PlaybackConfig.MAX_NOTE_LEAD_TIME_MS
+            notePlusBtn.alpha = if (notePlusBtn.isEnabled) 1.0f else 0.4f
+        }
+
+        if (::circleMinusBtn.isInitialized && ::circlePlusBtn.isInitialized) {
+            circleMinusBtn.isEnabled = currentApproachCircleLeadTimeMs > PlaybackConfig.MIN_APPROACH_CIRCLE_LEAD_TIME_MS
+            circleMinusBtn.alpha = if (circleMinusBtn.isEnabled) 1.0f else 0.4f
+            circlePlusBtn.isEnabled = currentApproachCircleLeadTimeMs < PlaybackConfig.MAX_APPROACH_CIRCLE_LEAD_TIME_MS
+            circlePlusBtn.alpha = if (circlePlusBtn.isEnabled) 1.0f else 0.4f
+        }
+
+        if (::speedMinusBtn.isInitialized && ::speedPlusBtn.isInitialized) {
+            speedMinusBtn.isEnabled = currentSpeed > PlaybackConfig.MIN_SPEED
+            speedMinusBtn.alpha = if (speedMinusBtn.isEnabled) 1.0f else 0.4f
+            speedPlusBtn.isEnabled = currentSpeed < PlaybackConfig.MAX_SPEED
+            speedPlusBtn.alpha = if (speedPlusBtn.isEnabled) 1.0f else 0.4f
+        }
     }
 
     // 再生/一時停止ボタン用キャッシュ Drawable
@@ -512,6 +594,7 @@ class ControlOverlayView(
     private var lastSpeed: Float = -1f
     private var lastSongTitle: String? = null
     private var lastNoteLeadTimeMs: Long = -1L
+    private var lastApproachCircleLeadTimeMs: Long = -1L
 
     /**
      * 再生状態や曲情報をControlパネルに反映する。
@@ -522,7 +605,8 @@ class ControlOverlayView(
         durationMs: Long,
         speed: Float,
         songTitle: String?,
-        noteLeadTimeMs: Long = currentNoteLeadTimeMs
+        noteLeadTimeMs: Long = currentNoteLeadTimeMs,
+        approachCircleLeadTimeMs: Long = currentApproachCircleLeadTimeMs
     ) {
         // 折りたたみ中・展開中に関わらず最新状態を常に保持
         currentIsPlaying = isPlaying
@@ -531,6 +615,7 @@ class ControlOverlayView(
         currentSpeed = speed
         currentSongTitle = songTitle
         currentNoteLeadTimeMs = noteLeadTimeMs
+        currentApproachCircleLeadTimeMs = approachCircleLeadTimeMs
 
         // 1. 再生状態の変更（Play / Pause）は折りたたみ中でも即時反映
         if (lastIsPlaying != isPlaying) {
@@ -576,6 +661,13 @@ class ControlOverlayView(
             lastNoteLeadTimeMs = currentNoteLeadTimeMs
             noteLeadTimeValueText.text = "${currentNoteLeadTimeMs}ms"
         }
+
+        if (force || lastApproachCircleLeadTimeMs != currentApproachCircleLeadTimeMs) {
+            lastApproachCircleLeadTimeMs = currentApproachCircleLeadTimeMs
+            approachCircleLeadTimeValueText.text = "${currentApproachCircleLeadTimeMs}ms"
+        }
+
+        updateAdjustButtonsEnabled()
     }
 
     private fun createMiniButton(text: String, bgColor: Int, onClick: () -> Unit): Button {
