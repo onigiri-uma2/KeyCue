@@ -154,7 +154,7 @@ class SettingsRepositoryTest {
     }
 
     @Test
-    fun `PlaybackConfig normalization is shared by bulk updates and enforces invariant`() = runBlocking {
+    fun `PlaybackConfig normalization independently clamps playback values`() = runBlocking {
         val repo = InMemorySettingsRepository()
 
         // note = 1L (clamped to 300), circle = 9000L (clamped to 2000)
