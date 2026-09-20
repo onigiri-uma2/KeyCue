@@ -199,26 +199,25 @@ class HomeViewModelTest {
     }
 
     @Test
-    fun adjustNoteLeadTime_followsApproachCircleWhenNoteDecreasesBelowCircle() {
+    fun adjustNoteLeadTime_doesNotAffectApproachCircleWhenNoteDecreasesBelowCircle() {
         // note = 500, circle = 400
         viewModel.adjustNoteLeadTime(200L) // 500L
         viewModel.adjustApproachCircleLeadTime(200L) // 400L
         assertEquals(500L, viewModel.uiState.value.noteLeadTimeMs)
         assertEquals(400L, viewModel.uiState.value.approachCircleLeadTimeMs)
 
-        // note を 300L に下げる -> circle も 300L に安全に追従
+        // note を 300L に下げる -> circle は 400L のまま維持され、Circle > Note が成立する
         viewModel.adjustNoteLeadTime(-200L)
         assertEquals(300L, viewModel.uiState.value.noteLeadTimeMs)
-        assertEquals(300L, viewModel.uiState.value.approachCircleLeadTimeMs)
-        assertTrue(viewModel.uiState.value.approachCircleLeadTimeMs <= viewModel.uiState.value.noteLeadTimeMs)
+        assertEquals(400L, viewModel.uiState.value.approachCircleLeadTimeMs)
     }
 
     @Test
-    fun adjustApproachCircleLeadTime_cannotExceedNoteLeadTime() {
-        // note = 300L の状態で circle を 500L に上げようとしても 300L に制限される
-        viewModel.adjustApproachCircleLeadTime(500L)
+    fun adjustApproachCircleLeadTime_canExceedNoteLeadTime() {
+        // note = 300L の状態で circle を 500L に上げても制限されず、独立して 500L に設定できる
+        viewModel.adjustApproachCircleLeadTime(300L) // default 200L + 300L = 500L
         assertEquals(300L, viewModel.uiState.value.noteLeadTimeMs)
-        assertEquals(300L, viewModel.uiState.value.approachCircleLeadTimeMs)
+        assertEquals(500L, viewModel.uiState.value.approachCircleLeadTimeMs)
     }
 
     @Test

@@ -978,4 +978,88 @@ class NoteSchedulerTest {
 
         assertTrue(frame.chordGroups.isEmpty())
     }
+
+    @Test
+    fun scheduleFrame_circleLeadTimeGreaterThanNoteLeadTime_extractsApproachCirclesBeyondNoteLeadTime() {
+        // Circle Lead Time (1500ms) > Note Lead Time (500ms) のケース
+        val events = listOf(
+            NoteEvent(timeMs = 400L, key = 2),   // Note範囲内 (400 <= 500) かつ Circle範囲内 (400 <= 1500)
+            NoteEvent(timeMs = 1200L, key = 4),  // Note範囲外 (1200 > 500) だが Circle範囲内 (1200 <= 1500)
+            NoteEvent(timeMs = 1800L, key = 6)   // 両方の範囲外 (1800 > 1500)
+        )
+        scheduler.prepare(events)
+
+        val frame = scheduler.scheduleFrame(
+            events = events,
+            currentTimeMs = 0L,
+            noteLeadTimeMs = 500L,
+            approachCircleLeadTimeMs = 1500L
+        )
+
+        // 1. Note (落下ノート) の検証: 500ms 以内の key=2 のみ含まれる
+        assertEquals(1, frame.upcomingNotes.size)
+        assertEquals(2, frame.upcomingNotes.first().key)
+
+        // 2. Approach Circle の検証: 1500ms 以内の key=2 と key=4 が含まれる (key=6 は除外)
+        assertEquals(2, frame.approachCircles.size)
+        val circleKey2 = frame.approachCircles.first { it.key == 2 }
+        val circleKey4 = frame.approachCircles.first { it.key == 4 }
+
+        // 進行度の検証: それぞれ Circle Lead Time (1500ms) を基準に独立計算されていること
+        // key=4: 1 - 1200 / 1500 = 0.20f
+        assertEquals(0.20f, circleKey4.progress, 0.01f)
+        // key=2: 1 - 400 / 1500 = 0.733f
+        assertEquals(0.733f, circleKey2.progress, 0.01f)
+
+        // keyHighlightProgress にも反映されていること
+        assertEquals(0.20f, frame.keyHighlightProgress[4], 0.01f)
+        assertEquals(0.733f, frame.keyHighlightProgress[2], 0.01f)
+        assertEquals(-1.0f, frame.keyHighlightProgress[6], 0.01f)
+    }
+
+    @Test
+    fun scheduleFrame_noteLeadTimeGreaterThanCircleLeadTime_extractsNotesBeyondCircleLeadTime() {
+        // 従来ケース: Note Lead Time (1500ms) > Circle Lead Time (500ms)
+        val events = listOf(
+            NoteEvent(timeMs = 400L, key = 2),   // 両方の範囲内
+            NoteEvent(timeMs = 1200L, key = 4),  // Note範囲内 (1200 <= 1500) だが Circle範囲外 (1200 > 500)
+            NoteEvent(timeMs = 1800L, key = 6)   // 両方の範囲外
+        )
+        scheduler.prepare(events)
+
+        val frame = scheduler.scheduleFrame(
+            events = events,
+            currentTimeMs = 0L,
+            noteLeadTimeMs = 1500L,
+            approachCircleLeadTimeMs = 50L
+        )
+
+        // Note は key=2, key=4 の2つが含まれる
+        assertEquals(2, frame.upcomingNotes.size)
+        assertTrue(frame.upcomingNotes.any { it.key == 2 })
+        assertTrue(frame.upcomingNotes.any { it.key == 4 })
+
+        // Circle は 50ms 以内なのでどちらも含まれない (400 > 50, 1200 > 50)
+        assertTrue(frame.approachCircles.isEmpty())
+    }
+
+    @Test
+    fun scheduleFrame_doesNotDependOnVisualDisplayFlags_maintainsSeparationOfConcerns() {
+        // NoteScheduler は表示ON/OFFフラグ（Note OFF + Circle ONなど）を引数に取らず、
+        // 純粋に各先読み時間に基づく時間モデル（GuideFrame）を生成する責務に特化している。
+        // 表示のフィルタリング（Note OFF時にupcomingNotesを描画しない等）はGuideOverlayView側の描画責務。
+        val events = listOf(NoteEvent(timeMs = 800L, key = 1))
+        scheduler.prepare(events)
+
+        val frame = scheduler.scheduleFrame(
+            events = events,
+            currentTimeMs = 0L,
+            noteLeadTimeMs = 1000L,
+            approachCircleLeadTimeMs = 1000L
+        )
+
+        // Schedulerは表示フラグに依存しないため、常に完全なフレーム情報を出力する
+        assertEquals(1, frame.upcomingNotes.size)
+        assertEquals(1, frame.approachCircles.size)
+    }
 }

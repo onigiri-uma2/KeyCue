@@ -255,29 +255,27 @@ class HomeViewModel(
     }
 
     /**
-     * ノート先読み時間をデルタ分変更する（最小300ms、最大2000ms、100ms刻み）
-     * サークル時間が超過する場合は自然に追従する。
+     * ノート先読み時間をデルタ分変更する（最小300ms、最大2000ms、100ms刻み）。
+     * タイミングサークル先読み時間とは完全に独立して動作する。
      */
     fun adjustNoteLeadTime(deltaMs: Long) {
         val currentNote = _uiState.value.noteLeadTimeMs
-        val currentCircle = _uiState.value.approachCircleLeadTimeMs
         val candidateNote = currentNote + deltaMs
-        val (clampedNote, clampedCircle) = PlaybackConfig.normalizeLeadTimes(candidateNote, currentCircle)
-        _uiState.update { it.copy(noteLeadTimeMs = clampedNote, approachCircleLeadTimeMs = clampedCircle) }
+        val clampedNote = candidateNote.coerceIn(PlaybackConfig.MIN_NOTE_LEAD_TIME_MS, PlaybackConfig.MAX_NOTE_LEAD_TIME_MS)
+        _uiState.update { it.copy(noteLeadTimeMs = clampedNote) }
         scope.launch {
             settingsRepository.saveNoteLeadTimeMs(clampedNote)
         }
     }
 
     /**
-     * タイミングサークル先読み時間をデルタ分変更する（最小100ms、最大1000ms、50ms刻み）
-     * ノート先読み時間を超える値にならないよう正規化する。
+     * タイミングサークル先読み時間をデルタ分変更する（最小100ms、最大2000ms、50ms刻み）。
+     * ノート先読み時間とは完全に独立して動作する。
      */
     fun adjustApproachCircleLeadTime(deltaMs: Long) {
-        val currentNote = _uiState.value.noteLeadTimeMs
         val currentCircle = _uiState.value.approachCircleLeadTimeMs
         val candidateCircle = currentCircle + deltaMs
-        val (_, clampedCircle) = PlaybackConfig.normalizeLeadTimes(currentNote, candidateCircle)
+        val clampedCircle = candidateCircle.coerceIn(PlaybackConfig.MIN_APPROACH_CIRCLE_LEAD_TIME_MS, PlaybackConfig.MAX_APPROACH_CIRCLE_LEAD_TIME_MS)
         _uiState.update { it.copy(approachCircleLeadTimeMs = clampedCircle) }
         scope.launch {
             settingsRepository.saveApproachCircleLeadTimeMs(clampedCircle)

@@ -150,8 +150,7 @@ fun PlaybackConfigContent(
 
                 FilledTonalIconButton(
                     onClick = onApproachCircleLeadTimeIncrease,
-                    enabled = approachCircleLeadTimeMs < noteLeadTimeMs &&
-                            approachCircleLeadTimeMs < PlaybackConfig.MAX_APPROACH_CIRCLE_LEAD_TIME_MS
+                    enabled = approachCircleLeadTimeMs < PlaybackConfig.MAX_APPROACH_CIRCLE_LEAD_TIME_MS
                 ) {
                     Text(text = "＋", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 }

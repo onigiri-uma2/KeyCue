@@ -15,7 +15,7 @@ data class PlaybackConfig(
     val countdownMs: Long = 3000L
 ) {
     /**
-     * 設定値を正規化し、不変条件 (0 <= approachCircleLeadTimeMs <= noteLeadTimeMs) を保証した新しいインスタンスを返す。
+     * 設定値を正規化した新しいインスタンスを返す。
      */
     fun normalized(): PlaybackConfig = normalize(
         speed = speed,
@@ -33,30 +33,29 @@ data class PlaybackConfig(
         const val MIN_NOTE_LEAD_TIME_MS = 300L
         const val MAX_NOTE_LEAD_TIME_MS = 2000L
         const val MIN_APPROACH_CIRCLE_LEAD_TIME_MS = 100L
-        const val MAX_APPROACH_CIRCLE_LEAD_TIME_MS = 1000L
+        const val MAX_APPROACH_CIRCLE_LEAD_TIME_MS = 2000L
         const val MIN_COUNTDOWN_MS = 0L
         const val MAX_COUNTDOWN_MS = 5000L
 
         /**
          * 再生設定値の正規化を一元管理する。
          *
-         * 不変条件:
+         * 範囲制約:
          * - MIN_SPEED <= speed <= MAX_SPEED
          * - MIN_NOTE_LEAD_TIME_MS <= noteLeadTimeMs <= MAX_NOTE_LEAD_TIME_MS
-         * - MIN_APPROACH_CIRCLE_LEAD_TIME_MS <= approachCircleLeadTimeMs <= min(noteLeadTimeMs, MAX_APPROACH_CIRCLE_LEAD_TIME_MS)
+         * - MIN_APPROACH_CIRCLE_LEAD_TIME_MS <= approachCircleLeadTimeMs <= MAX_APPROACH_CIRCLE_LEAD_TIME_MS
          * - MIN_COUNTDOWN_MS <= countdownMs <= MAX_COUNTDOWN_MS
          */
         /**
          * ノート先読み時間とタイミングサークル先読み時間の正規化ペアを算出する。
-         * 不変条件: 0 <= approachCircleLeadTimeMs <= noteLeadTimeMs
+         * Note Lead Time と Approach Circle Lead Time は互いに干渉せず、完全に独立して正規化される。
          */
         fun normalizeLeadTimes(
             noteLeadTimeMs: Long,
             approachCircleLeadTimeMs: Long
         ): Pair<Long, Long> {
             val clampedNote = noteLeadTimeMs.coerceIn(MIN_NOTE_LEAD_TIME_MS, MAX_NOTE_LEAD_TIME_MS)
-            val maxCircle = minOf(MAX_APPROACH_CIRCLE_LEAD_TIME_MS, clampedNote)
-            val clampedCircle = approachCircleLeadTimeMs.coerceIn(MIN_APPROACH_CIRCLE_LEAD_TIME_MS, maxCircle)
+            val clampedCircle = approachCircleLeadTimeMs.coerceIn(MIN_APPROACH_CIRCLE_LEAD_TIME_MS, MAX_APPROACH_CIRCLE_LEAD_TIME_MS)
             return Pair(clampedNote, clampedCircle)
         }
 

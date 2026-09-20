@@ -60,16 +60,16 @@ class SettingsRepositoryTest {
     }
 
     @Test
-    fun `saveNoteLeadTimeMs clamps invalid values and adjusts approachCircleLeadTimeMs`() = runBlocking {
+    fun `saveNoteLeadTimeMs clamps invalid values without affecting approachCircleLeadTimeMs`() = runBlocking {
         val repo = InMemorySettingsRepository(
             initialNoteLeadTimeMs = 500L,
             initialApproachCircleLeadTimeMs = 400L
         )
 
-        // 下限 clamp (300L) かつ approachCircle も 300L 以下に連動追従
+        // 下限 clamp (300L) しても approachCircle (400L) は独立して維持される (Circle > Note 許容)
         repo.saveNoteLeadTimeMs(100L)
         assertEquals(300L, repo.noteLeadTimeMs.value)
-        assertEquals(300L, repo.approachCircleLeadTimeMs.value)
+        assertEquals(400L, repo.approachCircleLeadTimeMs.value)
 
         // 上限 clamp (2000L)
         repo.saveNoteLeadTimeMs(5000L)
@@ -77,7 +77,7 @@ class SettingsRepositoryTest {
     }
 
     @Test
-    fun `saveApproachCircleLeadTimeMs clamps invalid values and enforces invariant`() = runBlocking {
+    fun `saveApproachCircleLeadTimeMs clamps invalid values independently of noteLeadTimeMs`() = runBlocking {
         val repo = InMemorySettingsRepository(
             initialNoteLeadTimeMs = 300L,
             initialApproachCircleLeadTimeMs = 200L
@@ -87,9 +87,13 @@ class SettingsRepositoryTest {
         repo.saveApproachCircleLeadTimeMs(50L)
         assertEquals(100L, repo.approachCircleLeadTimeMs.value)
 
-        // 上限 clamp かつ noteLeadTimeMs (300L) を超えない
+        // noteLeadTimeMs (300L) を超えて独立して設定可能
         repo.saveApproachCircleLeadTimeMs(500L)
-        assertEquals(300L, repo.approachCircleLeadTimeMs.value)
+        assertEquals(500L, repo.approachCircleLeadTimeMs.value)
+
+        // 上限 clamp (2000L)
+        repo.saveApproachCircleLeadTimeMs(3000L)
+        assertEquals(2000L, repo.approachCircleLeadTimeMs.value)
     }
 
     @Test
@@ -153,10 +157,22 @@ class SettingsRepositoryTest {
     fun `PlaybackConfig normalization is shared by bulk updates and enforces invariant`() = runBlocking {
         val repo = InMemorySettingsRepository()
 
-        // note = 1L (clamped to 300), circle = 9000L (clamped to min(1000, 300) = 300)
+        // note = 1L (clamped to 300), circle = 9000L (clamped to 2000)
         repo.savePlaybackConfig(PlaybackConfig(9f, 1L, 9_000L, -1L))
 
-        assertEquals(PlaybackConfig(2f, 300L, 300L, 0L), repo.playbackConfig.value)
+        assertEquals(PlaybackConfig(2f, 300L, 2000L, 0L), repo.playbackConfig.value)
+    }
+
+    @Test
+    fun `savePlaybackConfig allows circle lead time greater than note lead time`() = runBlocking {
+        val repo = InMemorySettingsRepository()
+
+        // Circle > Note (Note = 500L, Circle = 1800L) がそのまま保存されること
+        repo.savePlaybackConfig(PlaybackConfig(1.0f, 500L, 1800L, 3000L))
+
+        assertEquals(500L, repo.noteLeadTimeMs.value)
+        assertEquals(1800L, repo.approachCircleLeadTimeMs.value)
+        assertEquals(PlaybackConfig(1.0f, 500L, 1800L, 3000L), repo.playbackConfig.value)
     }
 
     @Test
@@ -340,19 +356,19 @@ class SettingsRepositoryTest {
     }
 
     @Test
-    fun `SharedPreferences normalizes inconsistent legacy saved values where circle exceeds note`() {
-        val inconsistentPrefs = createFakePrefs(
+    fun `SharedPreferences allows saved values where circle exceeds note`() {
+        val prefs = createFakePrefs(
             mapOf(
                 "lead_time_ms" to 300L,
                 "highlight_time_ms" to 400L
             )
         )
-        val repo = SharedPreferencesSettingsRepository(inconsistentPrefs)
+        val repo = SharedPreferencesSettingsRepository(prefs)
 
-        // 0 <= approachCircleLeadTimeMs <= noteLeadTimeMs の不変条件が保証される
+        // Circle > Note が許可され、それぞれの値がそのまま復元される
         assertEquals(300L, repo.noteLeadTimeMs.value)
-        assertEquals(300L, repo.approachCircleLeadTimeMs.value)
-        assertEquals(300L, repo.playbackConfig.value.approachCircleLeadTimeMs)
+        assertEquals(400L, repo.approachCircleLeadTimeMs.value)
+        assertEquals(400L, repo.playbackConfig.value.approachCircleLeadTimeMs)
     }
 
     @Test
