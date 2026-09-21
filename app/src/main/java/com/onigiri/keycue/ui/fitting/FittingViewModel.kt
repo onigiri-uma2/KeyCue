@@ -206,7 +206,6 @@ class FittingViewModel(
      * 手動補正モード（4点ドラッグ）を開始する。
      */
     fun startManualAdjust() {
-        pendingDetectedGuideRadiusRatio = null
         val current = _uiState.value
         val profile = current.currentProfile
             ?: current.savedProfile

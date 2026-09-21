@@ -243,4 +243,28 @@ class FittingViewModelTest {
         // ガイドサイズ 0.062f が変更されず維持される
         assertEquals(0.062f, settingsRepo.visualConfig.value.guideRadiusRatio, 0.001f)
     }
+
+    @Test
+    fun `first auto detection followed by manual adjustment still applies detected radius`() = runBlocking {
+        // 1. 初回状態 (保存済みProfileなし、デフォルトのguideRadiusRatio 0.04f)
+        assertEquals(null, settingsRepo.fitProfile.value)
+        assertEquals(0.04f, settingsRepo.visualConfig.value.guideRadiusRatio, 0.001f)
+
+        // 2. 自動検出成功 (keyRadiusRatio = 0.058f)
+        val detectedProfile = FitProfile.createDefaultTestProfile(landscape = true).copy(keyRadiusRatio = 0.058f)
+        viewModel.setDetectedResultForTest(detectedProfile)
+
+        // 3. 手動補正モードへ移行
+        viewModel.startManualAdjust()
+        // 4隅の位置を微調整
+        viewModel.updateManualCorner(cornerIndex = 0, normX = 0.16f, normY = 0.56f)
+
+        // 4. 保存を実行
+        viewModel.saveCurrentProfile()
+
+        assertTrue(viewModel.uiState.value.isSavedSuccess)
+        assertNotNull(settingsRepo.fitProfile.value)
+        // 手動補正を挟んでも、初回自動検出で得られた keyRadiusRatio (0.058f) が VisualConfig に反映されること
+        assertEquals(0.058f, settingsRepo.visualConfig.value.guideRadiusRatio, 0.001f)
+    }
 }
