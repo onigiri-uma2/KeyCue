@@ -42,6 +42,7 @@ import kotlin.math.sqrt
 class FittingOverlayView(
     context: Context,
     initialProfile: FitProfile,
+    private val guideRadiusRatio: Float,
     private val onSave: (FitProfile) -> Unit,
     private val onCancel: () -> Unit
 ) : FrameLayout(context) {
@@ -134,7 +135,7 @@ class FittingOverlayView(
         if (w <= 0f || h <= 0f) return
 
         val minDim = min(w, h)
-        keyRadiusPx = minDim * currentProfile.keyRadiusRatio
+        keyRadiusPx = minDim * guideRadiusRatio
 
         keyPixelCenters.clear()
         for (norm in currentProfile.keyCenters) {

@@ -406,6 +406,72 @@ class SettingsRepositoryTest {
         assertEquals(50, repo3.visualConfig.value.chordHaloFillAlphaPercent)
     }
 
+    @Test
+    fun `saveFitProfile does not overwrite guideRadiusRatio`() = runBlocking {
+        val prefs = createFakePrefs(emptyMap())
+        val repo = SharedPreferencesSettingsRepository(prefs)
+
+        // VisualConfig.guideRadiusRatio = 0.06f に設定
+        repo.saveGuideRadiusRatio(0.06f)
+        assertEquals(0.06f, repo.visualConfig.value.guideRadiusRatio, 0.001f)
+
+        // FitProfile.keyRadiusRatio = 0.04f のプロファイルを保存
+        val profile = com.onigiri.keycue.model.FitProfile.createDefaultTestProfile().copy(keyRadiusRatio = 0.04f)
+        repo.saveFitProfile(profile)
+
+        // VisualConfig.guideRadiusRatio が 0.06f のまま維持されること
+        assertEquals(0.06f, repo.visualConfig.value.guideRadiusRatio, 0.001f)
+    }
+
+    @Test
+    fun `saveFitProfile does not modify VisualConfig`() = runBlocking {
+        val prefs = createFakePrefs(emptyMap())
+        val repo = SharedPreferencesSettingsRepository(prefs)
+
+        val customVisualConfig = com.onigiri.keycue.model.VisualConfig(
+            showGuideLabels = true,
+            showFallingNotes = false,
+            showApproachCircles = false,
+            showRepeatCountBadge = false,
+            showJustEffect = true,
+            guideRadiusRatio = 0.065f,
+            guideColor = 0xFF123456.toInt(),
+            noteColorTop = 0xFF112233.toInt(),
+            noteColorMiddle = 0xFF445566.toInt(),
+            noteColorBottom = 0xFF778899.toInt(),
+            showChordLinks = true,
+            showChordHalos = false,
+            chordStrokeWidthDp = 3.5f,
+            chordStrokeAlphaPercent = 80,
+            chordHaloFillAlphaPercent = 25
+        )
+        repo.saveVisualConfig(customVisualConfig)
+
+        val profile = com.onigiri.keycue.model.FitProfile.createDefaultTestProfile().copy(keyRadiusRatio = 0.035f)
+        repo.saveFitProfile(profile)
+
+        // FitProfileが保存されていること
+        assertEquals(profile, repo.fitProfile.value)
+
+        // VisualConfigの各プロパティが一切変更されていないこと
+        val currentVisual = repo.visualConfig.value
+        assertEquals(customVisualConfig.showGuideLabels, currentVisual.showGuideLabels)
+        assertEquals(customVisualConfig.showFallingNotes, currentVisual.showFallingNotes)
+        assertEquals(customVisualConfig.showApproachCircles, currentVisual.showApproachCircles)
+        assertEquals(customVisualConfig.showRepeatCountBadge, currentVisual.showRepeatCountBadge)
+        assertEquals(customVisualConfig.showJustEffect, currentVisual.showJustEffect)
+        assertEquals(customVisualConfig.guideRadiusRatio, currentVisual.guideRadiusRatio, 0.001f)
+        assertEquals(customVisualConfig.guideColor, currentVisual.guideColor)
+        assertEquals(customVisualConfig.noteColorTop, currentVisual.noteColorTop)
+        assertEquals(customVisualConfig.noteColorMiddle, currentVisual.noteColorMiddle)
+        assertEquals(customVisualConfig.noteColorBottom, currentVisual.noteColorBottom)
+        assertEquals(customVisualConfig.showChordLinks, currentVisual.showChordLinks)
+        assertEquals(customVisualConfig.showChordHalos, currentVisual.showChordHalos)
+        assertEquals(customVisualConfig.chordStrokeWidthDp, currentVisual.chordStrokeWidthDp, 0.001f)
+        assertEquals(customVisualConfig.chordStrokeAlphaPercent, currentVisual.chordStrokeAlphaPercent)
+        assertEquals(customVisualConfig.chordHaloFillAlphaPercent, currentVisual.chordHaloFillAlphaPercent)
+    }
+
     private fun createFakePrefs(initialData: Map<String, Any>): android.content.SharedPreferences {
         val map = HashMap<String, Any>(initialData)
         return java.lang.reflect.Proxy.newProxyInstance(

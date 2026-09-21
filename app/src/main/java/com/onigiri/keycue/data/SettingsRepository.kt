@@ -319,11 +319,6 @@ class SharedPreferencesSettingsRepository internal constructor(
                 remove(KEY_FIT_PROFILE)
             }
         }.apply()
-
-        // FitProfile保存時、自動検出・設定されたキー半径比率をVisualConfig（ガイド円の大きさ）にも連動反映
-        if (profile != null) {
-            saveGuideRadiusRatio(profile.keyRadiusRatio)
-        }
     }
 
     override suspend fun saveVisualConfig(config: com.onigiri.keycue.model.VisualConfig) {

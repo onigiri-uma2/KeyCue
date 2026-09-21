@@ -156,4 +156,91 @@ class FittingViewModelTest {
         assertEquals(0.84f, manualState.manualBottomRight.x, 0.001f)
         assertEquals(0.89f, manualState.manualBottomRight.y, 0.001f)
     }
+
+    @Test
+    fun `detected profile on initial fitting can apply detected radius`() = runBlocking {
+        // 初回フィッティング時 (savedProfile == null)
+        assertEquals(null, settingsRepo.fitProfile.value)
+        assertEquals(0.04f, settingsRepo.visualConfig.value.guideRadiusRatio, 0.001f)
+
+        val detectedProfile = FitProfile.createDefaultTestProfile(landscape = true).copy(keyRadiusRatio = 0.055f)
+        viewModel.setDetectedResultForTest(detectedProfile)
+
+        viewModel.saveCurrentProfile()
+
+        assertTrue(viewModel.uiState.value.isSavedSuccess)
+        assertEquals(detectedProfile, settingsRepo.fitProfile.value)
+        // 初回自動検出のため、検出された半径 0.055f が VisualConfig に反映される
+        assertEquals(0.055f, settingsRepo.visualConfig.value.guideRadiusRatio, 0.001f)
+    }
+
+    @Test
+    fun `detected profile on existing profile does not overwrite customized guide radius`() = runBlocking {
+        // 既存Profileがあり、ユーザーがガイドサイズを 0.07f にカスタマイズしている状態
+        val existingProfile = FitProfile.createDefaultTestProfile(landscape = true).copy(keyRadiusRatio = 0.04f)
+        settingsRepo.saveFitProfile(existingProfile)
+        settingsRepo.saveGuideRadiusRatio(0.07f)
+
+        // ViewModelを既存Profile購読状態で再初期化
+        viewModel = FittingViewModel(
+            settingsRepository = settingsRepo,
+            keyDetector = fakeDetector,
+            gridFitter = gridFitter,
+            externalScope = testScope
+        )
+        assertEquals(existingProfile, viewModel.uiState.value.savedProfile)
+
+        // 新たに自動検出（半径 0.05f）を実行
+        val newDetectedProfile = FitProfile.createDefaultTestProfile(landscape = true).copy(keyRadiusRatio = 0.05f)
+        viewModel.setDetectedResultForTest(newDetectedProfile)
+
+        viewModel.saveCurrentProfile()
+
+        assertTrue(viewModel.uiState.value.isSavedSuccess)
+        assertEquals(newDetectedProfile, settingsRepo.fitProfile.value)
+        // 既に保存済みProfileが存在するため、カスタマイズされた 0.07f は上書きされず維持される
+        assertEquals(0.07f, settingsRepo.visualConfig.value.guideRadiusRatio, 0.001f)
+    }
+
+    @Test
+    fun `manually adjusted profile does not overwrite guide radius`() = runBlocking {
+        // ユーザーがガイドサイズを 0.065f にカスタマイズ
+        settingsRepo.saveGuideRadiusRatio(0.065f)
+        assertEquals(0.065f, settingsRepo.visualConfig.value.guideRadiusRatio, 0.001f)
+
+        // 手動調整モードを開始
+        viewModel.startManualAdjust()
+        viewModel.updateManualCorner(cornerIndex = 0, normX = 0.15f, normY = 0.55f)
+
+        viewModel.saveCurrentProfile()
+
+        assertTrue(viewModel.uiState.value.isSavedSuccess)
+        assertNotNull(settingsRepo.fitProfile.value)
+        // 手動調整による保存では、カスタマイズされた 0.065f が変更されず維持される
+        assertEquals(0.065f, settingsRepo.visualConfig.value.guideRadiusRatio, 0.001f)
+    }
+
+    @Test
+    fun `saved profile reuse does not overwrite guide radius`() = runBlocking {
+        // 既存Profileがあり、ガイドサイズは 0.062f
+        val savedProfile = FitProfile.createDefaultTestProfile(landscape = true).copy(keyRadiusRatio = 0.038f)
+        settingsRepo.saveFitProfile(savedProfile)
+        settingsRepo.saveGuideRadiusRatio(0.062f)
+
+        viewModel = FittingViewModel(
+            settingsRepository = settingsRepo,
+            keyDetector = fakeDetector,
+            gridFitter = gridFitter,
+            externalScope = testScope
+        )
+
+        // 保存済みProfileを採用して保存
+        viewModel.useSavedProfile()
+        viewModel.saveCurrentProfile()
+
+        assertTrue(viewModel.uiState.value.isSavedSuccess)
+        assertEquals(savedProfile, settingsRepo.fitProfile.value)
+        // ガイドサイズ 0.062f が変更されず維持される
+        assertEquals(0.062f, settingsRepo.visualConfig.value.guideRadiusRatio, 0.001f)
+    }
 }

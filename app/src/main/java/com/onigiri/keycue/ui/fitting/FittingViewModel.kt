@@ -47,6 +47,9 @@ class FittingViewModel(
     private val _uiState = MutableStateFlow(FittingUiState())
     val uiState: StateFlow<FittingUiState> = _uiState.asStateFlow()
 
+    /** 自動検出結果として得られたキー半径比率（初回確定保存時にVisualConfigへ初期反映可能） */
+    private var pendingDetectedGuideRadiusRatio: Float? = null
+
     init {
         // 保存済みFitProfileの購読
         scope.launch {
@@ -62,6 +65,7 @@ class FittingViewModel(
      */
     fun onImageSelected(uri: Uri?, contentResolver: ContentResolver) {
         if (uri == null) return
+        pendingDetectedGuideRadiusRatio = null
 
         scope.launch(Dispatchers.IO) {
             try {
@@ -158,6 +162,7 @@ class FittingViewModel(
                 withContext(Dispatchers.Main) {
                     if (fitResult.profile != null) {
                         val profile = fitResult.profile
+                        pendingDetectedGuideRadiusRatio = profile.keyRadiusRatio
                         val centers = profile.keyCenters
                         _uiState.update { current ->
                             current.copy(
@@ -201,6 +206,7 @@ class FittingViewModel(
      * 手動補正モード（4点ドラッグ）を開始する。
      */
     fun startManualAdjust() {
+        pendingDetectedGuideRadiusRatio = null
         val current = _uiState.value
         val profile = current.currentProfile
             ?: current.savedProfile
@@ -311,6 +317,7 @@ class FittingViewModel(
      * 保存済みのFitProfileを即座に適用する。
      */
     fun useSavedProfile() {
+        pendingDetectedGuideRadiusRatio = null
         val saved = _uiState.value.savedProfile ?: return
         _uiState.update {
             it.copy(
@@ -326,8 +333,15 @@ class FittingViewModel(
      */
     fun saveCurrentProfile() {
         val profile = _uiState.value.currentProfile ?: return
+        val isFirstFitting = _uiState.value.savedProfile == null
+        val detectedRadiusToApply = if (isFirstFitting) pendingDetectedGuideRadiusRatio else null
+        pendingDetectedGuideRadiusRatio = null
+
         scope.launch {
             settingsRepository.saveFitProfile(profile)
+            if (detectedRadiusToApply != null) {
+                settingsRepository.saveGuideRadiusRatio(detectedRadiusToApply)
+            }
             val currentSession = com.onigiri.keycue.data.InMemoryPlaybackSessionRepository.instance.currentSession.value
             if (currentSession != null) {
                 com.onigiri.keycue.data.InMemoryPlaybackSessionRepository.instance.setSession(
@@ -355,6 +369,24 @@ class FittingViewModel(
      */
     fun clearError() {
         _uiState.update { it.copy(errorMessage = null) }
+    }
+
+    @androidx.annotation.VisibleForTesting
+    internal fun setDetectedResultForTest(profile: FitProfile) {
+        pendingDetectedGuideRadiusRatio = profile.keyRadiusRatio
+        val centers = profile.keyCenters
+        _uiState.update { current ->
+            current.copy(
+                step = FittingStep.Success(1.0f),
+                currentProfile = profile,
+                confidence = 1.0f,
+                manualTopLeft = centers[gameProfile.topLeftKeyIndex],
+                manualTopRight = centers[gameProfile.topRightKeyIndex],
+                manualBottomLeft = centers[gameProfile.bottomLeftKeyIndex],
+                manualBottomRight = centers[gameProfile.bottomRightKeyIndex],
+                errorMessage = null
+            )
+        }
     }
 
     companion object {

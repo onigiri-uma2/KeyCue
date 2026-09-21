@@ -352,6 +352,7 @@ class OverlayWindowController(
         val view = FittingOverlayView(
             context = context,
             initialProfile = currentFitProfile,
+            guideRadiusRatio = currentVisualConfig.guideRadiusRatio,
             onSave = { updatedProfile ->
                 updateFitProfile(updatedProfile)
                 callbacks.onSaveFitProfile(updatedProfile)
