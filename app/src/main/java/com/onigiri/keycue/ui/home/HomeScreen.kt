@@ -236,6 +236,13 @@ fun HomeScreen(
         onManualRootChange = { viewModel.setManualRoot(it) },
         onManualScaleChange = { viewModel.setManualScale(it) },
         onManualBaseOctaveChange = { viewModel.setManualBaseOctave(it) },
+        onShowSongInfoChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showSongInfo = it) } },
+        onShowSeekBarChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showSeekBar = it) } },
+        onShowPlaybackControlsChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showPlaybackControls = it) } },
+        onShowLoopControlsChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showLoopControls = it) } },
+        onShowSpeedControlChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showSpeedControl = it) } },
+        onShowNoteLeadTimeControlChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showNoteLeadTimeControl = it) } },
+        onShowCircleLeadTimeControlChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showCircleLeadTimeControl = it) } },
         onDismissError = { viewModel.clearError() }
     )
 }
@@ -278,6 +285,13 @@ fun HomeScreenContent(
     onManualRootChange: (com.onigiri.keycue.model.PitchClass) -> Unit = {},
     onManualScaleChange: (com.onigiri.keycue.model.ScaleType) -> Unit = {},
     onManualBaseOctaveChange: (Int) -> Unit = {},
+    onShowSongInfoChange: (Boolean) -> Unit = {},
+    onShowSeekBarChange: (Boolean) -> Unit = {},
+    onShowPlaybackControlsChange: (Boolean) -> Unit = {},
+    onShowLoopControlsChange: (Boolean) -> Unit = {},
+    onShowSpeedControlChange: (Boolean) -> Unit = {},
+    onShowNoteLeadTimeControlChange: (Boolean) -> Unit = {},
+    onShowCircleLeadTimeControlChange: (Boolean) -> Unit = {},
     onDismissError: () -> Unit = {}
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
@@ -366,6 +380,13 @@ fun HomeScreenContent(
                         onManualRootChange = onManualRootChange,
                         onManualScaleChange = onManualScaleChange,
                         onManualBaseOctaveChange = onManualBaseOctaveChange,
+                        onShowSongInfoChange = onShowSongInfoChange,
+                        onShowSeekBarChange = onShowSeekBarChange,
+                        onShowPlaybackControlsChange = onShowPlaybackControlsChange,
+                        onShowLoopControlsChange = onShowLoopControlsChange,
+                        onShowSpeedControlChange = onShowSpeedControlChange,
+                        onShowNoteLeadTimeControlChange = onShowNoteLeadTimeControlChange,
+                        onShowCircleLeadTimeControlChange = onShowCircleLeadTimeControlChange,
                         onDismissError = onDismissError
                     )
                 } else {
@@ -404,6 +425,13 @@ fun HomeScreenContent(
                         onManualRootChange = onManualRootChange,
                         onManualScaleChange = onManualScaleChange,
                         onManualBaseOctaveChange = onManualBaseOctaveChange,
+                        onShowSongInfoChange = onShowSongInfoChange,
+                        onShowSeekBarChange = onShowSeekBarChange,
+                        onShowPlaybackControlsChange = onShowPlaybackControlsChange,
+                        onShowLoopControlsChange = onShowLoopControlsChange,
+                        onShowSpeedControlChange = onShowSpeedControlChange,
+                        onShowNoteLeadTimeControlChange = onShowNoteLeadTimeControlChange,
+                        onShowCircleLeadTimeControlChange = onShowCircleLeadTimeControlChange,
                         onDismissError = onDismissError
                     )
                 }
@@ -451,6 +479,13 @@ private fun HomeScreenNarrowContent(
     onManualRootChange: (com.onigiri.keycue.model.PitchClass) -> Unit,
     onManualScaleChange: (com.onigiri.keycue.model.ScaleType) -> Unit,
     onManualBaseOctaveChange: (Int) -> Unit,
+    onShowSongInfoChange: (Boolean) -> Unit = {},
+    onShowSeekBarChange: (Boolean) -> Unit = {},
+    onShowPlaybackControlsChange: (Boolean) -> Unit = {},
+    onShowLoopControlsChange: (Boolean) -> Unit = {},
+    onShowSpeedControlChange: (Boolean) -> Unit = {},
+    onShowNoteLeadTimeControlChange: (Boolean) -> Unit = {},
+    onShowCircleLeadTimeControlChange: (Boolean) -> Unit = {},
     onDismissError: () -> Unit
 ) {
     Column(
@@ -505,7 +540,14 @@ private fun HomeScreenNarrowContent(
             onMidiMappingModeChange = onMidiMappingModeChange,
             onManualRootChange = onManualRootChange,
             onScaleChange = onManualScaleChange,
-            onManualBaseOctaveChange = onManualBaseOctaveChange
+            onManualBaseOctaveChange = onManualBaseOctaveChange,
+            onShowSongInfoChange = onShowSongInfoChange,
+            onShowSeekBarChange = onShowSeekBarChange,
+            onShowPlaybackControlsChange = onShowPlaybackControlsChange,
+            onShowLoopControlsChange = onShowLoopControlsChange,
+            onShowSpeedControlChange = onShowSpeedControlChange,
+            onShowNoteLeadTimeControlChange = onShowNoteLeadTimeControlChange,
+            onShowCircleLeadTimeControlChange = onShowCircleLeadTimeControlChange
         )
 
         // 演奏支援開始ボタン
@@ -580,6 +622,13 @@ private fun HomeScreenWideContent(
     onManualRootChange: (com.onigiri.keycue.model.PitchClass) -> Unit,
     onManualScaleChange: (com.onigiri.keycue.model.ScaleType) -> Unit,
     onManualBaseOctaveChange: (Int) -> Unit,
+    onShowSongInfoChange: (Boolean) -> Unit = {},
+    onShowSeekBarChange: (Boolean) -> Unit = {},
+    onShowPlaybackControlsChange: (Boolean) -> Unit = {},
+    onShowLoopControlsChange: (Boolean) -> Unit = {},
+    onShowSpeedControlChange: (Boolean) -> Unit = {},
+    onShowNoteLeadTimeControlChange: (Boolean) -> Unit = {},
+    onShowCircleLeadTimeControlChange: (Boolean) -> Unit = {},
     onDismissError: () -> Unit
 ) {
     Row(
@@ -689,7 +738,14 @@ private fun HomeScreenWideContent(
                 onMidiMappingModeChange = onMidiMappingModeChange,
                 onManualRootChange = onManualRootChange,
                 onScaleChange = onManualScaleChange,
-                onManualBaseOctaveChange = onManualBaseOctaveChange
+                onManualBaseOctaveChange = onManualBaseOctaveChange,
+                onShowSongInfoChange = onShowSongInfoChange,
+                onShowSeekBarChange = onShowSeekBarChange,
+                onShowPlaybackControlsChange = onShowPlaybackControlsChange,
+                onShowLoopControlsChange = onShowLoopControlsChange,
+                onShowSpeedControlChange = onShowSpeedControlChange,
+                onShowNoteLeadTimeControlChange = onShowNoteLeadTimeControlChange,
+                onShowCircleLeadTimeControlChange = onShowCircleLeadTimeControlChange
             )
         }
     }

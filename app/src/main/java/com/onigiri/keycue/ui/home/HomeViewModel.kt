@@ -84,6 +84,13 @@ class HomeViewModel(
                 }
             }
         }
+
+        // コントロールオーバーレイ設定の変更を監視
+        scope.launch {
+            settingsRepository.controlOverlayConfig.collect { config ->
+                _uiState.update { it.copy(controlOverlayConfig = config) }
+            }
+        }
     }
 
     private data class RepositoryState(
@@ -391,6 +398,17 @@ class HomeViewModel(
                 com.onigiri.keycue.model.VisualConfig.MAX_CHORD_HALO_FILL_ALPHA_PERCENT
             )
         )
+    }
+
+    // --- ControlOverlayConfig 更新メソッド ---
+
+    /**
+     * ControlOverlayConfig を一括・ラムダ式で更新する。
+     */
+    fun updateControlOverlayConfig(transform: (com.onigiri.keycue.model.ControlOverlayConfig) -> com.onigiri.keycue.model.ControlOverlayConfig) {
+        scope.launch {
+            settingsRepository.updateControlOverlayConfig(transform)
+        }
     }
 
     companion object {

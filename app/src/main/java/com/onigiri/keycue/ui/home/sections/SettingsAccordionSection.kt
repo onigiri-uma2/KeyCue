@@ -47,7 +47,14 @@ fun SettingsAccordionSection(
     onMidiMappingModeChange: (MidiMappingMode) -> Unit,
     onManualRootChange: (PitchClass) -> Unit,
     onScaleChange: (ScaleType) -> Unit,
-    onManualBaseOctaveChange: (Int) -> Unit
+    onManualBaseOctaveChange: (Int) -> Unit,
+    onShowSongInfoChange: (Boolean) -> Unit = {},
+    onShowSeekBarChange: (Boolean) -> Unit = {},
+    onShowPlaybackControlsChange: (Boolean) -> Unit = {},
+    onShowLoopControlsChange: (Boolean) -> Unit = {},
+    onShowSpeedControlChange: (Boolean) -> Unit = {},
+    onShowNoteLeadTimeControlChange: (Boolean) -> Unit = {},
+    onShowCircleLeadTimeControlChange: (Boolean) -> Unit = {}
 ) {
     var midiMappingExpanded by rememberSaveable { mutableStateOf(false) }
     var timingExpanded by rememberSaveable { mutableStateOf(true) }
@@ -137,7 +144,37 @@ fun SettingsAccordionSection(
         )
     }
 
-    // 3. ボタン位置設定（スクリーンショット自動検出）
+    // 3. コントロールオーバーレイ表示設定
+    var controlOverlayExpanded by rememberSaveable { mutableStateOf(false) }
+    val activeControlCount = listOf(
+        uiState.controlOverlayConfig.showSongInfo,
+        uiState.controlOverlayConfig.showSeekBar,
+        uiState.controlOverlayConfig.showPlaybackControls,
+        uiState.controlOverlayConfig.showLoopControls,
+        uiState.controlOverlayConfig.showSpeedControl,
+        uiState.controlOverlayConfig.showNoteLeadTimeControl,
+        uiState.controlOverlayConfig.showCircleLeadTimeControl
+    ).count { it }
+    val controlSummary = "${activeControlCount}/7 項目表示"
+    ExpandableCard(
+        title = "コントロールオーバーレイ",
+        summary = controlSummary,
+        expanded = controlOverlayExpanded,
+        onExpandedChange = { controlOverlayExpanded = it }
+    ) {
+        ControlOverlayConfigContent(
+            config = uiState.controlOverlayConfig,
+            onShowSongInfoChange = onShowSongInfoChange,
+            onShowSeekBarChange = onShowSeekBarChange,
+            onShowPlaybackControlsChange = onShowPlaybackControlsChange,
+            onShowLoopControlsChange = onShowLoopControlsChange,
+            onShowSpeedControlChange = onShowSpeedControlChange,
+            onShowNoteLeadTimeControlChange = onShowNoteLeadTimeControlChange,
+            onShowCircleLeadTimeControlChange = onShowCircleLeadTimeControlChange
+        )
+    }
+
+    // 4. ボタン位置設定（スクリーンショット自動検出）
     var fittingExpanded by rememberSaveable { mutableStateOf(false) }
     val fittingSummary = if (uiState.fitConfigured) "設定済み" else "未設定"
     ExpandableCard(

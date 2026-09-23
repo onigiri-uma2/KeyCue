@@ -31,6 +31,14 @@ data class ControlOverlayCallbacks(
     val onSeekBack: () -> Unit = {},
     /** 一定時間早送りする */
     val onSeekForward: () -> Unit = {},
+    /** 指定した楽曲位置（ミリ秒）へシークする */
+    val onSeekTo: (Long) -> Unit = {},
+    /** ABリピートのA地点（開始位置）を現在位置に設定する */
+    val onSetLoopStart: () -> Unit = {},
+    /** ABリピートのB地点（終了位置）を現在位置に設定する */
+    val onSetLoopEnd: () -> Unit = {},
+    /** ABリピート設定を解除（クリア）する */
+    val onClearLoop: () -> Unit = {},
     /** 再生速度（0.5x〜2.0x等）を変更する */
     val onSpeedChange: (Float) -> Unit = {},
     /** ノート先読み時間（ms）を変更する */

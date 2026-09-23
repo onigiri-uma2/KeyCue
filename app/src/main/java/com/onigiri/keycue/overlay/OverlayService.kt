@@ -152,6 +152,22 @@ class OverlayService : Service() {
                 serviceScope.launch {
                     settingsRepository.saveFitProfile(profile)
                 }
+            },
+            onSeekTo = { pos ->
+                playbackEngine.seekTo(pos)
+                renderCurrentFrame(forceControlUpdate = true)
+            },
+            onSetLoopStart = {
+                playbackEngine.setLoopStart()
+                renderCurrentFrame(forceControlUpdate = true)
+            },
+            onSetLoopEnd = {
+                playbackEngine.setLoopEnd()
+                renderCurrentFrame(forceControlUpdate = true)
+            },
+            onClearLoop = {
+                playbackEngine.clearLoop()
+                renderCurrentFrame(forceControlUpdate = true)
             }
         )
 
@@ -190,6 +206,7 @@ class OverlayService : Service() {
         val session = sessionRepository.currentSession.value
         applySong(session?.song)
         applyPlaybackConfig(settingsRepository.playbackConfig.value)
+        windowController?.updateControlOverlayConfig(settingsRepository.controlOverlayConfig.value)
         val profile = settingsRepository.fitProfile.value ?: session?.fitProfile
         if (profile != null) windowController?.updateFitProfile(profile)
         updateGuideLabelsForSession(session)
@@ -275,6 +292,12 @@ class OverlayService : Service() {
                     windowController?.updateFitProfile(profileToUse)
                     renderCurrentFrame()
                 }
+            }
+        }
+        serviceScope.launch {
+            settingsRepository.controlOverlayConfig.collect { config ->
+                windowController?.updateControlOverlayConfig(config)
+                renderCurrentFrame(forceControlUpdate = true)
             }
         }
     }
@@ -372,6 +395,8 @@ class OverlayService : Service() {
     private var lastControlSpeed: Float = -1f
     private var lastControlNoteLeadTimeMs: Long = -1L
     private var lastControlApproachCircleLeadTimeMs: Long = -1L
+    private var lastControlLoopStartMs: Long? = null
+    private var lastControlLoopEndMs: Long? = null
 
     private fun renderCurrentFrame(forceControlUpdate: Boolean = false) {
         val session = sessionRepository.currentSession.value
@@ -416,15 +441,19 @@ class OverlayService : Service() {
         windowController?.renderGuideFrame(frame)
 
         // Control Overlay の更新頻度分離:
-        // 再生状態の変更（isPlaying）や曲の変更・停止・速度・先読み設定変更等の主要イベントは即時反映。
+        // 再生状態の変更（isPlaying）や曲の変更・停止・速度・先読み設定変更・ABループ変更等の主要イベントは即時反映。
         // 連続的な positionMs 更新のみ 100ms (10Hz) 間隔で間引く。
         val isPlaying = state is PlaybackState.Playing
         val now = android.os.SystemClock.uptimeMillis()
+        val loopStart = playbackEngine.loopStartMs
+        val loopEnd = playbackEngine.loopEndMs
         val isMajorStateChanged = (lastControlPlayingState != isPlaying) ||
                 (lastControlSongTitle != song?.title) ||
                 (lastControlSpeed != config.speed) ||
                 (lastControlNoteLeadTimeMs != config.noteLeadTimeMs) ||
-                (lastControlApproachCircleLeadTimeMs != config.approachCircleLeadTimeMs)
+                (lastControlApproachCircleLeadTimeMs != config.approachCircleLeadTimeMs) ||
+                (lastControlLoopStartMs != loopStart) ||
+                (lastControlLoopEndMs != loopEnd)
         val isTimeIntervalElapsed = (now - lastControlUpdateTimestamp >= 100L)
 
         if (forceControlUpdate || isMajorStateChanged || isTimeIntervalElapsed) {
@@ -433,6 +462,8 @@ class OverlayService : Service() {
             lastControlSpeed = config.speed
             lastControlNoteLeadTimeMs = config.noteLeadTimeMs
             lastControlApproachCircleLeadTimeMs = config.approachCircleLeadTimeMs
+            lastControlLoopStartMs = loopStart
+            lastControlLoopEndMs = loopEnd
             lastControlUpdateTimestamp = now
 
             windowController?.updateControlStatus(
@@ -442,7 +473,9 @@ class OverlayService : Service() {
                 speed = config.speed,
                 songTitle = song?.title,
                 noteLeadTimeMs = config.noteLeadTimeMs,
-                approachCircleLeadTimeMs = config.approachCircleLeadTimeMs
+                approachCircleLeadTimeMs = config.approachCircleLeadTimeMs,
+                loopStartMs = loopStart,
+                loopEndMs = loopEnd
             )
         }
     }

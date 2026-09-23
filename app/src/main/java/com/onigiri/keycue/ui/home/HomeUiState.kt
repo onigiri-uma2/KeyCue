@@ -45,7 +45,8 @@ data class HomeUiState(
     val songData: SongData? = null,
     val visualConfig: com.onigiri.keycue.model.VisualConfig = com.onigiri.keycue.model.VisualConfig(),
     val midiMappingSettings: com.onigiri.keycue.model.MidiMappingSettings = com.onigiri.keycue.model.MidiMappingSettings(),
-    val resolvedMidiMapping: com.onigiri.keycue.model.ResolvedMidiMapping? = null
+    val resolvedMidiMapping: com.onigiri.keycue.model.ResolvedMidiMapping? = null,
+    val controlOverlayConfig: com.onigiri.keycue.model.ControlOverlayConfig = com.onigiri.keycue.model.ControlOverlayConfig()
 ) {
     fun withoutSong(): HomeUiState = copy(
         songTitle = null,

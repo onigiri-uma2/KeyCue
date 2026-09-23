@@ -43,4 +43,17 @@ object TimeFormatter {
         val totalStr = formatDuration(totalMs, forceHours = requiresHours)
         return "$currentStr / $totalStr"
     }
+
+    /**
+     * ミリ秒を "mm:ss.S" (0.1秒単位) 形式の文字列へ変換する。
+     * ABリピートの区間表示等で使用。
+     */
+    fun formatDurationWithTenths(durationMs: Long): String {
+        val nonNegativeMs = durationMs.coerceAtLeast(0L)
+        val totalSeconds = nonNegativeMs / 1000L
+        val tenths = (nonNegativeMs % 1000L) / 100L
+        val minutes = (totalSeconds % 3600L) / 60L
+        val seconds = totalSeconds % 60L
+        return String.format(Locale.getDefault(), "%02d:%02d.%d", minutes, seconds, tenths)
+    }
 }

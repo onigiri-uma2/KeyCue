@@ -43,7 +43,11 @@ class OverlayWindowController(
         onSpeedChange: (Float) -> Unit = {},
         onNoteLeadTimeChange: (Long) -> Unit = {},
         onApproachCircleLeadTimeChange: (Long) -> Unit = {},
-        onSaveFitProfile: (FitProfile) -> Unit = {}
+        onSaveFitProfile: (FitProfile) -> Unit = {},
+        onSeekTo: (Long) -> Unit = {},
+        onSetLoopStart: () -> Unit = {},
+        onSetLoopEnd: () -> Unit = {},
+        onClearLoop: () -> Unit = {}
     ) : this(
         context = context,
         callbacks = ControlOverlayCallbacks(
@@ -59,7 +63,11 @@ class OverlayWindowController(
             onSpeedChange = onSpeedChange,
             onNoteLeadTimeChange = onNoteLeadTimeChange,
             onApproachCircleLeadTimeChange = onApproachCircleLeadTimeChange,
-            onSaveFitProfile = onSaveFitProfile
+            onSaveFitProfile = onSaveFitProfile,
+            onSeekTo = onSeekTo,
+            onSetLoopStart = onSetLoopStart,
+            onSetLoopEnd = onSetLoopEnd,
+            onClearLoop = onClearLoop
         )
     )
 
@@ -73,6 +81,7 @@ class OverlayWindowController(
     private var currentFitProfile: FitProfile = FitProfile.createDefaultTestProfile()
     private var currentVisualConfig: com.onigiri.keycue.model.VisualConfig = com.onigiri.keycue.model.VisualConfig()
     private var currentGuideLabels: List<String>? = null
+    private var currentControlOverlayConfig: com.onigiri.keycue.model.ControlOverlayConfig = com.onigiri.keycue.model.ControlOverlayConfig()
 
     // --- Control Overlay 管理 ---
 
@@ -139,7 +148,9 @@ class OverlayWindowController(
             windowManager = windowManager,
             layoutParams = layoutParams,
             callbacks = viewCallbacks
-        )
+        ).apply {
+            updateControlOverlayConfig(currentControlOverlayConfig)
+        }
 
         try {
             windowManager.addView(view, layoutParams)
@@ -299,7 +310,9 @@ class OverlayWindowController(
         speed: Float,
         songTitle: String?,
         noteLeadTimeMs: Long = com.onigiri.keycue.model.PlaybackConfig.DEFAULT_NOTE_LEAD_TIME_MS,
-        approachCircleLeadTimeMs: Long = com.onigiri.keycue.model.PlaybackConfig.DEFAULT_APPROACH_CIRCLE_LEAD_TIME_MS
+        approachCircleLeadTimeMs: Long = com.onigiri.keycue.model.PlaybackConfig.DEFAULT_APPROACH_CIRCLE_LEAD_TIME_MS,
+        loopStartMs: Long? = null,
+        loopEndMs: Long? = null
     ) {
         controlOverlayView?.updatePlaybackStatus(
             isPlaying = isPlaying,
@@ -308,8 +321,18 @@ class OverlayWindowController(
             speed = speed,
             songTitle = songTitle,
             noteLeadTimeMs = noteLeadTimeMs,
-            approachCircleLeadTimeMs = approachCircleLeadTimeMs
+            approachCircleLeadTimeMs = approachCircleLeadTimeMs,
+            loopStartMs = loopStartMs,
+            loopEndMs = loopEndMs
         )
+    }
+
+    /**
+     * ControlOverlayConfigを更新し、表示中のControl Overlayに反映する。
+     */
+    fun updateControlOverlayConfig(config: com.onigiri.keycue.model.ControlOverlayConfig) {
+        currentControlOverlayConfig = config
+        controlOverlayView?.updateControlOverlayConfig(config)
     }
 
     /**

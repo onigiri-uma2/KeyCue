@@ -14,8 +14,11 @@ import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
+import android.widget.SeekBar
 import android.widget.TextView
+import com.onigiri.keycue.model.ControlOverlayConfig
 import com.onigiri.keycue.model.PlaybackConfig
+import com.onigiri.keycue.playback.PlaybackEngine
 import com.onigiri.keycue.playback.TimeFormatter
 import kotlin.math.abs
 import kotlin.math.max
@@ -58,7 +61,11 @@ class ControlOverlayView(
         onSpeedChange: (Float) -> Unit = {},
         onNoteLeadTimeChange: (Long) -> Unit = {},
         onApproachCircleLeadTimeChange: (Long) -> Unit = {},
-        onStartFitting: () -> Unit = {}
+        onStartFitting: () -> Unit = {},
+        onSeekTo: (Long) -> Unit = {},
+        onSetLoopStart: () -> Unit = {},
+        onSetLoopEnd: () -> Unit = {},
+        onClearLoop: () -> Unit = {}
     ) : this(
         context = context,
         windowManager = windowManager,
@@ -78,7 +85,11 @@ class ControlOverlayView(
             onSpeedChange = onSpeedChange,
             onNoteLeadTimeChange = onNoteLeadTimeChange,
             onApproachCircleLeadTimeChange = onApproachCircleLeadTimeChange,
-            onStartFitting = onStartFitting
+            onStartFitting = onStartFitting,
+            onSeekTo = onSeekTo,
+            onSetLoopStart = onSetLoopStart,
+            onSetLoopEnd = onSetLoopEnd,
+            onClearLoop = onClearLoop
         )
     )
 
@@ -101,13 +112,51 @@ class ControlOverlayView(
     private var currentSongTitle: String? = null
     private var currentPositionMs: Long = 0L
     private var currentDurationMs: Long = 0L
+    private var currentLoopStartMs: Long? = null
+    private var currentLoopEndMs: Long? = null
+    private var isUserSeeking: Boolean = false
+    private var currentConfig: ControlOverlayConfig = ControlOverlayConfig()
 
     // UIコンポーネント
     private val collapsedView: TextView
     private val expandedView: View
+
+    // セクションコンテナ（表示/非表示制御用）
+    private lateinit var songInfoSection: View
+    private lateinit var seekBarSection: View
+    private lateinit var playbackControlsSection: View
+    private lateinit var loopSection: View
+    private lateinit var speedSection: View
+    private lateinit var noteLeadTimeSection: View
+    private lateinit var approachCircleLeadTimeSection: View
+
+    // アクションボタンコンテナ/参照（表示/非表示制御用）
+    private lateinit var selectFileBtn: View
+    private lateinit var minimizeBtn: View
+    private lateinit var openBtn: View
+    private lateinit var fittingBtn: View
+    private lateinit var guideToggleButton: Button
+    private lateinit var closeBtn: View
+
+    // 楽曲情報
     private lateinit var songTitleText: TextView
     private lateinit var timeText: TextView
+
+    // ミニシークバー
+    private lateinit var seekCurrentTimeText: TextView
+    private lateinit var playbackSeekBar: SeekBar
+    private lateinit var seekDurationText: TextView
+
+    // 再生コントロール
     private lateinit var playPauseButton: Button
+
+    // ABリピート
+    private lateinit var loopStatusText: TextView
+    private lateinit var loopAButton: Button
+    private lateinit var loopBButton: Button
+    private lateinit var loopClearButton: Button
+
+    // 速度・先読み設定
     private lateinit var speedValueText: TextView
     private lateinit var speedMinusBtn: Button
     private lateinit var speedPlusBtn: Button
@@ -117,7 +166,6 @@ class ControlOverlayView(
     private lateinit var approachCircleLeadTimeValueText: TextView
     private lateinit var circleMinusBtn: Button
     private lateinit var circlePlusBtn: Button
-    private lateinit var guideToggleButton: Button
 
     init {
         // --- 1. COLLAPSED View (最小化時の [ ♪ ] / [ ⏸ ] / [ ▶ ] ボタン) ---
@@ -172,6 +220,7 @@ class ControlOverlayView(
 
         addView(collapsedView)
         addView(expandedView)
+        updateControlOverlayConfig(currentConfig)
     }
 
     private fun buildExpandedContentLayout(): LinearLayout {
@@ -184,15 +233,30 @@ class ControlOverlayView(
             addView(buildTitleBar())
 
             // 楽曲情報
-            buildSongInfoSection().forEach { addView(it) }
+            songInfoSection = buildSongInfoSection()
+            addView(songInfoSection)
+
+            // ミニシークバー
+            seekBarSection = buildSeekBarSection()
+            addView(seekBarSection)
 
             // 再生コントロール
-            buildPlaybackControls().forEach { addView(it) }
+            playbackControlsSection = buildPlaybackControls()
+            addView(playbackControlsSection)
+
+            // ABリピート
+            loopSection = buildLoopSection()
+            addView(loopSection)
 
             // 速度・先読み設定
-            addView(buildSpeedControls())
-            addView(buildNoteLeadTimeControls())
-            addView(buildApproachCircleLeadTimeControls())
+            speedSection = buildSpeedControls()
+            addView(speedSection)
+
+            noteLeadTimeSection = buildNoteLeadTimeControls()
+            addView(noteLeadTimeSection)
+
+            approachCircleLeadTimeSection = buildApproachCircleLeadTimeControls()
+            addView(approachCircleLeadTimeSection)
 
             // アクションボタン群
             buildActionButtons().forEach { addView(it) }
@@ -237,39 +301,48 @@ class ControlOverlayView(
         }
     }
 
-    private fun buildSongInfoSection(): List<View> {
-        songTitleText = TextView(context).apply {
-            text = "未選択"
-            setTextColor(Color.WHITE)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-            typeface = android.graphics.Typeface.DEFAULT_BOLD
-            maxLines = 1
-            ellipsize = android.text.TextUtils.TruncateAt.END
+    private fun buildSongInfoSection(): View {
+        return LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                bottomMargin = dpToPx(2)
+                bottomMargin = dpToPx(6)
             }
-        }
 
-        timeText = TextView(context).apply {
-            text = "00:00 / 00:00"
-            setTextColor(Color.parseColor("#B0B0D0"))
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                bottomMargin = dpToPx(8)
+            songTitleText = TextView(context).apply {
+                text = "未選択"
+                setTextColor(Color.WHITE)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    bottomMargin = dpToPx(2)
+                }
             }
-        }
 
-        return listOf(songTitleText, timeText)
+            timeText = TextView(context).apply {
+                text = "00:00 / 00:00"
+                setTextColor(Color.parseColor("#B0B0D0"))
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+            }
+
+            addView(songTitleText)
+            addView(timeText)
+        }
     }
 
-    private fun buildPlaybackControls(): List<View> {
-        val playbackRow = LinearLayout(context).apply {
+    private fun buildSeekBarSection(): View {
+        return LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             layoutParams = LinearLayout.LayoutParams(
@@ -279,47 +352,171 @@ class ControlOverlayView(
                 bottomMargin = dpToPx(6)
             }
 
-            val seekBackBtn = createMiniButton("↶10", Color.parseColor("#37474F")) {
-                callbacks.onSeekBack()
+            seekCurrentTimeText = TextView(context).apply {
+                text = "00:00"
+                setTextColor(Color.parseColor("#B0B0D0"))
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
+                gravity = Gravity.CENTER
+                minWidth = dpToPx(32)
             }
-            addView(seekBackBtn)
-            addView(createHorizontalSpacer(4))
 
-            playPauseButton = createMiniButton("▶", Color.parseColor("#2E7D32")) {
-                callbacks.onPlayPause()
-            }
-            addView(playPauseButton)
-            addView(createHorizontalSpacer(4))
+            playbackSeekBar = SeekBar(context).apply {
+                max = 0
+                progress = 0
+                isEnabled = false
+                setPadding(dpToPx(6), 0, dpToPx(6), 0)
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                        if (fromUser) {
+                            seekCurrentTimeText.text = TimeFormatter.formatDuration(progress.toLong())
+                        }
+                    }
 
-            val seekFwdBtn = createMiniButton("↷10", Color.parseColor("#37474F")) {
-                callbacks.onSeekForward()
+                    override fun onStartTrackingTouch(seekBar: SeekBar?) {
+                        isUserSeeking = true
+                    }
+
+                    override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                        val targetMs = seekBar?.progress?.toLong() ?: 0L
+                        isUserSeeking = false
+                        callbacks.onSeekTo(targetMs)
+                    }
+                })
             }
-            addView(seekFwdBtn)
+
+            seekDurationText = TextView(context).apply {
+                text = "00:00"
+                setTextColor(Color.parseColor("#B0B0D0"))
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
+                gravity = Gravity.CENTER
+                minWidth = dpToPx(32)
+            }
+
+            addView(seekCurrentTimeText)
+            addView(playbackSeekBar)
+            addView(seekDurationText)
         }
+    }
 
-        val subControlsRow = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
+    private fun buildPlaybackControls(): View {
+        return LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                bottomMargin = dpToPx(8)
+                bottomMargin = dpToPx(6)
             }
 
-            val stopBtn = createMiniButton("■ 停止", Color.parseColor("#C62828")) {
-                callbacks.onStop()
-            }
-            addView(stopBtn)
-            addView(createHorizontalSpacer(4))
+            val playbackRow = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    bottomMargin = dpToPx(4)
+                }
 
-            val restartBtn = createMiniButton("🔄 Restart", Color.parseColor("#455A64")) {
-                callbacks.onRestart()
+                val seekBackBtn = createMiniButton("↶10", Color.parseColor("#37474F")) {
+                    callbacks.onSeekBack()
+                }
+                addView(seekBackBtn)
+                addView(createHorizontalSpacer(4))
+
+                playPauseButton = createMiniButton("▶", Color.parseColor("#2E7D32")) {
+                    callbacks.onPlayPause()
+                }
+                addView(playPauseButton)
+                addView(createHorizontalSpacer(4))
+
+                val seekFwdBtn = createMiniButton("↷10", Color.parseColor("#37474F")) {
+                    callbacks.onSeekForward()
+                }
+                addView(seekFwdBtn)
             }
-            addView(restartBtn)
+
+            val subControlsRow = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+
+                val stopBtn = createMiniButton("■ 停止", Color.parseColor("#C62828")) {
+                    callbacks.onStop()
+                }
+                addView(stopBtn)
+                addView(createHorizontalSpacer(4))
+
+                val restartBtn = createMiniButton("🔄 Restart", Color.parseColor("#455A64")) {
+                    callbacks.onRestart()
+                }
+                addView(restartBtn)
+            }
+
+            addView(playbackRow)
+            addView(subControlsRow)
         }
+    }
 
-        return listOf(playbackRow, subControlsRow)
+    private fun buildLoopSection(): View {
+        return LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomMargin = dpToPx(6)
+            }
+
+            loopStatusText = TextView(context).apply {
+                text = "A: --:--  B: --:--"
+                setTextColor(Color.parseColor("#B0BEC5"))
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
+                gravity = Gravity.CENTER
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    bottomMargin = dpToPx(3)
+                }
+            }
+
+            val loopButtonsRow = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+
+                loopAButton = createMiniButton("A", Color.parseColor("#1565C0")) {
+                    callbacks.onSetLoopStart()
+                }
+                addView(loopAButton)
+                addView(createHorizontalSpacer(4))
+
+                loopBButton = createMiniButton("B", Color.parseColor("#1565C0")) {
+                    callbacks.onSetLoopEnd()
+                }
+                addView(loopBButton)
+                addView(createHorizontalSpacer(4))
+
+                loopClearButton = createMiniButton("Clear", Color.parseColor("#455A64")) {
+                    callbacks.onClearLoop()
+                }
+                loopClearButton.isEnabled = false
+                loopClearButton.alpha = 0.4f
+                addView(loopClearButton)
+            }
+
+            addView(loopStatusText)
+            addView(loopButtonsRow)
+        }
     }
 
     private fun buildSpeedControls(): View {
@@ -446,10 +643,8 @@ class ControlOverlayView(
     }
 
     private fun buildActionButtons(): List<View> {
-        val views = mutableListOf<View>()
-
         // 「楽曲を選択」ボタン
-        val selectFileBtn = createActionButton(
+        selectFileBtn = createActionButton(
             text = "楽曲を選択",
             bgColor = Color.parseColor("#4A148C"),
             textColor = Color.WHITE
@@ -457,22 +652,18 @@ class ControlOverlayView(
             collapse()
             callbacks.onSelectFile()
         }
-        views.add(selectFileBtn)
-        views.add(createSpacer(5))
 
         // 「最小化」ボタン
-        val minimizeBtn = createActionButton(
+        minimizeBtn = createActionButton(
             text = "最小化",
             bgColor = Color.parseColor("#37474F"),
             textColor = Color.WHITE
         ) {
             collapse()
         }
-        views.add(minimizeBtn)
-        views.add(createSpacer(5))
 
         // 「設定」ボタン
-        val openBtn = createActionButton(
+        openBtn = createActionButton(
             text = "設定",
             bgColor = Color.parseColor("#3F51B5"),
             textColor = Color.WHITE
@@ -480,11 +671,9 @@ class ControlOverlayView(
             collapse()
             callbacks.onOpenApp()
         }
-        views.add(openBtn)
-        views.add(createSpacer(5))
 
         // 「位置微調整」ボタン
-        val fittingBtn = createActionButton(
+        fittingBtn = createActionButton(
             text = "位置微調整",
             bgColor = Color.parseColor("#1565C0"),
             textColor = Color.WHITE
@@ -492,8 +681,6 @@ class ControlOverlayView(
             collapse()
             callbacks.onStartFitting()
         }
-        views.add(fittingBtn)
-        views.add(createSpacer(5))
 
         // 「Guide ON / OFF」トグルボタン
         guideToggleButton = createActionButton(
@@ -504,20 +691,24 @@ class ControlOverlayView(
             val isShowingNow = callbacks.onToggleGuide()
             updateGuideButtonText(isShowingNow)
         }
-        views.add(guideToggleButton)
-        views.add(createSpacer(5))
 
         // 「終了」ボタン
-        val closeBtn = createActionButton(
+        closeBtn = createActionButton(
             text = "終了",
             bgColor = Color.parseColor("#5A1E1E"),
             textColor = Color.parseColor("#FFCDD2")
         ) {
             callbacks.onCloseOverlay()
         }
-        views.add(closeBtn)
 
-        return views
+        return listOf(
+            selectFileBtn,
+            minimizeBtn,
+            openBtn,
+            fittingBtn,
+            guideToggleButton,
+            closeBtn
+        )
     }
 
     private fun adjustSpeedStep(direction: Int) {
@@ -588,6 +779,8 @@ class ControlOverlayView(
     private var lastSongTitle: String? = null
     private var lastNoteLeadTimeMs: Long = -1L
     private var lastApproachCircleLeadTimeMs: Long = -1L
+    private var lastLoopStartMs: Long? = null
+    private var lastLoopEndMs: Long? = null
 
     /**
      * 再生状態や曲情報をControlパネルに反映する。
@@ -599,7 +792,9 @@ class ControlOverlayView(
         speed: Float,
         songTitle: String?,
         noteLeadTimeMs: Long = currentNoteLeadTimeMs,
-        approachCircleLeadTimeMs: Long = currentApproachCircleLeadTimeMs
+        approachCircleLeadTimeMs: Long = currentApproachCircleLeadTimeMs,
+        loopStartMs: Long? = null,
+        loopEndMs: Long? = null
     ) {
         // 折りたたみ中・展開中に関わらず最新状態を常に保持
         currentIsPlaying = isPlaying
@@ -609,6 +804,8 @@ class ControlOverlayView(
         currentSongTitle = songTitle
         currentNoteLeadTimeMs = noteLeadTimeMs
         currentApproachCircleLeadTimeMs = approachCircleLeadTimeMs
+        currentLoopStartMs = loopStartMs
+        currentLoopEndMs = loopEndMs
 
         // 1. 再生状態の変更（Play / Pause）は折りたたみ中でも即時反映
         if (lastIsPlaying != isPlaying) {
@@ -644,6 +841,51 @@ class ControlOverlayView(
             timeText.text = TimeFormatter.formatDurationPair(currentPositionMs, currentDurationMs)
         }
 
+        // シークバーの更新
+        if (::playbackSeekBar.isInitialized) {
+            if (currentDurationMs <= 0L) {
+                playbackSeekBar.max = 0
+                playbackSeekBar.progress = 0
+                playbackSeekBar.isEnabled = false
+                seekCurrentTimeText.text = "00:00"
+                seekDurationText.text = "00:00"
+            } else {
+                playbackSeekBar.isEnabled = true
+                val durInt = currentDurationMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+                if (playbackSeekBar.max != durInt) {
+                    playbackSeekBar.max = durInt
+                }
+                seekDurationText.text = TimeFormatter.formatDuration(currentDurationMs)
+                if (!isUserSeeking) {
+                    val posInt = currentPositionMs.coerceIn(0L, currentDurationMs).toInt()
+                    playbackSeekBar.progress = posInt
+                    seekCurrentTimeText.text = TimeFormatter.formatDuration(currentPositionMs)
+                }
+            }
+        }
+
+        // ABリピートの更新
+        if (::loopStatusText.isInitialized) {
+            val start = currentLoopStartMs
+            val end = currentLoopEndMs
+            val isValid = start != null && end != null && start < end && (end - start) >= PlaybackEngine.MIN_LOOP_DURATION_MS
+            val aStr = if (start != null) TimeFormatter.formatDurationWithTenths(start) else "--:--"
+            val bStr = if (end != null) TimeFormatter.formatDurationWithTenths(end) else "--:--"
+
+            if (isValid) {
+                loopStatusText.text = "🔁 A: $aStr → B: $bStr"
+                loopStatusText.setTextColor(Color.parseColor("#80D8FF"))
+                loopClearButton.isEnabled = true
+                loopClearButton.alpha = 1.0f
+            } else {
+                loopStatusText.text = "A: $aStr  B: $bStr"
+                loopStatusText.setTextColor(Color.parseColor("#B0BEC5"))
+                val hasAny = (start != null || end != null)
+                loopClearButton.isEnabled = hasAny
+                loopClearButton.alpha = if (hasAny) 1.0f else 0.4f
+            }
+        }
+
         if (force || lastSpeed != currentSpeed) {
             lastSpeed = currentSpeed
             val percent = (currentSpeed * 100).toInt()
@@ -661,6 +903,28 @@ class ControlOverlayView(
         }
 
         updateAdjustButtonsEnabled()
+    }
+
+    /**
+     * 表示項目の設定を更新し、各セクションの表示/非表示を切り替える。
+     * 設定、最小化、終了ボタンは常時表示を保証する。
+     */
+    fun updateControlOverlayConfig(config: ControlOverlayConfig) {
+        currentConfig = config
+        if (!::songInfoSection.isInitialized) return
+
+        songInfoSection.visibility = if (config.showSongInfo) View.VISIBLE else View.GONE
+        seekBarSection.visibility = if (config.showSeekBar) View.VISIBLE else View.GONE
+        playbackControlsSection.visibility = if (config.showPlaybackControls) View.VISIBLE else View.GONE
+        loopSection.visibility = if (config.showLoopControls) View.VISIBLE else View.GONE
+        speedSection.visibility = if (config.showSpeedControl) View.VISIBLE else View.GONE
+        noteLeadTimeSection.visibility = if (config.showNoteLeadTimeControl) View.VISIBLE else View.GONE
+        approachCircleLeadTimeSection.visibility = if (config.showCircleLeadTimeControl) View.VISIBLE else View.GONE
+
+        // 常時表示項目の安全性確保
+        minimizeBtn.visibility = View.VISIBLE
+        openBtn.visibility = View.VISIBLE
+        closeBtn.visibility = View.VISIBLE
     }
 
     private fun createMiniButton(text: String, bgColor: Int, onClick: () -> Unit): Button {
@@ -879,7 +1143,9 @@ class ControlOverlayView(
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 dpToPx(34)
-            )
+            ).apply {
+                bottomMargin = dpToPx(5)
+            }
             setOnClickListener { onClick() }
         }
     }

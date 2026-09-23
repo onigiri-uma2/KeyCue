@@ -472,6 +472,87 @@ class SettingsRepositoryTest {
         assertEquals(customVisualConfig.chordHaloFillAlphaPercent, currentVisual.chordHaloFillAlphaPercent)
     }
 
+    @Test
+    fun `InMemorySettingsRepository holds default controlOverlayConfig`() {
+        val repo = InMemorySettingsRepository()
+        val config = repo.controlOverlayConfig.value
+
+        assertEquals(true, config.showSongInfo)
+        assertEquals(true, config.showSeekBar)
+        assertEquals(true, config.showPlaybackControls)
+        assertEquals(true, config.showLoopControls)
+        assertEquals(true, config.showSpeedControl)
+        assertEquals(true, config.showNoteLeadTimeControl)
+        assertEquals(true, config.showCircleLeadTimeControl)
+        assertEquals(true, config.showCountdownControl)
+        assertEquals(true, config.showGuideQuickToggles)
+        assertEquals(false, config.showRecentSongs)
+    }
+
+    @Test
+    fun `InMemorySettingsRepository saves and updates controlOverlayConfig`() = runBlocking {
+        val repo = InMemorySettingsRepository()
+        val customConfig = com.onigiri.keycue.model.ControlOverlayConfig(
+            showSongInfo = false,
+            showSeekBar = false,
+            showPlaybackControls = true,
+            showLoopControls = true,
+            showSpeedControl = false,
+            showNoteLeadTimeControl = false,
+            showCircleLeadTimeControl = false,
+            showCountdownControl = false,
+            showGuideQuickToggles = false,
+            showRecentSongs = true
+        )
+
+        repo.saveControlOverlayConfig(customConfig)
+        assertEquals(customConfig, repo.controlOverlayConfig.value)
+    }
+
+    @Test
+    fun `SharedPreferencesSettingsRepository restores default controlOverlayConfig when prefs empty`() {
+        val fakePrefs = createFakePrefs(emptyMap())
+        val repo = SharedPreferencesSettingsRepository(fakePrefs)
+        val config = repo.controlOverlayConfig.value
+
+        assertEquals(true, config.showSongInfo)
+        assertEquals(true, config.showSeekBar)
+        assertEquals(true, config.showPlaybackControls)
+        assertEquals(true, config.showLoopControls)
+        assertEquals(true, config.showSpeedControl)
+        assertEquals(true, config.showNoteLeadTimeControl)
+        assertEquals(true, config.showCircleLeadTimeControl)
+        assertEquals(true, config.showCountdownControl)
+        assertEquals(true, config.showGuideQuickToggles)
+        assertEquals(false, config.showRecentSongs)
+    }
+
+    @Test
+    fun `SharedPreferencesSettingsRepository saves and restores controlOverlayConfig`() = runBlocking {
+        val fakePrefs = createFakePrefs(emptyMap())
+        val repo = SharedPreferencesSettingsRepository(fakePrefs)
+
+        val updated = com.onigiri.keycue.model.ControlOverlayConfig(
+            showSongInfo = false,
+            showSeekBar = true,
+            showPlaybackControls = false,
+            showLoopControls = true,
+            showSpeedControl = false,
+            showNoteLeadTimeControl = true,
+            showCircleLeadTimeControl = false,
+            showCountdownControl = true,
+            showGuideQuickToggles = false,
+            showRecentSongs = true
+        )
+
+        repo.saveControlOverlayConfig(updated)
+        assertEquals(updated, repo.controlOverlayConfig.value)
+
+        // 新しいリポジトリインスタンスを生成してSharedPreferencesから正しく復元されることを検証
+        val restoredRepo = SharedPreferencesSettingsRepository(fakePrefs)
+        assertEquals(updated, restoredRepo.controlOverlayConfig.value)
+    }
+
     private fun createFakePrefs(initialData: Map<String, Any>): android.content.SharedPreferences {
         val map = HashMap<String, Any>(initialData)
         return java.lang.reflect.Proxy.newProxyInstance(

@@ -2,6 +2,7 @@ package com.onigiri.keycue.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.onigiri.keycue.model.ControlOverlayConfig
 import com.onigiri.keycue.model.NormalizedPoint
 import com.onigiri.keycue.model.PlaybackConfig
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -110,6 +111,12 @@ interface SettingsRepository {
         updateMidiMappingSettings { it.copy(manualScale = scale) }
     suspend fun saveManualBaseOctave(octave: Int) =
         updateMidiMappingSettings { it.copy(manualBaseOctave = octave.coerceIn(2, 6)) }
+
+    /** フローティング操作コントローラーの表示設定 (ControlOverlayConfig) */
+    val controlOverlayConfig: StateFlow<ControlOverlayConfig>
+    suspend fun saveControlOverlayConfig(config: ControlOverlayConfig)
+    suspend fun updateControlOverlayConfig(transform: (ControlOverlayConfig) -> ControlOverlayConfig) =
+        saveControlOverlayConfig(transform(controlOverlayConfig.value))
 }
 
 /**
@@ -154,6 +161,16 @@ class SharedPreferencesSettingsRepository internal constructor(
         private const val KEY_MIDI_MANUAL_ROOT = "midi_manual_root"
         private const val KEY_MIDI_MANUAL_SCALE = "midi_manual_scale"
         private const val KEY_MIDI_MANUAL_BASE_OCTAVE = "midi_manual_base_octave"
+        private const val KEY_CONTROL_SHOW_SONG_INFO = "control_show_song_info"
+        private const val KEY_CONTROL_SHOW_SEEK_BAR = "control_show_seek_bar"
+        private const val KEY_CONTROL_SHOW_PLAYBACK_CONTROLS = "control_show_playback_controls"
+        private const val KEY_CONTROL_SHOW_LOOP_CONTROLS = "control_show_loop_controls"
+        private const val KEY_CONTROL_SHOW_SPEED_CONTROL = "control_show_speed_control"
+        private const val KEY_CONTROL_SHOW_NOTE_LEAD_TIME = "control_show_note_lead_time"
+        private const val KEY_CONTROL_SHOW_CIRCLE_LEAD_TIME = "control_show_circle_lead_time"
+        private const val KEY_CONTROL_SHOW_COUNTDOWN_CONTROL = "control_show_countdown_control"
+        private const val KEY_CONTROL_SHOW_GUIDE_QUICK_TOGGLES = "control_show_guide_quick_toggles"
+        private const val KEY_CONTROL_SHOW_RECENT_SONGS = "control_show_recent_songs"
 
         @Volatile
         private var instance: SharedPreferencesSettingsRepository? = null
@@ -164,6 +181,22 @@ class SharedPreferencesSettingsRepository internal constructor(
             }
         }
     }
+
+    private val _controlOverlayConfig = MutableStateFlow(
+        ControlOverlayConfig(
+            showSongInfo = prefs.getBoolean(KEY_CONTROL_SHOW_SONG_INFO, true),
+            showSeekBar = prefs.getBoolean(KEY_CONTROL_SHOW_SEEK_BAR, true),
+            showPlaybackControls = prefs.getBoolean(KEY_CONTROL_SHOW_PLAYBACK_CONTROLS, true),
+            showLoopControls = prefs.getBoolean(KEY_CONTROL_SHOW_LOOP_CONTROLS, true),
+            showSpeedControl = prefs.getBoolean(KEY_CONTROL_SHOW_SPEED_CONTROL, true),
+            showNoteLeadTimeControl = prefs.getBoolean(KEY_CONTROL_SHOW_NOTE_LEAD_TIME, true),
+            showCircleLeadTimeControl = prefs.getBoolean(KEY_CONTROL_SHOW_CIRCLE_LEAD_TIME, true),
+            showCountdownControl = prefs.getBoolean(KEY_CONTROL_SHOW_COUNTDOWN_CONTROL, true),
+            showGuideQuickToggles = prefs.getBoolean(KEY_CONTROL_SHOW_GUIDE_QUICK_TOGGLES, true),
+            showRecentSongs = prefs.getBoolean(KEY_CONTROL_SHOW_RECENT_SONGS, false)
+        )
+    )
+    override val controlOverlayConfig: StateFlow<ControlOverlayConfig> = _controlOverlayConfig.asStateFlow()
 
     private val _lastSongUri = MutableStateFlow(prefs.getString(KEY_LAST_SONG_URI, null))
     override val lastSongUri: StateFlow<String?> = _lastSongUri.asStateFlow()
@@ -373,6 +406,22 @@ class SharedPreferencesSettingsRepository internal constructor(
             .apply()
     }
 
+    override suspend fun saveControlOverlayConfig(config: ControlOverlayConfig) {
+        _controlOverlayConfig.value = config
+        prefs.edit()
+            .putBoolean(KEY_CONTROL_SHOW_SONG_INFO, config.showSongInfo)
+            .putBoolean(KEY_CONTROL_SHOW_SEEK_BAR, config.showSeekBar)
+            .putBoolean(KEY_CONTROL_SHOW_PLAYBACK_CONTROLS, config.showPlaybackControls)
+            .putBoolean(KEY_CONTROL_SHOW_LOOP_CONTROLS, config.showLoopControls)
+            .putBoolean(KEY_CONTROL_SHOW_SPEED_CONTROL, config.showSpeedControl)
+            .putBoolean(KEY_CONTROL_SHOW_NOTE_LEAD_TIME, config.showNoteLeadTimeControl)
+            .putBoolean(KEY_CONTROL_SHOW_CIRCLE_LEAD_TIME, config.showCircleLeadTimeControl)
+            .putBoolean(KEY_CONTROL_SHOW_COUNTDOWN_CONTROL, config.showCountdownControl)
+            .putBoolean(KEY_CONTROL_SHOW_GUIDE_QUICK_TOGGLES, config.showGuideQuickToggles)
+            .putBoolean(KEY_CONTROL_SHOW_RECENT_SONGS, config.showRecentSongs)
+            .apply()
+    }
+
     private fun applyPlaybackConfig(config: PlaybackConfig) {
         _playbackConfig.value = config
         _speed.value = config.speed
@@ -395,7 +444,8 @@ class InMemorySettingsRepository(
     initialApproachCircleLeadTimeMs: Long = PlaybackConfig.DEFAULT_APPROACH_CIRCLE_LEAD_TIME_MS,
     initialCountdownMs: Long = 3000L,
     initialVisualConfig: com.onigiri.keycue.model.VisualConfig = com.onigiri.keycue.model.VisualConfig(),
-    initialMidiMappingSettings: com.onigiri.keycue.model.MidiMappingSettings = com.onigiri.keycue.model.MidiMappingSettings()
+    initialMidiMappingSettings: com.onigiri.keycue.model.MidiMappingSettings = com.onigiri.keycue.model.MidiMappingSettings(),
+    initialControlOverlayConfig: ControlOverlayConfig = ControlOverlayConfig()
 ) : SettingsRepository {
 
     companion object {
@@ -441,6 +491,9 @@ class InMemorySettingsRepository(
 
     private val _midiMappingSettings = MutableStateFlow(initialMidiMappingSettings)
     override val midiMappingSettings: StateFlow<com.onigiri.keycue.model.MidiMappingSettings> = _midiMappingSettings.asStateFlow()
+
+    private val _controlOverlayConfig = MutableStateFlow(initialControlOverlayConfig)
+    override val controlOverlayConfig: StateFlow<ControlOverlayConfig> = _controlOverlayConfig.asStateFlow()
 
     override suspend fun saveLastSongUri(uri: String?) {
         _lastSongUri.value = uri
@@ -501,6 +554,10 @@ class InMemorySettingsRepository(
     override suspend fun saveMidiMappingSettings(settings: com.onigiri.keycue.model.MidiMappingSettings) {
         val safeOctave = settings.manualBaseOctave.coerceIn(2, 6)
         _midiMappingSettings.value = settings.copy(manualBaseOctave = safeOctave)
+    }
+
+    override suspend fun saveControlOverlayConfig(config: ControlOverlayConfig) {
+        _controlOverlayConfig.value = config
     }
 
     private fun applyPlaybackConfig(config: PlaybackConfig) {

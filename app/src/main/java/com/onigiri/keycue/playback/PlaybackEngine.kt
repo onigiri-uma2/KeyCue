@@ -46,11 +46,80 @@ class PlaybackEngine(
     private var countdownJob: Job? = null
     private var progressTickerJob: Job? = null
 
+    /** ABリピート開始位置（ミリ秒）。未設定時はnull */
+    var loopStartMs: Long? = null
+        private set
+
+    /** ABリピート終了位置（ミリ秒）。未設定時はnull */
+    var loopEndMs: Long? = null
+        private set
+
     /**
-     * 再生対象の楽曲データを設定する。
+     * ABリピートが有効条件を満たしているかどうかを判定する。
+     * 条件: A/B双方が設定済み、A < B、かつ区間長が MIN_LOOP_DURATION_MS (300ms) 以上。
+     */
+    fun isLoopValid(): Boolean {
+        val start = loopStartMs ?: return false
+        val end = loopEndMs ?: return false
+        return start < end && (end - start >= MIN_LOOP_DURATION_MS)
+    }
+
+    /**
+     * 指定位置においてループ処理を実行すべきかを判定する。
+     */
+    fun shouldLoop(positionMs: Long): Boolean {
+        val end = loopEndMs ?: return false
+        return isLoopValid() && positionMs >= end
+    }
+
+    /**
+     * 指定位置がループ対象である場合、シーク先となる開始位置（A地点）を返す。
+     * ループ対象でない場合はnullを返す。
+     */
+    fun getLoopTarget(positionMs: Long): Long? {
+        val start = loopStartMs ?: return null
+        val end = loopEndMs ?: return null
+        if (start >= end) return null
+        if (end - start < MIN_LOOP_DURATION_MS) return null
+        return if (positionMs >= end) start else null
+    }
+
+    /**
+     * ABリピートのA地点（開始位置）を設定する。
+     * 楽曲未読込または duration <= 0 の場合は安全に無視する。
+     */
+    fun setLoopStart(positionMs: Long? = null) {
+        val duration = songData?.durationMs ?: return
+        if (duration <= 0L) return
+        val rawPos = positionMs ?: getCurrentPositionMs()
+        loopStartMs = rawPos.coerceIn(0L, duration)
+    }
+
+    /**
+     * ABリピートのB地点（終了位置）を設定する。
+     * 楽曲未読込または duration <= 0 の場合は安全に無視する。
+     */
+    fun setLoopEnd(positionMs: Long? = null) {
+        val duration = songData?.durationMs ?: return
+        if (duration <= 0L) return
+        val rawPos = positionMs ?: getCurrentPositionMs()
+        loopEndMs = rawPos.coerceIn(0L, duration)
+    }
+
+    /**
+     * ABリピート設定を解除（クリア）する。
+     */
+    fun clearLoop() {
+        loopStartMs = null
+        loopEndMs = null
+    }
+
+    /**
+     * 再生対象の楽曲データを設定する。楽曲変更時はABリピート設定をクリアする。
      */
     fun setSong(song: SongData) {
         stop()
+        clearLoop()
         songData = song
     }
 
@@ -245,6 +314,15 @@ class PlaybackEngine(
             val duration = songData?.durationMs ?: 0L
             while (_state.value is PlaybackState.Playing) {
                 val currentPos = clock.getCurrentPositionMs(duration)
+
+                // 1. ABリピート判定（楽曲終了判定より前に必ず実行）
+                val loopTarget = getLoopTarget(currentPos)
+                if (loopTarget != null) {
+                    seekTo(loopTarget)
+                    continue
+                }
+
+                // 2. 楽曲終了判定
                 if (duration > 0L && currentPos >= duration) {
                     clock.pause()
                     _state.value = PlaybackState.Finished(duration)
@@ -264,5 +342,10 @@ class PlaybackEngine(
         if (isInternalScope) {
             scope.cancel()
         }
+    }
+
+    companion object {
+        /** ABリピートの最小許容区間長（ミリ秒）。これ未満の微小ループは無効と判定する */
+        const val MIN_LOOP_DURATION_MS = 300L
     }
 }

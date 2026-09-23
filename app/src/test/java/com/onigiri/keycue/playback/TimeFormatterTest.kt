@@ -43,4 +43,12 @@ class TimeFormatterTest {
         val result = TimeFormatter.formatDurationPair(84_000L, 3930_000L)
         assertEquals("00:01:24 / 01:05:30", result)
     }
+
+    @Test
+    fun `formatDurationWithTenths formats tenths of second correctly`() {
+        assertEquals("00:00.0", TimeFormatter.formatDurationWithTenths(0L))
+        assertEquals("00:00.3", TimeFormatter.formatDurationWithTenths(300L))
+        assertEquals("01:23.4", TimeFormatter.formatDurationWithTenths(83_450L))
+        assertEquals("00:00.0", TimeFormatter.formatDurationWithTenths(-500L))
+    }
 }
