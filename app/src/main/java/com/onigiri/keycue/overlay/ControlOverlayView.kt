@@ -1247,6 +1247,12 @@ class ControlOverlayView(
         }
 
         view.setOnTouchListener { v, event ->
+            val margin = touchSlop.toFloat()
+            val isInside = event.x >= -margin &&
+                event.x <= v.width + margin &&
+                event.y >= -margin &&
+                event.y <= v.height + margin
+
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     if (!v.isEnabled) return@setOnTouchListener false
@@ -1259,12 +1265,16 @@ class ControlOverlayView(
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
+                    if (!isInside) {
+                        cancelRepeat()
+                    }
                     true
                 }
                 MotionEvent.ACTION_UP -> {
+                    val wasPressed = v.isPressed
                     v.isPressed = false
                     repeatRunnable?.let { v.removeCallbacks(it) }
-                    if (!repeatStarted && v.isEnabled) {
+                    if (!repeatStarted && v.isEnabled && wasPressed && isInside) {
                         v.performClick()
                     }
                     repeatStarted = false
