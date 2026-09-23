@@ -91,8 +91,8 @@ class ControlOverlayView(
 
     private var isExpanded = false
 
-    // 再生速度の設定候補
-    private val speedPresets = listOf(0.50f, 0.75f, 1.00f, 1.25f, 1.50f)
+    // 再生速度の設定候補（PlaybackConfig.MIN_SPEED 0.25f 〜 MAX_SPEED 2.0f を網羅）
+    internal val speedPresets = SPEED_PRESETS
 
     private var currentSpeed: Float = 1.0f
     private var currentNoteLeadTimeMs: Long = PlaybackConfig.DEFAULT_NOTE_LEAD_TIME_MS
@@ -521,14 +521,7 @@ class ControlOverlayView(
     }
 
     private fun adjustSpeedStep(direction: Int) {
-        val currentIndex = speedPresets.indexOfFirst { abs(it - currentSpeed) < 0.01f }
-        val nextIndex = if (currentIndex >= 0) {
-            (currentIndex + direction).coerceIn(0, speedPresets.size - 1)
-        } else {
-            if (direction > 0) speedPresets.indexOfFirst { it > currentSpeed }.coerceAtLeast(0)
-            else speedPresets.indexOfLast { it < currentSpeed }.coerceAtLeast(0)
-        }
-        val target = speedPresets[nextIndex]
+        val target = calculateNextSpeed(currentSpeed, direction, speedPresets)
         callbacks.onSpeedChange(target)
     }
 
@@ -927,5 +920,48 @@ class ControlOverlayView(
     private fun dpToPx(dp: Int): Int {
         val scale = context.resources.displayMetrics.density
         return (dp * scale + 0.5f).toInt()
+    }
+
+    companion object {
+        const val SPEED_STEP = 0.25f
+
+        /**
+         * 最小速度から最大速度までの速度プリセットを生成する。
+         */
+        fun generateSpeedPresets(
+            minSpeed: Float = PlaybackConfig.MIN_SPEED,
+            maxSpeed: Float = PlaybackConfig.MAX_SPEED,
+            step: Float = SPEED_STEP
+        ): List<Float> {
+            val count = kotlin.math.round((maxSpeed - minSpeed) / step).toInt()
+            return (0..count).map { i ->
+                val v = minSpeed + i * step
+                kotlin.math.round(v * 100f) / 100f
+            }
+        }
+
+        /**
+         * 再生速度の設定プリセット一覧（PlaybackConfig.MIN_SPEED 〜 MAX_SPEED を網羅）。
+         */
+        val SPEED_PRESETS = generateSpeedPresets()
+
+        /**
+         * 現在の速度と増減方向（+1 または -1）から次の速度を算出する。
+         * プリセット外の速度の場合は直近のプリセットへスナップする。
+         */
+        fun calculateNextSpeed(
+            currentSpeed: Float,
+            direction: Int,
+            presets: List<Float> = SPEED_PRESETS
+        ): Float {
+            val currentIndex = presets.indexOfFirst { abs(it - currentSpeed) < 0.01f }
+            val nextIndex = if (currentIndex >= 0) {
+                (currentIndex + direction).coerceIn(0, presets.size - 1)
+            } else {
+                if (direction > 0) presets.indexOfFirst { it > currentSpeed }.coerceAtLeast(0)
+                else presets.indexOfLast { it < currentSpeed }.coerceAtLeast(0)
+            }
+            return presets[nextIndex]
+        }
     }
 }
