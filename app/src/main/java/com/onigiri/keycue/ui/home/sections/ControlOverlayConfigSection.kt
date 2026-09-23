@@ -18,7 +18,10 @@ fun ControlOverlayConfigContent(
     onShowLoopControlsChange: (Boolean) -> Unit,
     onShowSpeedControlChange: (Boolean) -> Unit,
     onShowNoteLeadTimeControlChange: (Boolean) -> Unit,
-    onShowCircleLeadTimeControlChange: (Boolean) -> Unit
+    onShowCircleLeadTimeControlChange: (Boolean) -> Unit,
+    onShowSongSelectionChange: (Boolean) -> Unit,
+    onShowFittingChange: (Boolean) -> Unit,
+    onShowGuideToggleChange: (Boolean) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         SettingSwitchRow(
@@ -62,6 +65,24 @@ fun ControlOverlayConfigContent(
             description = "Circle先読み時間調整行を表示します",
             checked = config.showCircleLeadTimeControl,
             onCheckedChange = onShowCircleLeadTimeControlChange
+        )
+        SettingSwitchRow(
+            label = "楽曲を選択",
+            description = "「楽曲を選択」ボタンを表示します",
+            checked = config.showSongSelection,
+            onCheckedChange = onShowSongSelectionChange
+        )
+        SettingSwitchRow(
+            label = "位置微調整",
+            description = "「位置微調整」ボタンを表示します",
+            checked = config.showFitting,
+            onCheckedChange = onShowFittingChange
+        )
+        SettingSwitchRow(
+            label = "演奏ガイド切替",
+            description = "「Guide ON / OFF」ボタンを表示します",
+            checked = config.showGuideToggle,
+            onCheckedChange = onShowGuideToggleChange
         )
     }
 }

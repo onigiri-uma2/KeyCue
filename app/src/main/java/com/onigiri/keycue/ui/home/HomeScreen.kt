@@ -243,6 +243,9 @@ fun HomeScreen(
         onShowSpeedControlChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showSpeedControl = it) } },
         onShowNoteLeadTimeControlChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showNoteLeadTimeControl = it) } },
         onShowCircleLeadTimeControlChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showCircleLeadTimeControl = it) } },
+        onShowSongSelectionChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showSongSelection = it) } },
+        onShowFittingChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showFitting = it) } },
+        onShowGuideToggleChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showGuideToggle = it) } },
         onDismissError = { viewModel.clearError() }
     )
 }
@@ -292,6 +295,9 @@ fun HomeScreenContent(
     onShowSpeedControlChange: (Boolean) -> Unit = {},
     onShowNoteLeadTimeControlChange: (Boolean) -> Unit = {},
     onShowCircleLeadTimeControlChange: (Boolean) -> Unit = {},
+    onShowSongSelectionChange: (Boolean) -> Unit = {},
+    onShowFittingChange: (Boolean) -> Unit = {},
+    onShowGuideToggleChange: (Boolean) -> Unit = {},
     onDismissError: () -> Unit = {}
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
@@ -387,6 +393,9 @@ fun HomeScreenContent(
                         onShowSpeedControlChange = onShowSpeedControlChange,
                         onShowNoteLeadTimeControlChange = onShowNoteLeadTimeControlChange,
                         onShowCircleLeadTimeControlChange = onShowCircleLeadTimeControlChange,
+                        onShowSongSelectionChange = onShowSongSelectionChange,
+                        onShowFittingChange = onShowFittingChange,
+                        onShowGuideToggleChange = onShowGuideToggleChange,
                         onDismissError = onDismissError
                     )
                 } else {
@@ -432,6 +441,9 @@ fun HomeScreenContent(
                         onShowSpeedControlChange = onShowSpeedControlChange,
                         onShowNoteLeadTimeControlChange = onShowNoteLeadTimeControlChange,
                         onShowCircleLeadTimeControlChange = onShowCircleLeadTimeControlChange,
+                        onShowSongSelectionChange = onShowSongSelectionChange,
+                        onShowFittingChange = onShowFittingChange,
+                        onShowGuideToggleChange = onShowGuideToggleChange,
                         onDismissError = onDismissError
                     )
                 }
@@ -486,6 +498,9 @@ private fun HomeScreenNarrowContent(
     onShowSpeedControlChange: (Boolean) -> Unit = {},
     onShowNoteLeadTimeControlChange: (Boolean) -> Unit = {},
     onShowCircleLeadTimeControlChange: (Boolean) -> Unit = {},
+    onShowSongSelectionChange: (Boolean) -> Unit = {},
+    onShowFittingChange: (Boolean) -> Unit = {},
+    onShowGuideToggleChange: (Boolean) -> Unit = {},
     onDismissError: () -> Unit
 ) {
     Column(
@@ -547,7 +562,10 @@ private fun HomeScreenNarrowContent(
             onShowLoopControlsChange = onShowLoopControlsChange,
             onShowSpeedControlChange = onShowSpeedControlChange,
             onShowNoteLeadTimeControlChange = onShowNoteLeadTimeControlChange,
-            onShowCircleLeadTimeControlChange = onShowCircleLeadTimeControlChange
+            onShowCircleLeadTimeControlChange = onShowCircleLeadTimeControlChange,
+            onShowSongSelectionChange = onShowSongSelectionChange,
+            onShowFittingChange = onShowFittingChange,
+            onShowGuideToggleChange = onShowGuideToggleChange
         )
 
         // 演奏支援開始ボタン
@@ -629,6 +647,9 @@ private fun HomeScreenWideContent(
     onShowSpeedControlChange: (Boolean) -> Unit = {},
     onShowNoteLeadTimeControlChange: (Boolean) -> Unit = {},
     onShowCircleLeadTimeControlChange: (Boolean) -> Unit = {},
+    onShowSongSelectionChange: (Boolean) -> Unit = {},
+    onShowFittingChange: (Boolean) -> Unit = {},
+    onShowGuideToggleChange: (Boolean) -> Unit = {},
     onDismissError: () -> Unit
 ) {
     Row(
@@ -745,7 +766,10 @@ private fun HomeScreenWideContent(
                 onShowLoopControlsChange = onShowLoopControlsChange,
                 onShowSpeedControlChange = onShowSpeedControlChange,
                 onShowNoteLeadTimeControlChange = onShowNoteLeadTimeControlChange,
-                onShowCircleLeadTimeControlChange = onShowCircleLeadTimeControlChange
+                onShowCircleLeadTimeControlChange = onShowCircleLeadTimeControlChange,
+                onShowSongSelectionChange = onShowSongSelectionChange,
+                onShowFittingChange = onShowFittingChange,
+                onShowGuideToggleChange = onShowGuideToggleChange
             )
         }
     }

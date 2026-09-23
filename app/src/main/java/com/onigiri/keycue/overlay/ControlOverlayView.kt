@@ -921,6 +921,10 @@ class ControlOverlayView(
         noteLeadTimeSection.visibility = if (config.showNoteLeadTimeControl) View.VISIBLE else View.GONE
         approachCircleLeadTimeSection.visibility = if (config.showCircleLeadTimeControl) View.VISIBLE else View.GONE
 
+        selectFileBtn.visibility = if (config.showSongSelection) View.VISIBLE else View.GONE
+        fittingBtn.visibility = if (config.showFitting) View.VISIBLE else View.GONE
+        guideToggleButton.visibility = if (config.showGuideToggle) View.VISIBLE else View.GONE
+
         // 常時表示項目の安全性確保
         minimizeBtn.visibility = View.VISIBLE
         openBtn.visibility = View.VISIBLE

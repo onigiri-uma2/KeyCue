@@ -10,6 +10,9 @@ package com.onigiri.keycue.model
  * @param showSpeedControl 再生速度調整（Speed）行の表示
  * @param showNoteLeadTimeControl ノート先読み時間（Note）調整行の表示
  * @param showCircleLeadTimeControl タイミングサークル先読み時間（Circle）調整行の表示
+ * @param showSongSelection 「楽曲を選択」ボタンの表示
+ * @param showFitting 「位置微調整」ボタンの表示
+ * @param showGuideToggle 「Guide ON / OFF」ボタンの表示
  * @param showCountdownControl 開始前カウントダウン調整の表示（将来用・予約項目）
  * @param showGuideQuickToggles ガイドクイック表示切替の表示（将来用・予約項目）
  * @param showRecentSongs 最近使った楽曲履歴の表示（将来用・予約項目）
@@ -22,6 +25,9 @@ data class ControlOverlayConfig(
     val showSpeedControl: Boolean = true,
     val showNoteLeadTimeControl: Boolean = true,
     val showCircleLeadTimeControl: Boolean = true,
+    val showSongSelection: Boolean = true,
+    val showFitting: Boolean = true,
+    val showGuideToggle: Boolean = true,
     val showCountdownControl: Boolean = true,
     val showGuideQuickToggles: Boolean = true,
     val showRecentSongs: Boolean = false

@@ -168,6 +168,9 @@ class SharedPreferencesSettingsRepository internal constructor(
         private const val KEY_CONTROL_SHOW_SPEED_CONTROL = "control_show_speed_control"
         private const val KEY_CONTROL_SHOW_NOTE_LEAD_TIME = "control_show_note_lead_time"
         private const val KEY_CONTROL_SHOW_CIRCLE_LEAD_TIME = "control_show_circle_lead_time"
+        private const val KEY_CONTROL_SHOW_SONG_SELECTION = "control_show_song_selection"
+        private const val KEY_CONTROL_SHOW_FITTING = "control_show_fitting"
+        private const val KEY_CONTROL_SHOW_GUIDE_TOGGLE = "control_show_guide_toggle"
         private const val KEY_CONTROL_SHOW_COUNTDOWN_CONTROL = "control_show_countdown_control"
         private const val KEY_CONTROL_SHOW_GUIDE_QUICK_TOGGLES = "control_show_guide_quick_toggles"
         private const val KEY_CONTROL_SHOW_RECENT_SONGS = "control_show_recent_songs"
@@ -191,6 +194,9 @@ class SharedPreferencesSettingsRepository internal constructor(
             showSpeedControl = prefs.getBoolean(KEY_CONTROL_SHOW_SPEED_CONTROL, true),
             showNoteLeadTimeControl = prefs.getBoolean(KEY_CONTROL_SHOW_NOTE_LEAD_TIME, true),
             showCircleLeadTimeControl = prefs.getBoolean(KEY_CONTROL_SHOW_CIRCLE_LEAD_TIME, true),
+            showSongSelection = prefs.getBoolean(KEY_CONTROL_SHOW_SONG_SELECTION, true),
+            showFitting = prefs.getBoolean(KEY_CONTROL_SHOW_FITTING, true),
+            showGuideToggle = prefs.getBoolean(KEY_CONTROL_SHOW_GUIDE_TOGGLE, true),
             showCountdownControl = prefs.getBoolean(KEY_CONTROL_SHOW_COUNTDOWN_CONTROL, true),
             showGuideQuickToggles = prefs.getBoolean(KEY_CONTROL_SHOW_GUIDE_QUICK_TOGGLES, true),
             showRecentSongs = prefs.getBoolean(KEY_CONTROL_SHOW_RECENT_SONGS, false)
@@ -416,6 +422,9 @@ class SharedPreferencesSettingsRepository internal constructor(
             .putBoolean(KEY_CONTROL_SHOW_SPEED_CONTROL, config.showSpeedControl)
             .putBoolean(KEY_CONTROL_SHOW_NOTE_LEAD_TIME, config.showNoteLeadTimeControl)
             .putBoolean(KEY_CONTROL_SHOW_CIRCLE_LEAD_TIME, config.showCircleLeadTimeControl)
+            .putBoolean(KEY_CONTROL_SHOW_SONG_SELECTION, config.showSongSelection)
+            .putBoolean(KEY_CONTROL_SHOW_FITTING, config.showFitting)
+            .putBoolean(KEY_CONTROL_SHOW_GUIDE_TOGGLE, config.showGuideToggle)
             .putBoolean(KEY_CONTROL_SHOW_COUNTDOWN_CONTROL, config.showCountdownControl)
             .putBoolean(KEY_CONTROL_SHOW_GUIDE_QUICK_TOGGLES, config.showGuideQuickToggles)
             .putBoolean(KEY_CONTROL_SHOW_RECENT_SONGS, config.showRecentSongs)

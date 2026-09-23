@@ -484,6 +484,9 @@ class SettingsRepositoryTest {
         assertEquals(true, config.showSpeedControl)
         assertEquals(true, config.showNoteLeadTimeControl)
         assertEquals(true, config.showCircleLeadTimeControl)
+        assertEquals(true, config.showSongSelection)
+        assertEquals(true, config.showFitting)
+        assertEquals(true, config.showGuideToggle)
         assertEquals(true, config.showCountdownControl)
         assertEquals(true, config.showGuideQuickToggles)
         assertEquals(false, config.showRecentSongs)
@@ -500,6 +503,9 @@ class SettingsRepositoryTest {
             showSpeedControl = false,
             showNoteLeadTimeControl = false,
             showCircleLeadTimeControl = false,
+            showSongSelection = false,
+            showFitting = true,
+            showGuideToggle = false,
             showCountdownControl = false,
             showGuideQuickToggles = false,
             showRecentSongs = true
@@ -522,6 +528,9 @@ class SettingsRepositoryTest {
         assertEquals(true, config.showSpeedControl)
         assertEquals(true, config.showNoteLeadTimeControl)
         assertEquals(true, config.showCircleLeadTimeControl)
+        assertEquals(true, config.showSongSelection)
+        assertEquals(true, config.showFitting)
+        assertEquals(true, config.showGuideToggle)
         assertEquals(true, config.showCountdownControl)
         assertEquals(true, config.showGuideQuickToggles)
         assertEquals(false, config.showRecentSongs)
@@ -540,6 +549,9 @@ class SettingsRepositoryTest {
             showSpeedControl = false,
             showNoteLeadTimeControl = true,
             showCircleLeadTimeControl = false,
+            showSongSelection = false,
+            showFitting = true,
+            showGuideToggle = false,
             showCountdownControl = true,
             showGuideQuickToggles = false,
             showRecentSongs = true
