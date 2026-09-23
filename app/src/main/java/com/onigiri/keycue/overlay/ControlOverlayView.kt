@@ -165,6 +165,8 @@ class ControlOverlayView(
 
     // 再生コントロール
     private lateinit var playPauseButton: Button
+    private lateinit var seekBackBtn: Button
+    private lateinit var seekFwdBtn: Button
 
     // ABリピート
     private lateinit var loopStatusText: TextView
@@ -443,7 +445,7 @@ class ControlOverlayView(
                     bottomMargin = dpToPx(4)
                 }
 
-                val seekBackBtn = createMiniButton("↶10", Color.parseColor("#37474F"))
+                seekBackBtn = createMiniButton("↶10", Color.parseColor("#37474F"))
                 configureRepeatPress(seekBackBtn, initialDelayMs = 400L, repeatIntervalMs = 220L) {
                     callbacks.onSeekBack()
                 }
@@ -456,7 +458,7 @@ class ControlOverlayView(
                 addView(playPauseButton)
                 addView(createHorizontalSpacer(4))
 
-                val seekFwdBtn = createMiniButton("↷10", Color.parseColor("#37474F"))
+                seekFwdBtn = createMiniButton("↷10", Color.parseColor("#37474F"))
                 configureRepeatPress(seekFwdBtn, initialDelayMs = 400L, repeatIntervalMs = 220L) {
                     callbacks.onSeekForward()
                 }
@@ -485,6 +487,7 @@ class ControlOverlayView(
 
             addView(playbackRow)
             addView(subControlsRow)
+            updateSeekButtonsEnabled()
         }
     }
 
@@ -801,6 +804,32 @@ class ControlOverlayView(
         }
     }
 
+    /**
+     * ±10秒Seekボタンの有効/無効およびアルファ値を更新する。
+     * - 楽曲未読込（duration <= 0）時は両方無効
+     * - 曲頭（position <= 0）時は戻るボタン無効
+     * - 曲末（position >= duration）時は進むボタン無効
+     */
+    private fun updateSeekButtonsEnabled() {
+        if (!::seekBackBtn.isInitialized || !::seekFwdBtn.isInitialized) return
+
+        if (currentDurationMs <= 0L) {
+            seekBackBtn.isEnabled = false
+            seekBackBtn.alpha = 0.4f
+            seekFwdBtn.isEnabled = false
+            seekFwdBtn.alpha = 0.4f
+            return
+        }
+
+        val canSeekBack = currentPositionMs > 0L
+        seekBackBtn.isEnabled = canSeekBack
+        seekBackBtn.alpha = if (canSeekBack) 1.0f else 0.4f
+
+        val canSeekFwd = currentPositionMs < currentDurationMs
+        seekFwdBtn.isEnabled = canSeekFwd
+        seekFwdBtn.alpha = if (canSeekFwd) 1.0f else 0.4f
+    }
+
     // 再生/一時停止ボタン用キャッシュ Drawable
     private val playBackgroundPlaying by lazy {
         createRoundedDrawable(
@@ -953,6 +982,7 @@ class ControlOverlayView(
         }
 
         updateAdjustButtonsEnabled()
+        updateSeekButtonsEnabled()
     }
 
     /**
@@ -1226,6 +1256,9 @@ class ControlOverlayView(
                         v.removeCallbacks(it)
                         v.postDelayed(it, initialDelayMs)
                     }
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
                     true
                 }
                 MotionEvent.ACTION_UP -> {
