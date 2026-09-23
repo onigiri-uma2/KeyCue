@@ -8,6 +8,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import com.onigiri.keycue.model.FitProfile
+import com.onigiri.keycue.model.RecentSongEntry
 import kotlin.math.max
 
 /**
@@ -50,7 +51,8 @@ class OverlayWindowController(
         onClearLoop: () -> Unit = {},
         onCountdownChange: (Long) -> Unit = {},
         onShowFallingNotesChange: (Boolean) -> Unit = {},
-        onShowApproachCirclesChange: (Boolean) -> Unit = {}
+        onShowApproachCirclesChange: (Boolean) -> Unit = {},
+        onSelectRecentSong: (RecentSongEntry) -> Unit = {}
     ) : this(
         context = context,
         callbacks = ControlOverlayCallbacks(
@@ -73,7 +75,8 @@ class OverlayWindowController(
             onClearLoop = onClearLoop,
             onCountdownChange = onCountdownChange,
             onShowFallingNotesChange = onShowFallingNotesChange,
-            onShowApproachCirclesChange = onShowApproachCirclesChange
+            onShowApproachCirclesChange = onShowApproachCirclesChange,
+            onSelectRecentSong = onSelectRecentSong
         )
     )
 
@@ -88,6 +91,8 @@ class OverlayWindowController(
     private var currentVisualConfig: com.onigiri.keycue.model.VisualConfig = com.onigiri.keycue.model.VisualConfig()
     private var currentGuideLabels: List<String>? = null
     private var currentControlOverlayConfig: com.onigiri.keycue.model.ControlOverlayConfig = com.onigiri.keycue.model.ControlOverlayConfig()
+    private var currentRecentSongs: List<RecentSongEntry> = emptyList()
+    private var currentSongUri: String? = null
 
     // --- Control Overlay 管理 ---
 
@@ -156,6 +161,7 @@ class OverlayWindowController(
             callbacks = viewCallbacks
         ).apply {
             updateControlOverlayConfig(currentControlOverlayConfig)
+            updateRecentSongs(currentRecentSongs, currentSongUri)
             updateGuideQuickToggleState(
                 showFallingNotes = currentVisualConfig.showFallingNotes,
                 showApproachCircles = currentVisualConfig.showApproachCircles
@@ -349,6 +355,15 @@ class OverlayWindowController(
     fun updateControlOverlayConfig(config: com.onigiri.keycue.model.ControlOverlayConfig) {
         currentControlOverlayConfig = config
         controlOverlayView?.updateControlOverlayConfig(config)
+    }
+
+    /**
+     * 最近使った楽曲リストおよび現在の楽曲URIを更新し、表示中のControl Overlayに反映する。
+     */
+    fun updateRecentSongs(songs: List<RecentSongEntry>, currentSongUri: String?) {
+        currentRecentSongs = songs
+        this.currentSongUri = currentSongUri
+        controlOverlayView?.updateRecentSongs(songs, currentSongUri)
     }
 
     /**

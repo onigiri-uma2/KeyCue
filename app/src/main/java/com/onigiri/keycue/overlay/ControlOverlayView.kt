@@ -1,5 +1,8 @@
 package com.onigiri.keycue.overlay
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Color
@@ -10,6 +13,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.WindowManager
+import android.view.animation.DecelerateInterpolator
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
@@ -18,11 +22,20 @@ import android.widget.SeekBar
 import android.widget.TextView
 import com.onigiri.keycue.model.ControlOverlayConfig
 import com.onigiri.keycue.model.PlaybackConfig
+import com.onigiri.keycue.model.RecentSongEntry
 import com.onigiri.keycue.playback.PlaybackEngine
 import com.onigiri.keycue.playback.TimeFormatter
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
+
+/**
+ * 最小化バブルのスナップ先画面端。
+ */
+enum class SnapEdge {
+    LEFT,
+    RIGHT
+}
 
 /**
  * ゲーム画面の最前面にフローティング表示される操作パネル用オーバーレイView。
@@ -100,6 +113,9 @@ class ControlOverlayView(
     private var initialLayoutY = 0
     private var isDragging = false
 
+    private var snapAnimator: ValueAnimator? = null
+    private var lastSnapEdge: SnapEdge = SnapEdge.LEFT
+
     private var isExpanded = false
 
     // 再生速度の設定候補（PlaybackConfig.MIN_SPEED 0.25f 〜 MAX_SPEED 2.0f を網羅）
@@ -110,12 +126,14 @@ class ControlOverlayView(
     private var currentApproachCircleLeadTimeMs: Long = PlaybackConfig.DEFAULT_APPROACH_CIRCLE_LEAD_TIME_MS
     private var currentIsPlaying: Boolean = false
     private var currentSongTitle: String? = null
+    private var currentSongUri: String? = null
     private var currentPositionMs: Long = 0L
     private var currentDurationMs: Long = 0L
     private var currentLoopStartMs: Long? = null
     private var currentLoopEndMs: Long? = null
     private var isUserSeeking: Boolean = false
     private var currentConfig: ControlOverlayConfig = ControlOverlayConfig()
+    private var currentRecentSongs: List<RecentSongEntry> = emptyList()
 
     // UIコンポーネント
     private val collapsedView: TextView
@@ -131,6 +149,8 @@ class ControlOverlayView(
     private lateinit var approachCircleLeadTimeSection: View
     private lateinit var countdownSection: View
     private lateinit var guideQuickToggleSection: View
+    private lateinit var recentSongsSection: LinearLayout
+    private lateinit var recentSongsListContainer: LinearLayout
 
     // カウントダウン
     private var currentCountdownMs: Long = 3000L
@@ -239,6 +259,16 @@ class ControlOverlayView(
         addView(collapsedView)
         addView(expandedView)
         updateControlOverlayConfig(currentConfig)
+
+        post {
+            if (!isExpanded) {
+                val screenWidth = resources.displayMetrics.widthPixels
+                val viewWidth = max(width, dpToPx(52))
+                val (targetX, edge) = calculateSnapTargetX(layoutParams.x, viewWidth, screenWidth)
+                lastSnapEdge = edge
+                snapToEdge(targetX, animated = false)
+            }
+        }
     }
 
     private fun buildExpandedContentLayout(): LinearLayout {
@@ -283,6 +313,10 @@ class ControlOverlayView(
             // ガイドクイック表示切替（2段構成）
             guideQuickToggleSection = buildGuideQuickToggleSection()
             addView(guideQuickToggleSection)
+
+            // 最近使った曲
+            recentSongsSection = buildRecentSongsSection()
+            addView(recentSongsSection)
 
             // アクションボタン群
             buildActionButtons().forEach { addView(it) }
@@ -738,10 +772,10 @@ class ControlOverlayView(
 
         return listOf(
             selectFileBtn,
-            minimizeBtn,
-            openBtn,
             fittingBtn,
             guideToggleButton,
+            openBtn,
+            minimizeBtn,
             closeBtn
         )
     }
@@ -1006,11 +1040,113 @@ class ControlOverlayView(
         fittingBtn.visibility = if (config.showFitting) View.VISIBLE else View.GONE
         guideToggleButton.visibility = if (config.showGuideToggle) View.VISIBLE else View.GONE
 
+        if (::recentSongsSection.isInitialized) {
+            val visibleRecentSongs = currentRecentSongs
+                .filter { it.uri != currentSongUri }
+                .take(3)
+            recentSongsSection.visibility = if (config.showRecentSongs && visibleRecentSongs.isNotEmpty()) View.VISIBLE else View.GONE
+        }
+
         // 常時表示項目の安全性確保（再生操作・最小化・設定・終了ボタン）
         playbackControlsSection.visibility = View.VISIBLE
         minimizeBtn.visibility = View.VISIBLE
         openBtn.visibility = View.VISIBLE
         closeBtn.visibility = View.VISIBLE
+    }
+
+    /**
+     * 最近使った楽曲（クイック切替）セクションを生成する。
+     */
+    private fun buildRecentSongsSection(): LinearLayout {
+        recentSongsSection = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomMargin = dpToPx(6)
+            }
+
+            val label = TextView(context).apply {
+                text = "Recent"
+                setTextColor(Color.parseColor("#CFD8DC"))
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    bottomMargin = dpToPx(4)
+                }
+            }
+            addView(label)
+
+            recentSongsListContainer = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+            }
+            addView(recentSongsListContainer)
+        }
+        refreshRecentSongsUi()
+        return recentSongsSection
+    }
+
+    /**
+     * 最近使った曲リストと現在の楽曲URIを更新する。
+     */
+    fun updateRecentSongs(songs: List<RecentSongEntry>, currentSongUri: String?) {
+        this.currentRecentSongs = songs
+        this.currentSongUri = currentSongUri
+        if (::recentSongsSection.isInitialized) {
+            refreshRecentSongsUi()
+        }
+    }
+
+    /**
+     * 現在の設定および楽曲状態に基づいて最近使った曲セクションの表示と各行ボタンを更新する。
+     * - 現在再生中の曲は除外
+     * - 最大3件まで縦に並べる
+     * - 表示件数が0件の場合はセクションごと非表示
+     */
+    private fun refreshRecentSongsUi() {
+        if (!::recentSongsSection.isInitialized || !::recentSongsListContainer.isInitialized) return
+
+        val visibleRecentSongs = currentRecentSongs
+            .filter { it.uri != currentSongUri }
+            .take(3)
+
+        val shouldShow = currentConfig.showRecentSongs && visibleRecentSongs.isNotEmpty()
+        recentSongsSection.visibility = if (shouldShow) View.VISIBLE else View.GONE
+
+        recentSongsListContainer.removeAllViews()
+        for (entry in visibleRecentSongs) {
+            val btn = Button(context).apply {
+                text = entry.title.ifBlank { "楽曲" }
+                setTextColor(Color.WHITE)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+                setPadding(dpToPx(6), 0, dpToPx(6), 0)
+                minWidth = 0
+                minimumWidth = 0
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                background = createRoundedDrawable(
+                    cornerRadiusDp = 4f,
+                    fillColor = Color.parseColor("#37474F")
+                )
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    dpToPx(28)
+                ).apply {
+                    bottomMargin = dpToPx(3)
+                }
+                setOnClickListener {
+                    callbacks.onSelectRecentSong(entry)
+                }
+            }
+            recentSongsListContainer.addView(btn)
+        }
     }
 
     private fun buildCountdownSection(): View {
@@ -1290,6 +1426,8 @@ class ControlOverlayView(
     }
 
     override fun onDetachedFromWindow() {
+        snapAnimator?.cancel()
+        snapAnimator = null
         repeatPressCancelers.forEach { it.invoke() }
         repeatPressCancelers.clear()
         super.onDetachedFromWindow()
@@ -1314,6 +1452,12 @@ class ControlOverlayView(
 
     fun expand() {
         if (isExpanded) return
+        snapAnimator?.cancel()
+        val screenWidth = context.resources.displayMetrics.widthPixels
+        val viewWidth = max(width, dpToPx(52))
+        val (_, edge) = calculateSnapTargetX(layoutParams.x, viewWidth, screenWidth)
+        lastSnapEdge = edge
+
         isExpanded = true
         updateGuideButtonText(callbacks.isGuideShowing())
         collapsedView.visibility = View.GONE
@@ -1328,7 +1472,58 @@ class ControlOverlayView(
         isExpanded = false
         expandedView.visibility = View.GONE
         collapsedView.visibility = View.VISIBLE
-        post { clampPosition() }
+        post {
+            clampPosition()
+            val screenWidth = context.resources.displayMetrics.widthPixels
+            val bubbleWidth = max(collapsedView.width, dpToPx(52))
+            val maxX = max(0, screenWidth - bubbleWidth)
+            val targetX = if (lastSnapEdge == SnapEdge.LEFT) 0 else maxX
+            snapToEdge(targetX, animated = true)
+        }
+    }
+
+    private fun snapToEdge(targetX: Int, animated: Boolean = true) {
+        snapAnimator?.cancel()
+        if (!animated) {
+            layoutParams.x = targetX
+            try {
+                windowManager.updateViewLayout(this, layoutParams)
+            } catch (_: IllegalArgumentException) {
+            }
+            notifyPositionChanged()
+            return
+        }
+        val startX = layoutParams.x
+        if (startX == targetX) {
+            notifyPositionChanged()
+            return
+        }
+        snapAnimator = ValueAnimator.ofInt(startX, targetX).apply {
+            duration = 180L
+            interpolator = DecelerateInterpolator()
+            var wasCancelled = false
+            addUpdateListener { animator ->
+                layoutParams.x = animator.animatedValue as Int
+                try {
+                    windowManager.updateViewLayout(this@ControlOverlayView, layoutParams)
+                } catch (_: IllegalArgumentException) {
+                }
+            }
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationCancel(animation: Animator) {
+                    wasCancelled = true
+                }
+                override fun onAnimationEnd(animation: Animator) {
+                    if (!wasCancelled) {
+                        notifyPositionChanged()
+                    }
+                    if (snapAnimator === animation) {
+                        snapAnimator = null
+                    }
+                }
+            })
+            start()
+        }
     }
 
     override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
@@ -1340,6 +1535,7 @@ class ControlOverlayView(
         // 最小化（フローティングアイコン）時は、タッチの移動量がtouchSlopを超えた時点でドラッグ操作とみなしインターセプトする
         when (ev.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                snapAnimator?.cancel()
                 initialTouchX = ev.rawX
                 initialTouchY = ev.rawY
                 initialLayoutX = layoutParams.x
@@ -1370,6 +1566,7 @@ class ControlOverlayView(
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                snapAnimator?.cancel()
                 initialTouchX = event.rawX
                 initialTouchY = event.rawY
                 initialLayoutX = layoutParams.x
@@ -1411,14 +1608,24 @@ class ControlOverlayView(
                         expand()
                     }
                 } else {
-                    // ドラッグ完了時に正規化座標（0.0〜1.0）を保存リポジトリへ通知
-                    notifyPositionChanged()
+                    val screenWidth = context.resources.displayMetrics.widthPixels
+                    val viewWidth = max(width, dpToPx(52))
+                    val (targetX, edge) = calculateSnapTargetX(layoutParams.x, viewWidth, screenWidth)
+                    lastSnapEdge = edge
+                    snapToEdge(targetX, animated = true)
                 }
                 isDragging = false
                 return true
             }
 
             MotionEvent.ACTION_CANCEL -> {
+                if (isDragging) {
+                    val screenWidth = context.resources.displayMetrics.widthPixels
+                    val viewWidth = max(width, dpToPx(52))
+                    val (targetX, edge) = calculateSnapTargetX(layoutParams.x, viewWidth, screenWidth)
+                    lastSnapEdge = edge
+                    snapToEdge(targetX, animated = true)
+                }
                 isDragging = false
                 return true
             }
@@ -1564,6 +1771,25 @@ class ControlOverlayView(
                 else presets.indexOfLast { it < currentSpeed }.coerceAtLeast(0)
             }
             return presets[nextIndex]
+        }
+
+        /**
+         * 現在のバブルX座標とView幅、画面幅から、最寄りのスナップ先X座標および端を算出する純粋関数。
+         * 画面中央より左なら左端 (0)、右なら右端 (screenWidth - viewWidth)。
+         */
+        fun calculateSnapTargetX(
+            currentX: Int,
+            viewWidth: Int,
+            screenWidth: Int
+        ): Pair<Int, SnapEdge> {
+            val maxX = max(0, screenWidth - viewWidth)
+            val centerX = currentX + viewWidth / 2f
+            val screenCenterX = screenWidth / 2f
+            return if (centerX <= screenCenterX) {
+                Pair(0, SnapEdge.LEFT)
+            } else {
+                Pair(maxX, SnapEdge.RIGHT)
+            }
         }
     }
 }

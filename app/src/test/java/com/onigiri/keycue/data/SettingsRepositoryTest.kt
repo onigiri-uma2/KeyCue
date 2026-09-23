@@ -1,6 +1,7 @@
 package com.onigiri.keycue.data
 
 import com.onigiri.keycue.model.PlaybackConfig
+import com.onigiri.keycue.model.RecentSongEntry
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -563,6 +564,105 @@ class SettingsRepositoryTest {
         // 新しいリポジトリインスタンスを生成してSharedPreferencesから正しく復元されることを検証
         val restoredRepo = SharedPreferencesSettingsRepository(fakePrefs)
         assertEquals(updated, restoredRepo.controlOverlayConfig.value)
+    }
+
+    @Test
+    fun `updateRecentSongs respects MRU order, deduplicates, and limits to maxSize`() {
+        val current = listOf(
+            RecentSongEntry("uri1", "Song 1"),
+            RecentSongEntry("uri2", "Song 2"),
+            RecentSongEntry("uri3", "Song 3")
+        )
+
+        // 新しい曲を追加（先頭に挿入）
+        val updated1 = updateRecentSongs(current, RecentSongEntry("uri4", "Song 4"), maxSize = 5)
+        assertEquals(4, updated1.size)
+        assertEquals("uri4", updated1[0].uri)
+        assertEquals("uri1", updated1[1].uri)
+
+        // 既存の曲を追加（重複除外され先頭に移動＆タイトル更新）
+        val updated2 = updateRecentSongs(updated1, RecentSongEntry("uri2", "Song 2 Updated"), maxSize = 5)
+        assertEquals(4, updated2.size)
+        assertEquals("uri2", updated2[0].uri)
+        assertEquals("Song 2 Updated", updated2[0].title)
+        assertEquals("uri4", updated2[1].uri)
+        assertEquals("uri1", updated2[2].uri)
+        assertEquals("uri3", updated2[3].uri)
+
+        // 最大件数（maxSize = 3）を超える場合の切り捨て
+        val updated3 = updateRecentSongs(updated2, RecentSongEntry("uri5", "Song 5"), maxSize = 3)
+        assertEquals(3, updated3.size)
+        assertEquals("uri5", updated3[0].uri)
+        assertEquals("uri2", updated3[1].uri)
+        assertEquals("uri4", updated3[2].uri)
+    }
+
+    @Test
+    fun `InMemorySettingsRepository handles addRecentSong and removeRecentSong`() = runBlocking {
+        val repo = InMemorySettingsRepository(
+            initialRecentSongs = listOf(RecentSongEntry("uri1", "Song 1"))
+        )
+
+        assertEquals(1, repo.recentSongs.value.size)
+
+        repo.addRecentSong(RecentSongEntry("uri2", "Song 2"))
+        assertEquals(2, repo.recentSongs.value.size)
+        assertEquals("uri2", repo.recentSongs.value[0].uri)
+
+        repo.removeRecentSong("uri1")
+        assertEquals(1, repo.recentSongs.value.size)
+        assertEquals("uri2", repo.recentSongs.value[0].uri)
+    }
+
+    @Test
+    fun `SharedPreferencesSettingsRepository saves and restores recentSongs as JSON`() = runBlocking {
+        val fakePrefs = createFakePrefs(emptyMap())
+        val repo = SharedPreferencesSettingsRepository(fakePrefs)
+
+        assertEquals(emptyList<RecentSongEntry>(), repo.recentSongs.value)
+
+        repo.addRecentSong(RecentSongEntry("content://media/1", "Test Song 1"))
+        repo.addRecentSong(RecentSongEntry("content://media/2", "Test Song 2"))
+
+        assertEquals(2, repo.recentSongs.value.size)
+        assertEquals("content://media/2", repo.recentSongs.value[0].uri)
+
+        // 新インスタンスで復元検証
+        val restoredRepo = SharedPreferencesSettingsRepository(fakePrefs)
+        assertEquals(2, restoredRepo.recentSongs.value.size)
+        assertEquals("content://media/2", restoredRepo.recentSongs.value[0].uri)
+        assertEquals("Test Song 2", restoredRepo.recentSongs.value[0].title)
+        assertEquals("content://media/1", restoredRepo.recentSongs.value[1].uri)
+        assertEquals("Test Song 1", restoredRepo.recentSongs.value[1].title)
+
+        // 削除検証
+        restoredRepo.removeRecentSong("content://media/2")
+        assertEquals(1, restoredRepo.recentSongs.value.size)
+        assertEquals("content://media/1", restoredRepo.recentSongs.value[0].uri)
+
+        val restoredRepo2 = SharedPreferencesSettingsRepository(fakePrefs)
+        assertEquals(1, restoredRepo2.recentSongs.value.size)
+        assertEquals("content://media/1", restoredRepo2.recentSongs.value[0].uri)
+    }
+
+    @Test
+    fun `SharedPreferencesSettingsRepository handles partially corrupted JSON array safely`() = runBlocking {
+        val corruptedJson = """[
+            {"uri": "content://media/valid1", "title": "Valid 1"},
+            {"corrupt": true},
+            {"uri": "", "title": "Empty URI"},
+            {"uri": "content://media/valid2", "title": "Valid 2"}
+        ]""".trimIndent()
+
+        val fakePrefs = createFakePrefs(mapOf("recent_songs" to corruptedJson))
+        val repo = SharedPreferencesSettingsRepository(fakePrefs)
+
+        // 破損要素や空URIはスキップされ、有効な2件のみ復元
+        assertEquals(2, repo.recentSongs.value.size)
+        assertEquals("content://media/valid1", repo.recentSongs.value[0].uri)
+        assertEquals("Valid 1", repo.recentSongs.value[0].title)
+        assertEquals("content://media/valid2", repo.recentSongs.value[1].uri)
+        assertEquals("Valid 2", repo.recentSongs.value[1].title)
     }
 
     private fun createFakePrefs(initialData: Map<String, Any>): android.content.SharedPreferences {

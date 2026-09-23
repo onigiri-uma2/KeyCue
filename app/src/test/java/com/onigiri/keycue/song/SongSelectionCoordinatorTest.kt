@@ -370,4 +370,60 @@ class SongSelectionCoordinatorTest {
         // 編集された設定が維持されていること
         assertEquals(editedSettings, settingsRepository.midiMappingSettings.value)
     }
+
+    @Test
+    fun select_onSuccess_addsSongToRecentSongs() = runBlocking {
+        val fakeSongLoader = object : SongLoader() {
+            override suspend fun loadSong(
+                contentResolver: ContentResolver,
+                uri: Uri,
+                midiMappingSettings: com.onigiri.keycue.model.MidiMappingSettings?,
+                initializeManualFromAuto: Boolean
+            ): SongLoadResult {
+                return SongLoadResult.Success(sampleSongData, sampleMetadata)
+            }
+        }
+
+        val coordinator = SongSelectionCoordinator(
+            contentResolver = contentResolver,
+            songLoader = fakeSongLoader,
+            sessionRepository = sessionRepository,
+            settingsRepository = settingsRepository
+        )
+
+        val result = coordinator.select(sampleUri)
+        assertTrue(result.isSuccess)
+
+        val recentList = settingsRepository.recentSongs.value
+        assertEquals(1, recentList.size)
+        assertEquals(sampleUri.toString(), recentList[0].uri)
+        assertEquals(sampleSongData.title, recentList[0].title)
+    }
+
+    @Test
+    fun select_onFailure_doesNotAddSongToRecentSongs() = runBlocking {
+        val fakeSongLoader = object : SongLoader() {
+            override suspend fun loadSong(
+                contentResolver: ContentResolver,
+                uri: Uri,
+                midiMappingSettings: com.onigiri.keycue.model.MidiMappingSettings?,
+                initializeManualFromAuto: Boolean
+            ): SongLoadResult {
+                return SongLoadResult.Failure.FileReadError("読み込みエラー")
+            }
+        }
+
+        val coordinator = SongSelectionCoordinator(
+            contentResolver = contentResolver,
+            songLoader = fakeSongLoader,
+            sessionRepository = sessionRepository,
+            settingsRepository = settingsRepository
+        )
+
+        val result = coordinator.select(sampleUri)
+        assertFalse(result.isSuccess)
+
+        val recentList = settingsRepository.recentSongs.value
+        assertTrue(recentList.isEmpty())
+    }
 }

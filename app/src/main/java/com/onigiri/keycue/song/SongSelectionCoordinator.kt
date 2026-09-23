@@ -8,6 +8,7 @@ import com.onigiri.keycue.data.PlaybackSessionRepository
 import com.onigiri.keycue.data.SettingsRepository
 import com.onigiri.keycue.model.FitProfile
 import com.onigiri.keycue.model.PlaybackConfig
+import com.onigiri.keycue.model.RecentSongEntry
 import com.onigiri.keycue.model.SongData
 
 /**
@@ -80,6 +81,10 @@ class SongSelectionCoordinator(
 
                 // 6. SettingsRepository へ lastSongUri を保存
                 settingsRepository.saveLastSongUri(uri.toString())
+
+                // 最近使った曲リストへ追加（MRU）
+                val songTitle = songData.title.ifBlank { result.metadata.displayName.ifBlank { "楽曲" } }
+                settingsRepository.addRecentSong(RecentSongEntry(uri.toString(), songTitle))
 
                 // 7. 全読み込み成功後にのみ、AUTO解析結果による手動設定更新を永続化
                 if (result.updatedMidiSettings != null) {

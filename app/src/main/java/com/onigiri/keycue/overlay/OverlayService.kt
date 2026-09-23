@@ -17,6 +17,7 @@ import com.onigiri.keycue.playback.PlaybackEngine
 import com.onigiri.keycue.playback.PlaybackState
 import android.net.Uri
 import com.onigiri.keycue.model.PlaybackSession
+import com.onigiri.keycue.model.RecentSongEntry
 import com.onigiri.keycue.model.SongData
 import com.onigiri.keycue.song.SongSelectionCoordinator
 import kotlinx.coroutines.CoroutineScope
@@ -96,6 +97,7 @@ class OverlayService : Service() {
     private var windowController: OverlayWindowController? = null
     private var loadedSong: SongData? = null
     private var isFrameLoopRunning = false
+    private var isRecentSongLoading = false
 
     // ディスプレイの垂直同期信号 (VSYNC) に合わせて60fps/120fpsでフレーム描画を駆動するChoreographerコールバック
     private val frameCallback = object : android.view.Choreographer.FrameCallback {
@@ -183,6 +185,9 @@ class OverlayService : Service() {
                 serviceScope.launch {
                     settingsRepository.saveShowApproachCircles(show)
                 }
+            },
+            onSelectRecentSong = { entry ->
+                handleSelectRecentSong(entry)
             }
         )
 
@@ -222,6 +227,10 @@ class OverlayService : Service() {
         applySong(session?.song)
         applyPlaybackConfig(settingsRepository.playbackConfig.value)
         windowController?.updateControlOverlayConfig(settingsRepository.controlOverlayConfig.value)
+        windowController?.updateRecentSongs(
+            songs = settingsRepository.recentSongs.value,
+            currentSongUri = session?.uri?.toString()
+        )
         val profile = settingsRepository.fitProfile.value ?: session?.fitProfile
         if (profile != null) windowController?.updateFitProfile(profile)
         updateGuideLabelsForSession(session)
@@ -315,6 +324,14 @@ class OverlayService : Service() {
                 renderCurrentFrame(forceControlUpdate = true)
             }
         }
+        serviceScope.launch {
+            settingsRepository.recentSongs.collect { songs ->
+                windowController?.updateRecentSongs(
+                    songs = songs,
+                    currentSongUri = sessionRepository.currentSession.value?.uri?.toString()
+                )
+            }
+        }
     }
 
     private fun observePlaybackSession() {
@@ -325,6 +342,10 @@ class OverlayService : Service() {
                 val profile = settingsRepository.fitProfile.value ?: session?.fitProfile
                 if (profile != null) windowController?.updateFitProfile(profile)
                 updateGuideLabelsForSession(session)
+                windowController?.updateRecentSongs(
+                    songs = settingsRepository.recentSongs.value,
+                    currentSongUri = session?.uri?.toString()
+                )
                 renderCurrentFrame()
             }
         }
@@ -390,6 +411,58 @@ class OverlayService : Service() {
                 }
             }
         )
+    }
+
+    private fun handleSelectRecentSong(entry: RecentSongEntry) {
+        if (isRecentSongLoading) return
+        val currentState = playbackEngine.state.value
+        // CountingDown中はRecent切替を受け付けない
+        if (currentState is PlaybackState.CountingDown) return
+
+        val currentUri = sessionRepository.currentSession.value?.uri?.toString()
+        if (entry.uri == currentUri) return
+
+        val uri = try {
+            Uri.parse(entry.uri)
+        } catch (_: Exception) {
+            serviceScope.launch { settingsRepository.removeRecentSong(entry.uri) }
+            return
+        }
+
+        isRecentSongLoading = true
+        val wasPlaying = currentState is PlaybackState.Playing
+        val previousPosition = playbackEngine.getCurrentPositionMs(allowNegative = false)
+        if (wasPlaying) {
+            playbackEngine.pause()
+        }
+
+        serviceScope.launch {
+            try {
+                val coordinator = SongSelectionCoordinator(
+                    contentResolver = contentResolver,
+                    sessionRepository = sessionRepository,
+                    settingsRepository = settingsRepository
+                )
+                val result = coordinator.select(uri, initializeManualFromAuto = false)
+                if (result.isSuccess) {
+                    // 成功時は observePlaybackSession -> applySong 経由で
+                    // 自然に stop() / setSong() され、Stopped 先頭待機となる（自動再生なし）
+                } else {
+                    android.util.Log.e(
+                        "OverlayService",
+                        "Failed to load recent song: ${entry.uri}",
+                        result.exceptionOrNull()
+                    )
+                    settingsRepository.removeRecentSong(entry.uri)
+                    if (wasPlaying) {
+                        playbackEngine.seekTo(previousPosition)
+                        playbackEngine.resume()
+                    }
+                }
+            } finally {
+                isRecentSongLoading = false
+            }
+        }
     }
 
     private fun startFrameLoop() {

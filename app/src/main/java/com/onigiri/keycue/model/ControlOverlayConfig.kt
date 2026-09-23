@@ -15,7 +15,7 @@ package com.onigiri.keycue.model
  * @param showGuideToggle 「Guide ON / OFF」ボタンの表示
  * @param showCountdownControl 開始前カウントダウン調整セクションの表示
  * @param showGuideQuickToggles ガイドクイック表示切替（Notes/Circle）セクションの表示
- * @param showRecentSongs 最近使った楽曲履歴の表示（将来用・予約項目）
+ * @param showRecentSongs 最近使った楽曲（クイック切替）の表示
  */
 data class ControlOverlayConfig(
     val showSongInfo: Boolean = true,

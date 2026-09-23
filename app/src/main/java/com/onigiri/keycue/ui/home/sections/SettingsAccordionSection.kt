@@ -56,6 +56,7 @@ fun SettingsAccordionSection(
     onShowCircleLeadTimeControlChange: (Boolean) -> Unit = {},
     onShowCountdownControlChange: (Boolean) -> Unit = {},
     onShowGuideQuickTogglesChange: (Boolean) -> Unit = {},
+    onShowRecentSongsChange: (Boolean) -> Unit = {},
     onShowSongSelectionChange: (Boolean) -> Unit = {},
     onShowFittingChange: (Boolean) -> Unit = {},
     onShowGuideToggleChange: (Boolean) -> Unit = {}
@@ -159,11 +160,12 @@ fun SettingsAccordionSection(
         uiState.controlOverlayConfig.showCircleLeadTimeControl,
         uiState.controlOverlayConfig.showCountdownControl,
         uiState.controlOverlayConfig.showGuideQuickToggles,
+        uiState.controlOverlayConfig.showRecentSongs,
         uiState.controlOverlayConfig.showSongSelection,
         uiState.controlOverlayConfig.showFitting,
         uiState.controlOverlayConfig.showGuideToggle
     ).count { it }
-    val controlSummary = "${activeControlCount}/11 項目表示"
+    val controlSummary = "${activeControlCount}/12 項目表示"
     ExpandableCard(
         title = "コントロールオーバーレイ",
         summary = controlSummary,
@@ -180,6 +182,7 @@ fun SettingsAccordionSection(
             onShowCircleLeadTimeControlChange = onShowCircleLeadTimeControlChange,
             onShowCountdownControlChange = onShowCountdownControlChange,
             onShowGuideQuickTogglesChange = onShowGuideQuickTogglesChange,
+            onShowRecentSongsChange = onShowRecentSongsChange,
             onShowSongSelectionChange = onShowSongSelectionChange,
             onShowFittingChange = onShowFittingChange,
             onShowGuideToggleChange = onShowGuideToggleChange

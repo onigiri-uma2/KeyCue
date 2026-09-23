@@ -1,6 +1,7 @@
 package com.onigiri.keycue.overlay
 
 import com.onigiri.keycue.model.FitProfile
+import com.onigiri.keycue.model.RecentSongEntry
 
 /**
  * コントロールオーバーレイ（フローティング操作UI）からの各種ユーザー操作イベントを受け取るコールバック群。
@@ -54,5 +55,7 @@ data class ControlOverlayCallbacks(
     /** 落下ノート（Falling Notes）表示ON/OFFを切り替える */
     val onShowFallingNotesChange: (Boolean) -> Unit = {},
     /** タイミングサークル（Approach Circles）表示ON/OFFを切り替える */
-    val onShowApproachCirclesChange: (Boolean) -> Unit = {}
+    val onShowApproachCirclesChange: (Boolean) -> Unit = {},
+    /** 最近使った楽曲を選択・切り替える */
+    val onSelectRecentSong: (RecentSongEntry) -> Unit = {}
 )

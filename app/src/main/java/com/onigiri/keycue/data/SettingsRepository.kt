@@ -5,9 +5,27 @@ import android.content.SharedPreferences
 import com.onigiri.keycue.model.ControlOverlayConfig
 import com.onigiri.keycue.model.NormalizedPoint
 import com.onigiri.keycue.model.PlaybackConfig
+import com.onigiri.keycue.model.RecentSongEntry
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import org.json.JSONArray
+import org.json.JSONObject
+
+/**
+ * 最近使った曲リストを MRU（Most Recently Used）順で更新する純粋関数。
+ *
+ * 同一 URI のエントリが存在する場合はそれを除外し、新しいエントリを先頭に挿入します。
+ * [maxSize] 件を超えた古いエントリは切り捨てられます。
+ */
+internal fun updateRecentSongs(
+    current: List<RecentSongEntry>,
+    newEntry: RecentSongEntry,
+    maxSize: Int = 5
+): List<RecentSongEntry> {
+    val filtered = current.filter { it.uri != newEntry.uri }
+    return (listOf(newEntry) + filtered).take(maxSize)
+}
 
 /**
  * アプリ設定およびユーザー設定状態の永続化を担当するリポジトリインターフェース。
@@ -19,6 +37,11 @@ interface SettingsRepository {
     /** 最後に選択された楽曲のURI文字列（StateFlow） */
     val lastSongUri: StateFlow<String?>
     suspend fun saveLastSongUri(uri: String?)
+
+    /** 最近使った楽曲リスト（最大5件、MRU順） */
+    val recentSongs: StateFlow<List<RecentSongEntry>>
+    suspend fun addRecentSong(entry: RecentSongEntry)
+    suspend fun removeRecentSong(uri: String)
 
     /** 再生速度比率 (1.0f = 100%) */
     val speed: StateFlow<Float>
@@ -174,6 +197,41 @@ class SharedPreferencesSettingsRepository internal constructor(
         private const val KEY_CONTROL_SHOW_COUNTDOWN_CONTROL = "control_show_countdown_control"
         private const val KEY_CONTROL_SHOW_GUIDE_QUICK_TOGGLES = "control_show_guide_quick_toggles"
         private const val KEY_CONTROL_SHOW_RECENT_SONGS = "control_show_recent_songs"
+        private const val KEY_RECENT_SONGS = "recent_songs"
+
+        private fun parseRecentSongs(json: String?): List<RecentSongEntry> {
+            if (json.isNullOrBlank()) return emptyList()
+            return try {
+                val array = JSONArray(json)
+                val list = mutableListOf<RecentSongEntry>()
+                for (i in 0 until array.length()) {
+                    try {
+                        val obj = array.getJSONObject(i)
+                        val uri = obj.getString("uri")
+                        val title = obj.optString("title", "")
+                        if (uri.isNotBlank()) {
+                            list.add(RecentSongEntry(uri = uri, title = title))
+                        }
+                    } catch (_: Exception) {
+                        // 破損要素はスキップ
+                    }
+                }
+                list.take(5)
+            } catch (_: Exception) {
+                emptyList()
+            }
+        }
+
+        private fun serializeRecentSongs(songs: List<RecentSongEntry>): String {
+            val array = JSONArray()
+            for (song in songs) {
+                val obj = JSONObject()
+                obj.put("uri", song.uri)
+                obj.put("title", song.title)
+                array.put(obj)
+            }
+            return array.toString()
+        }
 
         @Volatile
         private var instance: SharedPreferencesSettingsRepository? = null
@@ -206,6 +264,9 @@ class SharedPreferencesSettingsRepository internal constructor(
 
     private val _lastSongUri = MutableStateFlow(prefs.getString(KEY_LAST_SONG_URI, null))
     override val lastSongUri: StateFlow<String?> = _lastSongUri.asStateFlow()
+
+    private val _recentSongs = MutableStateFlow(parseRecentSongs(prefs.getString(KEY_RECENT_SONGS, null)))
+    override val recentSongs: StateFlow<List<RecentSongEntry>> = _recentSongs.asStateFlow()
 
     private val _initialConfig = PlaybackConfig.normalize(
         speed = prefs.getFloat(KEY_SPEED, 1.0f),
@@ -300,6 +361,18 @@ class SharedPreferencesSettingsRepository internal constructor(
                 remove(KEY_LAST_SONG_URI)
             }
         }.apply()
+    }
+
+    override suspend fun addRecentSong(entry: RecentSongEntry) {
+        val updated = updateRecentSongs(_recentSongs.value, entry, maxSize = 5)
+        _recentSongs.value = updated
+        prefs.edit().putString(KEY_RECENT_SONGS, serializeRecentSongs(updated)).apply()
+    }
+
+    override suspend fun removeRecentSong(uri: String) {
+        val updated = _recentSongs.value.filter { it.uri != uri }
+        _recentSongs.value = updated
+        prefs.edit().putString(KEY_RECENT_SONGS, serializeRecentSongs(updated)).apply()
     }
 
     override suspend fun saveSpeed(speed: Float) {
@@ -445,6 +518,7 @@ class SharedPreferencesSettingsRepository internal constructor(
  */
 class InMemorySettingsRepository(
     initialSongUri: String? = null,
+    initialRecentSongs: List<RecentSongEntry> = emptyList(),
     initialOverlayPosition: Pair<Int, Int>? = null,
     initialOverlayNormalized: NormalizedPoint? = null,
     initialFitProfile: com.onigiri.keycue.model.FitProfile? = null,
@@ -463,6 +537,9 @@ class InMemorySettingsRepository(
 
     private val _lastSongUri = MutableStateFlow(initialSongUri)
     override val lastSongUri: StateFlow<String?> = _lastSongUri.asStateFlow()
+
+    private val _recentSongs = MutableStateFlow(initialRecentSongs)
+    override val recentSongs: StateFlow<List<RecentSongEntry>> = _recentSongs.asStateFlow()
 
     private val _fitProfile = MutableStateFlow(initialFitProfile)
     override val fitProfile: StateFlow<com.onigiri.keycue.model.FitProfile?> = _fitProfile.asStateFlow()
@@ -506,6 +583,14 @@ class InMemorySettingsRepository(
 
     override suspend fun saveLastSongUri(uri: String?) {
         _lastSongUri.value = uri
+    }
+
+    override suspend fun addRecentSong(entry: RecentSongEntry) {
+        _recentSongs.value = updateRecentSongs(_recentSongs.value, entry, maxSize = 5)
+    }
+
+    override suspend fun removeRecentSong(uri: String) {
+        _recentSongs.value = _recentSongs.value.filter { it.uri != uri }
     }
 
     override suspend fun saveSpeed(speed: Float) {

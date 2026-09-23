@@ -20,6 +20,7 @@ fun ControlOverlayConfigContent(
     onShowCircleLeadTimeControlChange: (Boolean) -> Unit,
     onShowCountdownControlChange: (Boolean) -> Unit,
     onShowGuideQuickTogglesChange: (Boolean) -> Unit,
+    onShowRecentSongsChange: (Boolean) -> Unit,
     onShowSongSelectionChange: (Boolean) -> Unit,
     onShowFittingChange: (Boolean) -> Unit,
     onShowGuideToggleChange: (Boolean) -> Unit
@@ -72,6 +73,12 @@ fun ControlOverlayConfigContent(
             description = "Notes/Circle 個別クイック切替行を表示します",
             checked = config.showGuideQuickToggles,
             onCheckedChange = onShowGuideQuickTogglesChange
+        )
+        SettingSwitchRow(
+            label = "最近使った曲",
+            description = "最近読み込んだ楽曲（最大3件）のクイック切替を表示します",
+            checked = config.showRecentSongs,
+            onCheckedChange = onShowRecentSongsChange
         )
         SettingSwitchRow(
             label = "楽曲を選択",

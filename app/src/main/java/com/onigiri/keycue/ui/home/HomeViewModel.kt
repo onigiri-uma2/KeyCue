@@ -120,7 +120,10 @@ class HomeViewModel(
         } catch (_: Exception) {
             null
         } ?: run {
-            scope.launch { settingsRepository.saveLastSongUri(null) }
+            scope.launch {
+                settingsRepository.saveLastSongUri(null)
+                settingsRepository.removeRecentSong(uriStr)
+            }
             return
         }
 
@@ -138,6 +141,7 @@ class HomeViewModel(
                     )
                 }
                 settingsRepository.saveLastSongUri(null)
+                settingsRepository.removeRecentSong(uriStr)
             }
         }
     }
