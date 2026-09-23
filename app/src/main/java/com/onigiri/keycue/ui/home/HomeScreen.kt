@@ -238,16 +238,15 @@ fun HomeScreen(
         onManualBaseOctaveChange = { viewModel.setManualBaseOctave(it) },
         onShowSongInfoChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showSongInfo = it) } },
         onShowSeekBarChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showSeekBar = it) } },
-        onShowPlaybackControlsChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showPlaybackControls = it) } },
         onShowLoopControlsChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showLoopControls = it) } },
         onShowSpeedControlChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showSpeedControl = it) } },
         onShowNoteLeadTimeControlChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showNoteLeadTimeControl = it) } },
         onShowCircleLeadTimeControlChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showCircleLeadTimeControl = it) } },
+        onShowCountdownControlChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showCountdownControl = it) } },
+        onShowGuideQuickTogglesChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showGuideQuickToggles = it) } },
         onShowSongSelectionChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showSongSelection = it) } },
         onShowFittingChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showFitting = it) } },
         onShowGuideToggleChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showGuideToggle = it) } },
-        onShowCountdownControlChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showCountdownControl = it) } },
-        onShowGuideQuickTogglesChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showGuideQuickToggles = it) } },
         onDismissError = { viewModel.clearError() }
     )
 }
@@ -292,16 +291,15 @@ fun HomeScreenContent(
     onManualBaseOctaveChange: (Int) -> Unit = {},
     onShowSongInfoChange: (Boolean) -> Unit = {},
     onShowSeekBarChange: (Boolean) -> Unit = {},
-    onShowPlaybackControlsChange: (Boolean) -> Unit = {},
     onShowLoopControlsChange: (Boolean) -> Unit = {},
     onShowSpeedControlChange: (Boolean) -> Unit = {},
     onShowNoteLeadTimeControlChange: (Boolean) -> Unit = {},
     onShowCircleLeadTimeControlChange: (Boolean) -> Unit = {},
+    onShowCountdownControlChange: (Boolean) -> Unit = {},
+    onShowGuideQuickTogglesChange: (Boolean) -> Unit = {},
     onShowSongSelectionChange: (Boolean) -> Unit = {},
     onShowFittingChange: (Boolean) -> Unit = {},
     onShowGuideToggleChange: (Boolean) -> Unit = {},
-    onShowCountdownControlChange: (Boolean) -> Unit = {},
-    onShowGuideQuickTogglesChange: (Boolean) -> Unit = {},
     onDismissError: () -> Unit = {}
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
@@ -392,16 +390,15 @@ fun HomeScreenContent(
                         onManualBaseOctaveChange = onManualBaseOctaveChange,
                         onShowSongInfoChange = onShowSongInfoChange,
                         onShowSeekBarChange = onShowSeekBarChange,
-                        onShowPlaybackControlsChange = onShowPlaybackControlsChange,
                         onShowLoopControlsChange = onShowLoopControlsChange,
                         onShowSpeedControlChange = onShowSpeedControlChange,
                         onShowNoteLeadTimeControlChange = onShowNoteLeadTimeControlChange,
                         onShowCircleLeadTimeControlChange = onShowCircleLeadTimeControlChange,
+                        onShowCountdownControlChange = onShowCountdownControlChange,
+                        onShowGuideQuickTogglesChange = onShowGuideQuickTogglesChange,
                         onShowSongSelectionChange = onShowSongSelectionChange,
                         onShowFittingChange = onShowFittingChange,
                         onShowGuideToggleChange = onShowGuideToggleChange,
-                        onShowCountdownControlChange = onShowCountdownControlChange,
-                        onShowGuideQuickTogglesChange = onShowGuideQuickTogglesChange,
                         onDismissError = onDismissError
                     )
                 } else {
@@ -442,16 +439,15 @@ fun HomeScreenContent(
                         onManualBaseOctaveChange = onManualBaseOctaveChange,
                         onShowSongInfoChange = onShowSongInfoChange,
                         onShowSeekBarChange = onShowSeekBarChange,
-                        onShowPlaybackControlsChange = onShowPlaybackControlsChange,
                         onShowLoopControlsChange = onShowLoopControlsChange,
                         onShowSpeedControlChange = onShowSpeedControlChange,
                         onShowNoteLeadTimeControlChange = onShowNoteLeadTimeControlChange,
                         onShowCircleLeadTimeControlChange = onShowCircleLeadTimeControlChange,
+                        onShowCountdownControlChange = onShowCountdownControlChange,
+                        onShowGuideQuickTogglesChange = onShowGuideQuickTogglesChange,
                         onShowSongSelectionChange = onShowSongSelectionChange,
                         onShowFittingChange = onShowFittingChange,
                         onShowGuideToggleChange = onShowGuideToggleChange,
-                        onShowCountdownControlChange = onShowCountdownControlChange,
-                        onShowGuideQuickTogglesChange = onShowGuideQuickTogglesChange,
                         onDismissError = onDismissError
                     )
                 }
@@ -501,16 +497,15 @@ private fun HomeScreenNarrowContent(
     onManualBaseOctaveChange: (Int) -> Unit,
     onShowSongInfoChange: (Boolean) -> Unit = {},
     onShowSeekBarChange: (Boolean) -> Unit = {},
-    onShowPlaybackControlsChange: (Boolean) -> Unit = {},
     onShowLoopControlsChange: (Boolean) -> Unit = {},
     onShowSpeedControlChange: (Boolean) -> Unit = {},
     onShowNoteLeadTimeControlChange: (Boolean) -> Unit = {},
     onShowCircleLeadTimeControlChange: (Boolean) -> Unit = {},
+    onShowCountdownControlChange: (Boolean) -> Unit = {},
+    onShowGuideQuickTogglesChange: (Boolean) -> Unit = {},
     onShowSongSelectionChange: (Boolean) -> Unit = {},
     onShowFittingChange: (Boolean) -> Unit = {},
     onShowGuideToggleChange: (Boolean) -> Unit = {},
-    onShowCountdownControlChange: (Boolean) -> Unit = {},
-    onShowGuideQuickTogglesChange: (Boolean) -> Unit = {},
     onDismissError: () -> Unit
 ) {
     Column(
@@ -568,16 +563,15 @@ private fun HomeScreenNarrowContent(
             onManualBaseOctaveChange = onManualBaseOctaveChange,
             onShowSongInfoChange = onShowSongInfoChange,
             onShowSeekBarChange = onShowSeekBarChange,
-            onShowPlaybackControlsChange = onShowPlaybackControlsChange,
             onShowLoopControlsChange = onShowLoopControlsChange,
             onShowSpeedControlChange = onShowSpeedControlChange,
             onShowNoteLeadTimeControlChange = onShowNoteLeadTimeControlChange,
             onShowCircleLeadTimeControlChange = onShowCircleLeadTimeControlChange,
+            onShowCountdownControlChange = onShowCountdownControlChange,
+            onShowGuideQuickTogglesChange = onShowGuideQuickTogglesChange,
             onShowSongSelectionChange = onShowSongSelectionChange,
             onShowFittingChange = onShowFittingChange,
-            onShowGuideToggleChange = onShowGuideToggleChange,
-            onShowCountdownControlChange = onShowCountdownControlChange,
-            onShowGuideQuickTogglesChange = onShowGuideQuickTogglesChange
+            onShowGuideToggleChange = onShowGuideToggleChange
         )
 
         // 演奏支援開始ボタン
@@ -654,16 +648,15 @@ private fun HomeScreenWideContent(
     onManualBaseOctaveChange: (Int) -> Unit,
     onShowSongInfoChange: (Boolean) -> Unit = {},
     onShowSeekBarChange: (Boolean) -> Unit = {},
-    onShowPlaybackControlsChange: (Boolean) -> Unit = {},
     onShowLoopControlsChange: (Boolean) -> Unit = {},
     onShowSpeedControlChange: (Boolean) -> Unit = {},
     onShowNoteLeadTimeControlChange: (Boolean) -> Unit = {},
     onShowCircleLeadTimeControlChange: (Boolean) -> Unit = {},
+    onShowCountdownControlChange: (Boolean) -> Unit = {},
+    onShowGuideQuickTogglesChange: (Boolean) -> Unit = {},
     onShowSongSelectionChange: (Boolean) -> Unit = {},
     onShowFittingChange: (Boolean) -> Unit = {},
     onShowGuideToggleChange: (Boolean) -> Unit = {},
-    onShowCountdownControlChange: (Boolean) -> Unit = {},
-    onShowGuideQuickTogglesChange: (Boolean) -> Unit = {},
     onDismissError: () -> Unit
 ) {
     Row(
@@ -776,16 +769,15 @@ private fun HomeScreenWideContent(
                 onManualBaseOctaveChange = onManualBaseOctaveChange,
                 onShowSongInfoChange = onShowSongInfoChange,
                 onShowSeekBarChange = onShowSeekBarChange,
-                onShowPlaybackControlsChange = onShowPlaybackControlsChange,
                 onShowLoopControlsChange = onShowLoopControlsChange,
                 onShowSpeedControlChange = onShowSpeedControlChange,
                 onShowNoteLeadTimeControlChange = onShowNoteLeadTimeControlChange,
                 onShowCircleLeadTimeControlChange = onShowCircleLeadTimeControlChange,
+                onShowCountdownControlChange = onShowCountdownControlChange,
+                onShowGuideQuickTogglesChange = onShowGuideQuickTogglesChange,
                 onShowSongSelectionChange = onShowSongSelectionChange,
                 onShowFittingChange = onShowFittingChange,
-                onShowGuideToggleChange = onShowGuideToggleChange,
-                onShowCountdownControlChange = onShowCountdownControlChange,
-                onShowGuideQuickTogglesChange = onShowGuideQuickTogglesChange
+                onShowGuideToggleChange = onShowGuideToggleChange
             )
         }
     }

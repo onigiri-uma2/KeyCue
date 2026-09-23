@@ -995,7 +995,6 @@ class ControlOverlayView(
 
         songInfoSection.visibility = if (config.showSongInfo) View.VISIBLE else View.GONE
         seekBarSection.visibility = if (config.showSeekBar) View.VISIBLE else View.GONE
-        playbackControlsSection.visibility = if (config.showPlaybackControls) View.VISIBLE else View.GONE
         loopSection.visibility = if (config.showLoopControls) View.VISIBLE else View.GONE
         speedSection.visibility = if (config.showSpeedControl) View.VISIBLE else View.GONE
         noteLeadTimeSection.visibility = if (config.showNoteLeadTimeControl) View.VISIBLE else View.GONE
@@ -1007,7 +1006,8 @@ class ControlOverlayView(
         fittingBtn.visibility = if (config.showFitting) View.VISIBLE else View.GONE
         guideToggleButton.visibility = if (config.showGuideToggle) View.VISIBLE else View.GONE
 
-        // 常時表示項目の安全性確保
+        // 常時表示項目の安全性確保（再生操作・最小化・設定・終了ボタン）
+        playbackControlsSection.visibility = View.VISIBLE
         minimizeBtn.visibility = View.VISIBLE
         openBtn.visibility = View.VISIBLE
         closeBtn.visibility = View.VISIBLE

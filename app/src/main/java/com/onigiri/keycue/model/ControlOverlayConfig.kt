@@ -5,7 +5,7 @@ package com.onigiri.keycue.model
  *
  * @param showSongInfo 楽曲情報（曲名・時間表示）の表示
  * @param showSeekBar ミニシークバー（進捗スライダー・現在時刻・総時間）の表示
- * @param showPlaybackControls 再生操作ボタン群（再生/一時停止、±10秒スキップ、停止、リスタート）の表示
+ * @param showPlaybackControls 再生操作ボタン群の表示（常時表示項目・互換性保持）
  * @param showLoopControls ABリピート（区間ループ）操作ボタン群の表示
  * @param showSpeedControl 再生速度調整（Speed）行の表示
  * @param showNoteLeadTimeControl ノート先読み時間（Note）調整行の表示

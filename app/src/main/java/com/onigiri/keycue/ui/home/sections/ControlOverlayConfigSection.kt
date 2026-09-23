@@ -14,16 +14,15 @@ fun ControlOverlayConfigContent(
     config: ControlOverlayConfig,
     onShowSongInfoChange: (Boolean) -> Unit,
     onShowSeekBarChange: (Boolean) -> Unit,
-    onShowPlaybackControlsChange: (Boolean) -> Unit,
     onShowLoopControlsChange: (Boolean) -> Unit,
     onShowSpeedControlChange: (Boolean) -> Unit,
     onShowNoteLeadTimeControlChange: (Boolean) -> Unit,
     onShowCircleLeadTimeControlChange: (Boolean) -> Unit,
+    onShowCountdownControlChange: (Boolean) -> Unit,
+    onShowGuideQuickTogglesChange: (Boolean) -> Unit,
     onShowSongSelectionChange: (Boolean) -> Unit,
     onShowFittingChange: (Boolean) -> Unit,
-    onShowGuideToggleChange: (Boolean) -> Unit,
-    onShowCountdownControlChange: (Boolean) -> Unit,
-    onShowGuideQuickTogglesChange: (Boolean) -> Unit
+    onShowGuideToggleChange: (Boolean) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         SettingSwitchRow(
@@ -37,12 +36,6 @@ fun ControlOverlayConfigContent(
             description = "ミニ進捗スライダーを表示します",
             checked = config.showSeekBar,
             onCheckedChange = onShowSeekBarChange
-        )
-        SettingSwitchRow(
-            label = "再生操作",
-            description = "再生・一時停止・スキップ・停止・リスタートボタンを表示します",
-            checked = config.showPlaybackControls,
-            onCheckedChange = onShowPlaybackControlsChange
         )
         SettingSwitchRow(
             label = "ABリピート",
@@ -69,6 +62,18 @@ fun ControlOverlayConfigContent(
             onCheckedChange = onShowCircleLeadTimeControlChange
         )
         SettingSwitchRow(
+            label = "カウントダウン",
+            description = "開始カウントダウン（0s/1s/3s/5s）選択行を表示します",
+            checked = config.showCountdownControl,
+            onCheckedChange = onShowCountdownControlChange
+        )
+        SettingSwitchRow(
+            label = "ガイド表示切替",
+            description = "Notes/Circle 個別クイック切替行を表示します",
+            checked = config.showGuideQuickToggles,
+            onCheckedChange = onShowGuideQuickTogglesChange
+        )
+        SettingSwitchRow(
             label = "楽曲を選択",
             description = "「楽曲を選択」ボタンを表示します",
             checked = config.showSongSelection,
@@ -85,18 +90,6 @@ fun ControlOverlayConfigContent(
             description = "「Guide ON / OFF」ボタンを表示します",
             checked = config.showGuideToggle,
             onCheckedChange = onShowGuideToggleChange
-        )
-        SettingSwitchRow(
-            label = "カウントダウン",
-            description = "開始カウントダウン（0s/1s/3s/5s）選択行を表示します",
-            checked = config.showCountdownControl,
-            onCheckedChange = onShowCountdownControlChange
-        )
-        SettingSwitchRow(
-            label = "ガイド表示切替",
-            description = "Notes/Circle 個別クイック切替行を表示します",
-            checked = config.showGuideQuickToggles,
-            onCheckedChange = onShowGuideQuickTogglesChange
         )
     }
 }
