@@ -129,6 +129,22 @@ class ControlOverlayView(
     private lateinit var speedSection: View
     private lateinit var noteLeadTimeSection: View
     private lateinit var approachCircleLeadTimeSection: View
+    private lateinit var countdownSection: View
+    private lateinit var guideQuickToggleSection: View
+
+    // カウントダウン
+    private var currentCountdownMs: Long = 3000L
+    private var lastCountdownMs: Long = -1L
+    private val countdownButtons = mutableListOf<Pair<Long, Button>>()
+
+    // ガイドクイックトグル
+    private var currentShowFallingNotes: Boolean = true
+    private var currentShowApproachCircles: Boolean = true
+    private lateinit var notesToggleBtn: Button
+    private lateinit var circleToggleBtn: Button
+
+    // 長押し連続入力のキャンセル関数リスト（onDetachedFromWindowで一括解除）
+    private val repeatPressCancelers = mutableListOf<() -> Unit>()
 
     // アクションボタンコンテナ/参照（表示/非表示制御用）
     private lateinit var selectFileBtn: View
@@ -257,6 +273,14 @@ class ControlOverlayView(
 
             approachCircleLeadTimeSection = buildApproachCircleLeadTimeControls()
             addView(approachCircleLeadTimeSection)
+
+            // カウントダウン設定（2段構成）
+            countdownSection = buildCountdownSection()
+            addView(countdownSection)
+
+            // ガイドクイック表示切替（2段構成）
+            guideQuickToggleSection = buildGuideQuickToggleSection()
+            addView(guideQuickToggleSection)
 
             // アクションボタン群
             buildActionButtons().forEach { addView(it) }
@@ -419,7 +443,8 @@ class ControlOverlayView(
                     bottomMargin = dpToPx(4)
                 }
 
-                val seekBackBtn = createMiniButton("↶10", Color.parseColor("#37474F")) {
+                val seekBackBtn = createMiniButton("↶10", Color.parseColor("#37474F"))
+                configureRepeatPress(seekBackBtn, initialDelayMs = 400L, repeatIntervalMs = 220L) {
                     callbacks.onSeekBack()
                 }
                 addView(seekBackBtn)
@@ -431,7 +456,8 @@ class ControlOverlayView(
                 addView(playPauseButton)
                 addView(createHorizontalSpacer(4))
 
-                val seekFwdBtn = createMiniButton("↷10", Color.parseColor("#37474F")) {
+                val seekFwdBtn = createMiniButton("↷10", Color.parseColor("#37474F"))
+                configureRepeatPress(seekFwdBtn, initialDelayMs = 400L, repeatIntervalMs = 220L) {
                     callbacks.onSeekForward()
                 }
                 addView(seekFwdBtn)
@@ -548,10 +574,12 @@ class ControlOverlayView(
             }
             addView(speedValueText)
 
-            speedMinusBtn = createSmallAdjustButton("－") {
+            speedMinusBtn = createSmallAdjustButton("－")
+            configureRepeatPress(speedMinusBtn, initialDelayMs = 400L, repeatIntervalMs = 130L) {
                 adjustSpeedStep(-1)
             }
-            speedPlusBtn = createSmallAdjustButton("＋") {
+            speedPlusBtn = createSmallAdjustButton("＋")
+            configureRepeatPress(speedPlusBtn, initialDelayMs = 400L, repeatIntervalMs = 130L) {
                 adjustSpeedStep(+1)
             }
             addView(speedMinusBtn)
@@ -589,10 +617,12 @@ class ControlOverlayView(
             }
             addView(noteLeadTimeValueText)
 
-            noteMinusBtn = createSmallAdjustButton("－") {
+            noteMinusBtn = createSmallAdjustButton("－")
+            configureRepeatPress(noteMinusBtn, initialDelayMs = 400L, repeatIntervalMs = 130L) {
                 adjustNoteLeadTimeStep(-1)
             }
-            notePlusBtn = createSmallAdjustButton("＋") {
+            notePlusBtn = createSmallAdjustButton("＋")
+            configureRepeatPress(notePlusBtn, initialDelayMs = 400L, repeatIntervalMs = 130L) {
                 adjustNoteLeadTimeStep(+1)
             }
             addView(noteMinusBtn)
@@ -630,10 +660,12 @@ class ControlOverlayView(
             }
             addView(approachCircleLeadTimeValueText)
 
-            circleMinusBtn = createSmallAdjustButton("－") {
+            circleMinusBtn = createSmallAdjustButton("－")
+            configureRepeatPress(circleMinusBtn, initialDelayMs = 400L, repeatIntervalMs = 130L) {
                 adjustApproachCircleLeadTimeStep(-1)
             }
-            circlePlusBtn = createSmallAdjustButton("＋") {
+            circlePlusBtn = createSmallAdjustButton("＋")
+            configureRepeatPress(circlePlusBtn, initialDelayMs = 400L, repeatIntervalMs = 130L) {
                 adjustApproachCircleLeadTimeStep(+1)
             }
             addView(circleMinusBtn)
@@ -713,14 +745,22 @@ class ControlOverlayView(
 
     private fun adjustSpeedStep(direction: Int) {
         val target = calculateNextSpeed(currentSpeed, direction, speedPresets)
-        callbacks.onSpeedChange(target)
+        if (target != currentSpeed) {
+            currentSpeed = target
+            speedValueText.text = "${(target * 100).toInt()}%"
+            callbacks.onSpeedChange(target)
+            updateAdjustButtonsEnabled()
+        }
     }
 
     private fun adjustNoteLeadTimeStep(direction: Int) {
         val next = (currentNoteLeadTimeMs + direction * PlaybackConfig.NOTE_LEAD_TIME_STEP_MS)
             .coerceIn(PlaybackConfig.MIN_NOTE_LEAD_TIME_MS, PlaybackConfig.MAX_NOTE_LEAD_TIME_MS)
         if (next != currentNoteLeadTimeMs) {
+            currentNoteLeadTimeMs = next
+            noteLeadTimeValueText.text = "${next}ms"
             callbacks.onNoteLeadTimeChange(next)
+            updateAdjustButtonsEnabled()
         }
     }
 
@@ -728,7 +768,10 @@ class ControlOverlayView(
         val next = (currentApproachCircleLeadTimeMs + direction * PlaybackConfig.APPROACH_CIRCLE_LEAD_TIME_STEP_MS)
             .coerceIn(PlaybackConfig.MIN_APPROACH_CIRCLE_LEAD_TIME_MS, PlaybackConfig.MAX_APPROACH_CIRCLE_LEAD_TIME_MS)
         if (next != currentApproachCircleLeadTimeMs) {
+            currentApproachCircleLeadTimeMs = next
+            approachCircleLeadTimeValueText.text = "${next}ms"
             callbacks.onApproachCircleLeadTimeChange(next)
+            updateAdjustButtonsEnabled()
         }
     }
 
@@ -794,7 +837,8 @@ class ControlOverlayView(
         noteLeadTimeMs: Long = currentNoteLeadTimeMs,
         approachCircleLeadTimeMs: Long = currentApproachCircleLeadTimeMs,
         loopStartMs: Long? = null,
-        loopEndMs: Long? = null
+        loopEndMs: Long? = null,
+        countdownMs: Long = currentCountdownMs
     ) {
         // 折りたたみ中・展開中に関わらず最新状態を常に保持
         currentIsPlaying = isPlaying
@@ -806,6 +850,7 @@ class ControlOverlayView(
         currentApproachCircleLeadTimeMs = approachCircleLeadTimeMs
         currentLoopStartMs = loopStartMs
         currentLoopEndMs = loopEndMs
+        currentCountdownMs = countdownMs
 
         // 1. 再生状態の変更（Play / Pause）は折りたたみ中でも即時反映
         if (lastIsPlaying != isPlaying) {
@@ -902,6 +947,11 @@ class ControlOverlayView(
             approachCircleLeadTimeValueText.text = "${currentApproachCircleLeadTimeMs}ms"
         }
 
+        if (force || lastCountdownMs != currentCountdownMs) {
+            lastCountdownMs = currentCountdownMs
+            updateCountdownButtonsStyle()
+        }
+
         updateAdjustButtonsEnabled()
     }
 
@@ -920,6 +970,8 @@ class ControlOverlayView(
         speedSection.visibility = if (config.showSpeedControl) View.VISIBLE else View.GONE
         noteLeadTimeSection.visibility = if (config.showNoteLeadTimeControl) View.VISIBLE else View.GONE
         approachCircleLeadTimeSection.visibility = if (config.showCircleLeadTimeControl) View.VISIBLE else View.GONE
+        countdownSection.visibility = if (config.showCountdownControl) View.VISIBLE else View.GONE
+        guideQuickToggleSection.visibility = if (config.showGuideQuickToggles) View.VISIBLE else View.GONE
 
         selectFileBtn.visibility = if (config.showSongSelection) View.VISIBLE else View.GONE
         fittingBtn.visibility = if (config.showFitting) View.VISIBLE else View.GONE
@@ -931,36 +983,273 @@ class ControlOverlayView(
         closeBtn.visibility = View.VISIBLE
     }
 
-    private fun createMiniButton(text: String, bgColor: Int, onClick: () -> Unit): Button {
-        return Button(context).apply {
-            this.text = text
-            setTextColor(Color.WHITE)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
-            typeface = android.graphics.Typeface.DEFAULT_BOLD
-            setPadding(0, 0, 0, 0)
-            background = createRoundedDrawable(
-                cornerRadiusDp = 6f,
-                fillColor = bgColor
-            )
-            layoutParams = LinearLayout.LayoutParams(0, dpToPx(34), 1f)
-            setOnClickListener { onClick() }
+    private fun buildCountdownSection(): View {
+        return LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomMargin = dpToPx(6)
+            }
+
+            val label = TextView(context).apply {
+                text = "Countdown"
+                setTextColor(Color.parseColor("#CFD8DC"))
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    bottomMargin = dpToPx(4)
+                }
+            }
+            addView(label)
+
+            val buttonRow = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+
+                countdownButtons.clear()
+                for (presetMs in PlaybackConfig.COUNTDOWN_PRESETS_MS) {
+                    val btn = createCountdownButton(presetMs)
+                    countdownButtons.add(presetMs to btn)
+                    addView(btn)
+                    if (presetMs != PlaybackConfig.COUNTDOWN_PRESETS_MS.last()) {
+                        addView(createHorizontalSpacer(4))
+                    }
+                }
+            }
+            addView(buttonRow)
+            updateCountdownButtonsStyle()
         }
     }
 
-    private fun createSmallAdjustButton(text: String, onClick: () -> Unit): Button {
+    private fun createCountdownButton(presetMs: Long): Button {
+        val label = "${presetMs / 1000L}s"
+        return Button(context).apply {
+            text = label
+            setTextColor(Color.WHITE)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setPadding(0, 0, 0, 0)
+            minWidth = 0
+            minimumWidth = 0
+            layoutParams = LinearLayout.LayoutParams(0, dpToPx(28), 1f)
+            setOnClickListener {
+                callbacks.onCountdownChange(presetMs)
+                currentCountdownMs = presetMs
+                updateCountdownButtonsStyle()
+            }
+        }
+    }
+
+    private fun updateCountdownButtonsStyle() {
+        val isPresetContained = PlaybackConfig.COUNTDOWN_PRESETS_MS.contains(currentCountdownMs)
+        for ((presetMs, btn) in countdownButtons) {
+            val isSelected = isPresetContained && (presetMs == currentCountdownMs)
+            val bgColor = if (isSelected) Color.parseColor("#3F51B5") else Color.parseColor("#37474F")
+            btn.background = createRoundedDrawable(cornerRadiusDp = 4f, fillColor = bgColor)
+            btn.setTextColor(if (isSelected) Color.WHITE else Color.parseColor("#B0BEC5"))
+        }
+    }
+
+    private fun buildGuideQuickToggleSection(): View {
+        return LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomMargin = dpToPx(6)
+            }
+
+            val label = TextView(context).apply {
+                text = "Guide"
+                setTextColor(Color.parseColor("#CFD8DC"))
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    bottomMargin = dpToPx(4)
+                }
+            }
+            addView(label)
+
+            val buttonRow = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+
+                notesToggleBtn = createQuickToggleButton("Notes ON") {
+                    callbacks.onShowFallingNotesChange(!currentShowFallingNotes)
+                }
+                circleToggleBtn = createQuickToggleButton("Circle ON") {
+                    callbacks.onShowApproachCirclesChange(!currentShowApproachCircles)
+                }
+
+                addView(notesToggleBtn)
+                addView(createHorizontalSpacer(4))
+                addView(circleToggleBtn)
+            }
+            addView(buttonRow)
+            updateGuideQuickToggleStyle()
+        }
+    }
+
+    private fun createQuickToggleButton(text: String, onClick: () -> Unit): Button {
         return Button(context).apply {
             this.text = text
             setTextColor(Color.WHITE)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
             typeface = android.graphics.Typeface.DEFAULT_BOLD
             setPadding(0, 0, 0, 0)
+            minWidth = 0
+            minimumWidth = 0
+            layoutParams = LinearLayout.LayoutParams(0, dpToPx(28), 1f)
+            setOnClickListener { onClick() }
+        }
+    }
+
+    private fun updateGuideQuickToggleStyle() {
+        if (!::notesToggleBtn.isInitialized || !::circleToggleBtn.isInitialized) return
+
+        notesToggleBtn.text = if (currentShowFallingNotes) "Notes ON" else "Notes OFF"
+        notesToggleBtn.background = createRoundedDrawable(
+            cornerRadiusDp = 4f,
+            fillColor = if (currentShowFallingNotes) Color.parseColor("#00796B") else Color.parseColor("#37474F")
+        )
+        notesToggleBtn.setTextColor(if (currentShowFallingNotes) Color.WHITE else Color.parseColor("#90A4AE"))
+
+        circleToggleBtn.text = if (currentShowApproachCircles) "Circle ON" else "Circle OFF"
+        circleToggleBtn.background = createRoundedDrawable(
+            cornerRadiusDp = 4f,
+            fillColor = if (currentShowApproachCircles) Color.parseColor("#00796B") else Color.parseColor("#37474F")
+        )
+        circleToggleBtn.setTextColor(if (currentShowApproachCircles) Color.WHITE else Color.parseColor("#90A4AE"))
+    }
+
+    fun updateGuideQuickToggleState(showFallingNotes: Boolean, showApproachCircles: Boolean) {
+        currentShowFallingNotes = showFallingNotes
+        currentShowApproachCircles = showApproachCircles
+        updateGuideQuickToggleStyle()
+    }
+
+    private fun createMiniButton(text: String, bgColor: Int, onClick: (() -> Unit)? = null): Button {
+        return Button(context).apply {
+            this.text = text
+            setTextColor(Color.WHITE)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setPadding(0, 0, 0, 0)
+            minWidth = 0
+            minimumWidth = 0
+            background = createRoundedDrawable(
+                cornerRadiusDp = 6f,
+                fillColor = bgColor
+            )
+            layoutParams = LinearLayout.LayoutParams(0, dpToPx(34), 1f)
+            onClick?.let { setOnClickListener { it() } }
+        }
+    }
+
+    private fun createSmallAdjustButton(text: String, onClick: (() -> Unit)? = null): Button {
+        return Button(context).apply {
+            this.text = text
+            setTextColor(Color.WHITE)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setPadding(0, 0, 0, 0)
+            minWidth = 0
+            minimumWidth = 0
             background = createRoundedDrawable(
                 cornerRadiusDp = 4f,
                 fillColor = Color.parseColor("#455A64")
             )
             layoutParams = LinearLayout.LayoutParams(dpToPx(28), dpToPx(26))
-            setOnClickListener { onClick() }
+            onClick?.let { setOnClickListener { it() } }
         }
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    private fun configureRepeatPress(
+        view: View,
+        initialDelayMs: Long = 400L,
+        repeatIntervalMs: Long = 130L,
+        action: () -> Unit
+    ) {
+        view.setOnClickListener {
+            action()
+        }
+
+        var repeatStarted = false
+        var repeatRunnable: Runnable? = null
+
+        val cancelRepeat = {
+            repeatRunnable?.let { view.removeCallbacks(it) }
+            repeatStarted = false
+            view.isPressed = false
+        }
+        repeatPressCancelers.add(cancelRepeat)
+
+        repeatRunnable = object : Runnable {
+            override fun run() {
+                if (!view.isEnabled || !view.isAttachedToWindow) {
+                    cancelRepeat()
+                    return
+                }
+                repeatStarted = true
+                action()
+                if (view.isEnabled && view.isAttachedToWindow) {
+                    view.postDelayed(this, repeatIntervalMs)
+                } else {
+                    cancelRepeat()
+                }
+            }
+        }
+
+        view.setOnTouchListener { v, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    if (!v.isEnabled) return@setOnTouchListener false
+                    repeatStarted = false
+                    v.isPressed = true
+                    repeatRunnable?.let {
+                        v.removeCallbacks(it)
+                        v.postDelayed(it, initialDelayMs)
+                    }
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    v.isPressed = false
+                    repeatRunnable?.let { v.removeCallbacks(it) }
+                    if (!repeatStarted && v.isEnabled) {
+                        v.performClick()
+                    }
+                    repeatStarted = false
+                    true
+                }
+                MotionEvent.ACTION_CANCEL -> {
+                    cancelRepeat()
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
+    override fun onDetachedFromWindow() {
+        repeatPressCancelers.forEach { it.invoke() }
+        repeatPressCancelers.clear()
+        super.onDetachedFromWindow()
     }
 
     private fun createHorizontalSpacer(widthDp: Int): View {

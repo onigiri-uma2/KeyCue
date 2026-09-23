@@ -168,7 +168,8 @@ fun PlaybackConfigContent(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                val presets = listOf(0L to "なし", 1000L to "1秒", 3000L to "3秒", 5000L to "5秒")
+                val labels = mapOf(0L to "なし", 1000L to "1秒", 3000L to "3秒", 5000L to "5秒")
+                val presets = PlaybackConfig.COUNTDOWN_PRESETS_MS.map { it to (labels[it] ?: "${it / 1000}秒") }
                 for ((ms, label) in presets) {
                     val isSelected = countdownMs == ms
                     FilledTonalButton(

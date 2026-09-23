@@ -13,8 +13,8 @@ package com.onigiri.keycue.model
  * @param showSongSelection 「楽曲を選択」ボタンの表示
  * @param showFitting 「位置微調整」ボタンの表示
  * @param showGuideToggle 「Guide ON / OFF」ボタンの表示
- * @param showCountdownControl 開始前カウントダウン調整の表示（将来用・予約項目）
- * @param showGuideQuickToggles ガイドクイック表示切替の表示（将来用・予約項目）
+ * @param showCountdownControl 開始前カウントダウン調整セクションの表示
+ * @param showGuideQuickToggles ガイドクイック表示切替（Notes/Circle）セクションの表示
  * @param showRecentSongs 最近使った楽曲履歴の表示（将来用・予約項目）
  */
 data class ControlOverlayConfig(

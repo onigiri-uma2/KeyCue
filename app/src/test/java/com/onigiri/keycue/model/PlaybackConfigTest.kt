@@ -94,4 +94,9 @@ class PlaybackConfigTest {
         assertEquals(100L, PlaybackConfig.NOTE_LEAD_TIME_STEP_MS)
         assertEquals(50L, PlaybackConfig.APPROACH_CIRCLE_LEAD_TIME_STEP_MS)
     }
+
+    @Test
+    fun countdownPresets_definedConsistently() {
+        assertEquals(listOf(0L, 1000L, 3000L, 5000L), PlaybackConfig.COUNTDOWN_PRESETS_MS)
+    }
 }

@@ -21,7 +21,9 @@ fun ControlOverlayConfigContent(
     onShowCircleLeadTimeControlChange: (Boolean) -> Unit,
     onShowSongSelectionChange: (Boolean) -> Unit,
     onShowFittingChange: (Boolean) -> Unit,
-    onShowGuideToggleChange: (Boolean) -> Unit
+    onShowGuideToggleChange: (Boolean) -> Unit,
+    onShowCountdownControlChange: (Boolean) -> Unit,
+    onShowGuideQuickTogglesChange: (Boolean) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         SettingSwitchRow(
@@ -83,6 +85,18 @@ fun ControlOverlayConfigContent(
             description = "「Guide ON / OFF」ボタンを表示します",
             checked = config.showGuideToggle,
             onCheckedChange = onShowGuideToggleChange
+        )
+        SettingSwitchRow(
+            label = "カウントダウン",
+            description = "開始カウントダウン（0s/1s/3s/5s）選択行を表示します",
+            checked = config.showCountdownControl,
+            onCheckedChange = onShowCountdownControlChange
+        )
+        SettingSwitchRow(
+            label = "ガイド表示切替",
+            description = "Notes/Circle 個別クイック切替行を表示します",
+            checked = config.showGuideQuickToggles,
+            onCheckedChange = onShowGuideQuickTogglesChange
         )
     }
 }

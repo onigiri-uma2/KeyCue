@@ -47,7 +47,10 @@ class OverlayWindowController(
         onSeekTo: (Long) -> Unit = {},
         onSetLoopStart: () -> Unit = {},
         onSetLoopEnd: () -> Unit = {},
-        onClearLoop: () -> Unit = {}
+        onClearLoop: () -> Unit = {},
+        onCountdownChange: (Long) -> Unit = {},
+        onShowFallingNotesChange: (Boolean) -> Unit = {},
+        onShowApproachCirclesChange: (Boolean) -> Unit = {}
     ) : this(
         context = context,
         callbacks = ControlOverlayCallbacks(
@@ -67,7 +70,10 @@ class OverlayWindowController(
             onSeekTo = onSeekTo,
             onSetLoopStart = onSetLoopStart,
             onSetLoopEnd = onSetLoopEnd,
-            onClearLoop = onClearLoop
+            onClearLoop = onClearLoop,
+            onCountdownChange = onCountdownChange,
+            onShowFallingNotesChange = onShowFallingNotesChange,
+            onShowApproachCirclesChange = onShowApproachCirclesChange
         )
     )
 
@@ -150,6 +156,10 @@ class OverlayWindowController(
             callbacks = viewCallbacks
         ).apply {
             updateControlOverlayConfig(currentControlOverlayConfig)
+            updateGuideQuickToggleState(
+                showFallingNotes = currentVisualConfig.showFallingNotes,
+                showApproachCircles = currentVisualConfig.showApproachCircles
+            )
         }
 
         try {
@@ -285,11 +295,15 @@ class OverlayWindowController(
     }
 
     /**
-     * VisualConfig（見た目設定）を更新し、Guide Overlay に反映する。
+     * VisualConfig（見た目設定）を更新し、Guide Overlay および Control Overlay に反映する。
      */
     fun updateVisualConfig(config: com.onigiri.keycue.model.VisualConfig) {
         currentVisualConfig = config
         guideOverlayView?.updateVisualConfig(config)
+        controlOverlayView?.updateGuideQuickToggleState(
+            showFallingNotes = config.showFallingNotes,
+            showApproachCircles = config.showApproachCircles
+        )
     }
 
     /**
@@ -312,7 +326,8 @@ class OverlayWindowController(
         noteLeadTimeMs: Long = com.onigiri.keycue.model.PlaybackConfig.DEFAULT_NOTE_LEAD_TIME_MS,
         approachCircleLeadTimeMs: Long = com.onigiri.keycue.model.PlaybackConfig.DEFAULT_APPROACH_CIRCLE_LEAD_TIME_MS,
         loopStartMs: Long? = null,
-        loopEndMs: Long? = null
+        loopEndMs: Long? = null,
+        countdownMs: Long = 3000L
     ) {
         controlOverlayView?.updatePlaybackStatus(
             isPlaying = isPlaying,
@@ -323,7 +338,8 @@ class OverlayWindowController(
             noteLeadTimeMs = noteLeadTimeMs,
             approachCircleLeadTimeMs = approachCircleLeadTimeMs,
             loopStartMs = loopStartMs,
-            loopEndMs = loopEndMs
+            loopEndMs = loopEndMs,
+            countdownMs = countdownMs
         )
     }
 

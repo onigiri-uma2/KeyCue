@@ -57,7 +57,9 @@ fun SettingsAccordionSection(
     onShowCircleLeadTimeControlChange: (Boolean) -> Unit = {},
     onShowSongSelectionChange: (Boolean) -> Unit = {},
     onShowFittingChange: (Boolean) -> Unit = {},
-    onShowGuideToggleChange: (Boolean) -> Unit = {}
+    onShowGuideToggleChange: (Boolean) -> Unit = {},
+    onShowCountdownControlChange: (Boolean) -> Unit = {},
+    onShowGuideQuickTogglesChange: (Boolean) -> Unit = {}
 ) {
     var midiMappingExpanded by rememberSaveable { mutableStateOf(false) }
     var timingExpanded by rememberSaveable { mutableStateOf(true) }
@@ -159,9 +161,11 @@ fun SettingsAccordionSection(
         uiState.controlOverlayConfig.showCircleLeadTimeControl,
         uiState.controlOverlayConfig.showSongSelection,
         uiState.controlOverlayConfig.showFitting,
-        uiState.controlOverlayConfig.showGuideToggle
+        uiState.controlOverlayConfig.showGuideToggle,
+        uiState.controlOverlayConfig.showCountdownControl,
+        uiState.controlOverlayConfig.showGuideQuickToggles
     ).count { it }
-    val controlSummary = "${activeControlCount}/10 項目表示"
+    val controlSummary = "${activeControlCount}/12 項目表示"
     ExpandableCard(
         title = "コントロールオーバーレイ",
         summary = controlSummary,
@@ -179,7 +183,9 @@ fun SettingsAccordionSection(
             onShowCircleLeadTimeControlChange = onShowCircleLeadTimeControlChange,
             onShowSongSelectionChange = onShowSongSelectionChange,
             onShowFittingChange = onShowFittingChange,
-            onShowGuideToggleChange = onShowGuideToggleChange
+            onShowGuideToggleChange = onShowGuideToggleChange,
+            onShowCountdownControlChange = onShowCountdownControlChange,
+            onShowGuideQuickTogglesChange = onShowGuideQuickTogglesChange
         )
     }
 

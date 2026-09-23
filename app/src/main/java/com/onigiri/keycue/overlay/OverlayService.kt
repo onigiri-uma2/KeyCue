@@ -168,6 +168,21 @@ class OverlayService : Service() {
             onClearLoop = {
                 playbackEngine.clearLoop()
                 renderCurrentFrame(forceControlUpdate = true)
+            },
+            onCountdownChange = { newMs ->
+                serviceScope.launch {
+                    settingsRepository.saveCountdownMs(newMs)
+                }
+            },
+            onShowFallingNotesChange = { show ->
+                serviceScope.launch {
+                    settingsRepository.saveShowFallingNotes(show)
+                }
+            },
+            onShowApproachCirclesChange = { show ->
+                serviceScope.launch {
+                    settingsRepository.saveShowApproachCircles(show)
+                }
             }
         )
 
@@ -395,6 +410,7 @@ class OverlayService : Service() {
     private var lastControlSpeed: Float = -1f
     private var lastControlNoteLeadTimeMs: Long = -1L
     private var lastControlApproachCircleLeadTimeMs: Long = -1L
+    private var lastControlCountdownMs: Long = -1L
     private var lastControlLoopStartMs: Long? = null
     private var lastControlLoopEndMs: Long? = null
 
@@ -441,7 +457,7 @@ class OverlayService : Service() {
         windowController?.renderGuideFrame(frame)
 
         // Control Overlay の更新頻度分離:
-        // 再生状態の変更（isPlaying）や曲の変更・停止・速度・先読み設定変更・ABループ変更等の主要イベントは即時反映。
+        // 再生状態の変更（isPlaying）や曲の変更・停止・速度・先読み設定変更・ABループ変更・Countdown変更等の主要イベントは即時反映。
         // 連続的な positionMs 更新のみ 100ms (10Hz) 間隔で間引く。
         val isPlaying = state is PlaybackState.Playing
         val now = android.os.SystemClock.uptimeMillis()
@@ -452,6 +468,7 @@ class OverlayService : Service() {
                 (lastControlSpeed != config.speed) ||
                 (lastControlNoteLeadTimeMs != config.noteLeadTimeMs) ||
                 (lastControlApproachCircleLeadTimeMs != config.approachCircleLeadTimeMs) ||
+                (lastControlCountdownMs != config.countdownMs) ||
                 (lastControlLoopStartMs != loopStart) ||
                 (lastControlLoopEndMs != loopEnd)
         val isTimeIntervalElapsed = (now - lastControlUpdateTimestamp >= 100L)
@@ -462,6 +479,7 @@ class OverlayService : Service() {
             lastControlSpeed = config.speed
             lastControlNoteLeadTimeMs = config.noteLeadTimeMs
             lastControlApproachCircleLeadTimeMs = config.approachCircleLeadTimeMs
+            lastControlCountdownMs = config.countdownMs
             lastControlLoopStartMs = loopStart
             lastControlLoopEndMs = loopEnd
             lastControlUpdateTimestamp = now
@@ -475,7 +493,8 @@ class OverlayService : Service() {
                 noteLeadTimeMs = config.noteLeadTimeMs,
                 approachCircleLeadTimeMs = config.approachCircleLeadTimeMs,
                 loopStartMs = loopStart,
-                loopEndMs = loopEnd
+                loopEndMs = loopEnd,
+                countdownMs = config.countdownMs
             )
         }
     }

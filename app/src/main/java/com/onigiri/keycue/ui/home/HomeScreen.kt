@@ -246,6 +246,8 @@ fun HomeScreen(
         onShowSongSelectionChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showSongSelection = it) } },
         onShowFittingChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showFitting = it) } },
         onShowGuideToggleChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showGuideToggle = it) } },
+        onShowCountdownControlChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showCountdownControl = it) } },
+        onShowGuideQuickTogglesChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showGuideQuickToggles = it) } },
         onDismissError = { viewModel.clearError() }
     )
 }
@@ -298,6 +300,8 @@ fun HomeScreenContent(
     onShowSongSelectionChange: (Boolean) -> Unit = {},
     onShowFittingChange: (Boolean) -> Unit = {},
     onShowGuideToggleChange: (Boolean) -> Unit = {},
+    onShowCountdownControlChange: (Boolean) -> Unit = {},
+    onShowGuideQuickTogglesChange: (Boolean) -> Unit = {},
     onDismissError: () -> Unit = {}
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
@@ -396,6 +400,8 @@ fun HomeScreenContent(
                         onShowSongSelectionChange = onShowSongSelectionChange,
                         onShowFittingChange = onShowFittingChange,
                         onShowGuideToggleChange = onShowGuideToggleChange,
+                        onShowCountdownControlChange = onShowCountdownControlChange,
+                        onShowGuideQuickTogglesChange = onShowGuideQuickTogglesChange,
                         onDismissError = onDismissError
                     )
                 } else {
@@ -444,6 +450,8 @@ fun HomeScreenContent(
                         onShowSongSelectionChange = onShowSongSelectionChange,
                         onShowFittingChange = onShowFittingChange,
                         onShowGuideToggleChange = onShowGuideToggleChange,
+                        onShowCountdownControlChange = onShowCountdownControlChange,
+                        onShowGuideQuickTogglesChange = onShowGuideQuickTogglesChange,
                         onDismissError = onDismissError
                     )
                 }
@@ -501,6 +509,8 @@ private fun HomeScreenNarrowContent(
     onShowSongSelectionChange: (Boolean) -> Unit = {},
     onShowFittingChange: (Boolean) -> Unit = {},
     onShowGuideToggleChange: (Boolean) -> Unit = {},
+    onShowCountdownControlChange: (Boolean) -> Unit = {},
+    onShowGuideQuickTogglesChange: (Boolean) -> Unit = {},
     onDismissError: () -> Unit
 ) {
     Column(
@@ -565,7 +575,9 @@ private fun HomeScreenNarrowContent(
             onShowCircleLeadTimeControlChange = onShowCircleLeadTimeControlChange,
             onShowSongSelectionChange = onShowSongSelectionChange,
             onShowFittingChange = onShowFittingChange,
-            onShowGuideToggleChange = onShowGuideToggleChange
+            onShowGuideToggleChange = onShowGuideToggleChange,
+            onShowCountdownControlChange = onShowCountdownControlChange,
+            onShowGuideQuickTogglesChange = onShowGuideQuickTogglesChange
         )
 
         // 演奏支援開始ボタン
@@ -650,6 +662,8 @@ private fun HomeScreenWideContent(
     onShowSongSelectionChange: (Boolean) -> Unit = {},
     onShowFittingChange: (Boolean) -> Unit = {},
     onShowGuideToggleChange: (Boolean) -> Unit = {},
+    onShowCountdownControlChange: (Boolean) -> Unit = {},
+    onShowGuideQuickTogglesChange: (Boolean) -> Unit = {},
     onDismissError: () -> Unit
 ) {
     Row(
@@ -769,7 +783,9 @@ private fun HomeScreenWideContent(
                 onShowCircleLeadTimeControlChange = onShowCircleLeadTimeControlChange,
                 onShowSongSelectionChange = onShowSongSelectionChange,
                 onShowFittingChange = onShowFittingChange,
-                onShowGuideToggleChange = onShowGuideToggleChange
+                onShowGuideToggleChange = onShowGuideToggleChange,
+                onShowCountdownControlChange = onShowCountdownControlChange,
+                onShowGuideQuickTogglesChange = onShowGuideQuickTogglesChange
             )
         }
     }

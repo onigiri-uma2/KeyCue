@@ -48,5 +48,11 @@ data class ControlOverlayCallbacks(
     /** ゲーム画面上でのキー位置手動調整（フィッティング）を開始する */
     val onStartFitting: () -> Unit = {},
     /** 調整されたキー位置プロファイルを保存する */
-    val onSaveFitProfile: (FitProfile) -> Unit = {}
+    val onSaveFitProfile: (FitProfile) -> Unit = {},
+    /** 開始カウントダウン時間（ms）を変更する */
+    val onCountdownChange: (Long) -> Unit = {},
+    /** 落下ノート（Falling Notes）表示ON/OFFを切り替える */
+    val onShowFallingNotesChange: (Boolean) -> Unit = {},
+    /** タイミングサークル（Approach Circles）表示ON/OFFを切り替える */
+    val onShowApproachCirclesChange: (Boolean) -> Unit = {}
 )

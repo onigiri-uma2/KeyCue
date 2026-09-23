@@ -40,6 +40,9 @@ data class PlaybackConfig(
         const val NOTE_LEAD_TIME_STEP_MS = 100L
         const val APPROACH_CIRCLE_LEAD_TIME_STEP_MS = 50L
 
+        /** カウントダウンの選択肢プリセット（ミリ秒） */
+        val COUNTDOWN_PRESETS_MS = listOf(0L, 1000L, 3000L, 5000L)
+
         /**
          * 再生設定値の正規化を一元管理する。
          *
