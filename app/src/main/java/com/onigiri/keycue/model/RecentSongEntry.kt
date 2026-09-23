@@ -9,4 +9,12 @@ package com.onigiri.keycue.model
 data class RecentSongEntry(
     val uri: String,
     val title: String
-)
+) {
+    companion object {
+        /** 履歴として保持・永続化する最大件数 */
+        const val MAX_RECENT_SONGS = 5
+
+        /** コントロールオーバーレイ内に表示する最大件数 */
+        const val MAX_RECENT_SONGS_IN_OVERLAY = 3
+    }
+}

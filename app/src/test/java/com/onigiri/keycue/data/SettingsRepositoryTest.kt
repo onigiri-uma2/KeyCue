@@ -665,6 +665,39 @@ class SettingsRepositoryTest {
         assertEquals("Valid 2", repo.recentSongs.value[1].title)
     }
 
+    @Test
+    fun `SharedPreferencesSettingsRepository normalizes JSON with duplicates, blank titles, and limits to MAX_RECENT_SONGS`() = runBlocking {
+        val json = """[
+            {"uri": "content://media/song1", "title": "Song 1"},
+            {"uri": "content://media/song2", "title": ""},
+            {"uri": "  content://media/song1  ", "title": "Duplicate Song 1"},
+            {"uri": "content://media/song3", "title": "   "},
+            {"uri": "content://media/song4", "title": "Song 4"},
+            {"uri": "content://media/song5", "title": "Song 5"},
+            {"uri": "content://media/song6", "title": "Song 6"}
+        ]""".trimIndent()
+
+        val fakePrefs = createFakePrefs(mapOf("recent_songs" to json))
+        val repo = SharedPreferencesSettingsRepository(fakePrefs)
+
+        assertEquals(RecentSongEntry.MAX_RECENT_SONGS, repo.recentSongs.value.size)
+        // 1件目: song1
+        assertEquals("content://media/song1", repo.recentSongs.value[0].uri)
+        assertEquals("Song 1", repo.recentSongs.value[0].title)
+        // 2件目: song2 (空タイトル -> "楽曲")
+        assertEquals("content://media/song2", repo.recentSongs.value[1].uri)
+        assertEquals("楽曲", repo.recentSongs.value[1].title)
+        // 3件目: song3 (ブランクタイトル -> "楽曲", 重複のsong1はスキップ)
+        assertEquals("content://media/song3", repo.recentSongs.value[2].uri)
+        assertEquals("楽曲", repo.recentSongs.value[2].title)
+        // 4件目: song4
+        assertEquals("content://media/song4", repo.recentSongs.value[3].uri)
+        assertEquals("Song 4", repo.recentSongs.value[3].title)
+        // 5件目: song5 (上限到達、song6は除外)
+        assertEquals("content://media/song5", repo.recentSongs.value[4].uri)
+        assertEquals("Song 5", repo.recentSongs.value[4].title)
+    }
+
     private fun createFakePrefs(initialData: Map<String, Any>): android.content.SharedPreferences {
         val map = HashMap<String, Any>(initialData)
         return java.lang.reflect.Proxy.newProxyInstance(

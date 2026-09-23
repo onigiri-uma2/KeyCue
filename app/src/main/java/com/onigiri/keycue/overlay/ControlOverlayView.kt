@@ -1043,7 +1043,7 @@ class ControlOverlayView(
         if (::recentSongsSection.isInitialized) {
             val visibleRecentSongs = currentRecentSongs
                 .filter { it.uri != currentSongUri }
-                .take(3)
+                .take(RecentSongEntry.MAX_RECENT_SONGS_IN_OVERLAY)
             recentSongsSection.visibility = if (config.showRecentSongs && visibleRecentSongs.isNotEmpty()) View.VISIBLE else View.GONE
         }
 
@@ -1115,7 +1115,7 @@ class ControlOverlayView(
 
         val visibleRecentSongs = currentRecentSongs
             .filter { it.uri != currentSongUri }
-            .take(3)
+            .take(RecentSongEntry.MAX_RECENT_SONGS_IN_OVERLAY)
 
         val shouldShow = currentConfig.showRecentSongs && visibleRecentSongs.isNotEmpty()
         recentSongsSection.visibility = if (shouldShow) View.VISIBLE else View.GONE

@@ -117,8 +117,8 @@ class OverlayWindowController(
         val screenWidth = displayMetrics.widthPixels
         val screenHeight = displayMetrics.heightPixels
 
-        // デフォルト初期位置（画面右上寄り、上端から少し下）
-        val defaultX = screenWidth - (70 * density).toInt()
+        // デフォルト初期位置（画面左端、上端から少し下）
+        val defaultX = 0
         val defaultY = (120 * density).toInt()
 
         val targetX = when {

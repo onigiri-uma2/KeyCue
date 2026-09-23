@@ -21,7 +21,7 @@ import org.json.JSONObject
 internal fun updateRecentSongs(
     current: List<RecentSongEntry>,
     newEntry: RecentSongEntry,
-    maxSize: Int = 5
+    maxSize: Int = RecentSongEntry.MAX_RECENT_SONGS
 ): List<RecentSongEntry> {
     val filtered = current.filter { it.uri != newEntry.uri }
     return (listOf(newEntry) + filtered).take(maxSize)
@@ -204,19 +204,24 @@ class SharedPreferencesSettingsRepository internal constructor(
             return try {
                 val array = JSONArray(json)
                 val list = mutableListOf<RecentSongEntry>()
+                val seenUris = mutableSetOf<String>()
                 for (i in 0 until array.length()) {
                     try {
                         val obj = array.getJSONObject(i)
-                        val uri = obj.getString("uri")
-                        val title = obj.optString("title", "")
-                        if (uri.isNotBlank()) {
-                            list.add(RecentSongEntry(uri = uri, title = title))
+                        val uri = obj.optString("uri", "").trim()
+                        if (uri.isBlank() || !seenUris.add(uri)) {
+                            continue
+                        }
+                        val title = obj.optString("title", "").trim().ifBlank { "楽曲" }
+                        list.add(RecentSongEntry(uri = uri, title = title))
+                        if (list.size >= RecentSongEntry.MAX_RECENT_SONGS) {
+                            break
                         }
                     } catch (_: Exception) {
-                        // 破損要素はスキップ
+                        // 破損要素のみスキップ
                     }
                 }
-                list.take(5)
+                list
             } catch (_: Exception) {
                 emptyList()
             }
@@ -364,7 +369,7 @@ class SharedPreferencesSettingsRepository internal constructor(
     }
 
     override suspend fun addRecentSong(entry: RecentSongEntry) {
-        val updated = updateRecentSongs(_recentSongs.value, entry, maxSize = 5)
+        val updated = updateRecentSongs(_recentSongs.value, entry, maxSize = RecentSongEntry.MAX_RECENT_SONGS)
         _recentSongs.value = updated
         prefs.edit().putString(KEY_RECENT_SONGS, serializeRecentSongs(updated)).apply()
     }
@@ -586,7 +591,7 @@ class InMemorySettingsRepository(
     }
 
     override suspend fun addRecentSong(entry: RecentSongEntry) {
-        _recentSongs.value = updateRecentSongs(_recentSongs.value, entry, maxSize = 5)
+        _recentSongs.value = updateRecentSongs(_recentSongs.value, entry, maxSize = RecentSongEntry.MAX_RECENT_SONGS)
     }
 
     override suspend fun removeRecentSong(uri: String) {
