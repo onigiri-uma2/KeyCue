@@ -52,7 +52,8 @@ class OverlayWindowController(
         onCountdownChange: (Long) -> Unit = {},
         onShowFallingNotesChange: (Boolean) -> Unit = {},
         onShowApproachCirclesChange: (Boolean) -> Unit = {},
-        onSelectRecentSong: (RecentSongEntry) -> Unit = {}
+        onSelectRecentSong: (RecentSongEntry) -> Unit = {},
+        onMetronomeEnabledChange: (Boolean) -> Unit = {}
     ) : this(
         context = context,
         callbacks = ControlOverlayCallbacks(
@@ -76,7 +77,8 @@ class OverlayWindowController(
             onCountdownChange = onCountdownChange,
             onShowFallingNotesChange = onShowFallingNotesChange,
             onShowApproachCirclesChange = onShowApproachCirclesChange,
-            onSelectRecentSong = onSelectRecentSong
+            onSelectRecentSong = onSelectRecentSong,
+            onMetronomeEnabledChange = onMetronomeEnabledChange
         )
     )
 
@@ -93,6 +95,7 @@ class OverlayWindowController(
     private var currentControlOverlayConfig: com.onigiri.keycue.model.ControlOverlayConfig = com.onigiri.keycue.model.ControlOverlayConfig()
     private var currentRecentSongs: List<RecentSongEntry> = emptyList()
     private var currentSongUri: String? = null
+    private var currentMetronomeEnabled: Boolean = false
 
     // --- Control Overlay 管理 ---
 
@@ -166,6 +169,7 @@ class OverlayWindowController(
                 showFallingNotes = currentVisualConfig.showFallingNotes,
                 showApproachCircles = currentVisualConfig.showApproachCircles
             )
+            updateMetronomeState(currentMetronomeEnabled)
         }
 
         try {
@@ -310,6 +314,14 @@ class OverlayWindowController(
             showFallingNotes = config.showFallingNotes,
             showApproachCircles = config.showApproachCircles
         )
+    }
+
+    /**
+     * メトロノームの有効状態を更新し、Control Overlay に反映する。
+     */
+    fun updateMetronomeState(enabled: Boolean) {
+        currentMetronomeEnabled = enabled
+        controlOverlayView?.updateMetronomeState(enabled)
     }
 
     /**

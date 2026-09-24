@@ -3,6 +3,8 @@ package com.onigiri.keycue.data
 import android.content.Context
 import android.content.SharedPreferences
 import com.onigiri.keycue.model.ControlOverlayConfig
+import com.onigiri.keycue.model.BeatSubdivision
+import com.onigiri.keycue.model.MetronomeConfig
 import com.onigiri.keycue.model.NormalizedPoint
 import com.onigiri.keycue.model.PlaybackConfig
 import com.onigiri.keycue.model.RecentSongEntry
@@ -140,6 +142,12 @@ interface SettingsRepository {
     suspend fun saveControlOverlayConfig(config: ControlOverlayConfig)
     suspend fun updateControlOverlayConfig(transform: (ControlOverlayConfig) -> ControlOverlayConfig) =
         saveControlOverlayConfig(transform(controlOverlayConfig.value))
+
+    /** 音声メトロノーム設定 (MetronomeConfig) */
+    val metronomeConfig: StateFlow<MetronomeConfig>
+    suspend fun saveMetronomeConfig(config: MetronomeConfig)
+    suspend fun updateMetronomeConfig(transform: (MetronomeConfig) -> MetronomeConfig) =
+        saveMetronomeConfig(transform(metronomeConfig.value))
 }
 
 /**
@@ -198,6 +206,14 @@ class SharedPreferencesSettingsRepository internal constructor(
         private const val KEY_CONTROL_SHOW_GUIDE_QUICK_TOGGLES = "control_show_guide_quick_toggles"
         private const val KEY_CONTROL_SHOW_RECENT_SONGS = "control_show_recent_songs"
         private const val KEY_RECENT_SONGS = "recent_songs"
+
+        private const val KEY_METRONOME_ENABLED = "metronome_enabled"
+        private const val KEY_METRONOME_BPM = "metronome_bpm"
+        private const val KEY_METRONOME_BEATS_PER_BAR = "metronome_beats_per_bar"
+        private const val KEY_METRONOME_SUBDIVISION = "metronome_subdivision"
+        private const val KEY_METRONOME_ACCENT_ENABLED = "metronome_accent_enabled"
+        private const val KEY_METRONOME_VOLUME_PERCENT = "metronome_volume_percent"
+        private const val KEY_METRONOME_BEAT_OFFSET_MS = "metronome_beat_offset_ms"
 
         private fun parseRecentSongs(json: String?): List<RecentSongEntry> {
             if (json.isNullOrBlank()) return emptyList()
@@ -357,6 +373,36 @@ class SharedPreferencesSettingsRepository internal constructor(
     )
     override val midiMappingSettings: StateFlow<com.onigiri.keycue.model.MidiMappingSettings> = _midiMappingSettings.asStateFlow()
 
+    private val _metronomeConfig: MutableStateFlow<MetronomeConfig> = MutableStateFlow(
+        loadInitialMetronomeConfig()
+    )
+    override val metronomeConfig: StateFlow<MetronomeConfig> = _metronomeConfig.asStateFlow()
+
+    private fun loadInitialMetronomeConfig(): MetronomeConfig {
+        val enabled = prefs.getBoolean(KEY_METRONOME_ENABLED, false)
+        val bpm = prefs.getInt(KEY_METRONOME_BPM, MetronomeConfig.DEFAULT_BPM)
+        val beatsPerBar = prefs.getInt(KEY_METRONOME_BEATS_PER_BAR, MetronomeConfig.DEFAULT_BEATS_PER_BAR)
+        val subName = prefs.getString(KEY_METRONOME_SUBDIVISION, BeatSubdivision.QUARTER.name)
+        val subdivision = try {
+            BeatSubdivision.valueOf(subName ?: BeatSubdivision.QUARTER.name)
+        } catch (_: Exception) {
+            BeatSubdivision.QUARTER
+        }
+        val accentEnabled = prefs.getBoolean(KEY_METRONOME_ACCENT_ENABLED, true)
+        val volumePercent = prefs.getInt(KEY_METRONOME_VOLUME_PERCENT, MetronomeConfig.DEFAULT_VOLUME_PERCENT)
+        val beatOffsetMs = prefs.getLong(KEY_METRONOME_BEAT_OFFSET_MS, MetronomeConfig.DEFAULT_BEAT_OFFSET_MS)
+
+        return MetronomeConfig.normalize(
+            enabled = enabled,
+            bpm = bpm,
+            beatsPerBar = beatsPerBar,
+            subdivision = subdivision,
+            accentEnabled = accentEnabled,
+            volumePercent = volumePercent,
+            beatOffsetMs = beatOffsetMs
+        )
+    }
+
     override suspend fun saveLastSongUri(uri: String?) {
         _lastSongUri.value = uri
         prefs.edit().apply {
@@ -509,6 +555,20 @@ class SharedPreferencesSettingsRepository internal constructor(
             .apply()
     }
 
+    override suspend fun saveMetronomeConfig(config: MetronomeConfig) {
+        val normalized = config.normalized()
+        _metronomeConfig.value = normalized
+        prefs.edit()
+            .putBoolean(KEY_METRONOME_ENABLED, normalized.enabled)
+            .putInt(KEY_METRONOME_BPM, normalized.bpm)
+            .putInt(KEY_METRONOME_BEATS_PER_BAR, normalized.beatsPerBar)
+            .putString(KEY_METRONOME_SUBDIVISION, normalized.subdivision.name)
+            .putBoolean(KEY_METRONOME_ACCENT_ENABLED, normalized.accentEnabled)
+            .putInt(KEY_METRONOME_VOLUME_PERCENT, normalized.volumePercent)
+            .putLong(KEY_METRONOME_BEAT_OFFSET_MS, normalized.beatOffsetMs)
+            .apply()
+    }
+
     private fun applyPlaybackConfig(config: PlaybackConfig) {
         _playbackConfig.value = config
         _speed.value = config.speed
@@ -533,7 +593,8 @@ class InMemorySettingsRepository(
     initialCountdownMs: Long = 3000L,
     initialVisualConfig: com.onigiri.keycue.model.VisualConfig = com.onigiri.keycue.model.VisualConfig(),
     initialMidiMappingSettings: com.onigiri.keycue.model.MidiMappingSettings = com.onigiri.keycue.model.MidiMappingSettings(),
-    initialControlOverlayConfig: ControlOverlayConfig = ControlOverlayConfig()
+    initialControlOverlayConfig: ControlOverlayConfig = ControlOverlayConfig(),
+    initialMetronomeConfig: MetronomeConfig = MetronomeConfig()
 ) : SettingsRepository {
 
     companion object {
@@ -585,6 +646,9 @@ class InMemorySettingsRepository(
 
     private val _controlOverlayConfig = MutableStateFlow(initialControlOverlayConfig)
     override val controlOverlayConfig: StateFlow<ControlOverlayConfig> = _controlOverlayConfig.asStateFlow()
+
+    private val _metronomeConfig = MutableStateFlow(initialMetronomeConfig.normalized())
+    override val metronomeConfig: StateFlow<MetronomeConfig> = _metronomeConfig.asStateFlow()
 
     override suspend fun saveLastSongUri(uri: String?) {
         _lastSongUri.value = uri
@@ -657,6 +721,10 @@ class InMemorySettingsRepository(
 
     override suspend fun saveControlOverlayConfig(config: ControlOverlayConfig) {
         _controlOverlayConfig.value = config
+    }
+
+    override suspend fun saveMetronomeConfig(config: MetronomeConfig) {
+        _metronomeConfig.value = config.normalized()
     }
 
     private fun applyPlaybackConfig(config: PlaybackConfig) {

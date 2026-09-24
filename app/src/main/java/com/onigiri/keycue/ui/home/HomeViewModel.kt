@@ -91,6 +91,13 @@ class HomeViewModel(
                 _uiState.update { it.copy(controlOverlayConfig = config) }
             }
         }
+
+        // メトロノーム設定の変更を監視
+        scope.launch {
+            settingsRepository.metronomeConfig.collect { config ->
+                _uiState.update { it.copy(metronomeConfig = config) }
+            }
+        }
     }
 
     private data class RepositoryState(
@@ -414,6 +421,25 @@ class HomeViewModel(
             settingsRepository.updateControlOverlayConfig(transform)
         }
     }
+
+    // --- MetronomeConfig 更新メソッド ---
+
+    /**
+     * MetronomeConfig を一括・ラムダ式で更新する。
+     */
+    fun updateMetronomeConfig(transform: (com.onigiri.keycue.model.MetronomeConfig) -> com.onigiri.keycue.model.MetronomeConfig) {
+        scope.launch {
+            settingsRepository.updateMetronomeConfig(transform)
+        }
+    }
+
+    fun setMetronomeEnabled(enabled: Boolean) = updateMetronomeConfig { it.copy(enabled = enabled) }
+    fun setMetronomeBpm(bpm: Int) = updateMetronomeConfig { it.copy(bpm = bpm.coerceIn(com.onigiri.keycue.model.MetronomeConfig.MIN_BPM, com.onigiri.keycue.model.MetronomeConfig.MAX_BPM)) }
+    fun setMetronomeBeatsPerBar(beats: Int) = updateMetronomeConfig { it.copy(beatsPerBar = beats) }
+    fun setMetronomeSubdivision(subdivision: com.onigiri.keycue.model.BeatSubdivision) = updateMetronomeConfig { it.copy(subdivision = subdivision) }
+    fun setMetronomeAccentEnabled(enabled: Boolean) = updateMetronomeConfig { it.copy(accentEnabled = enabled) }
+    fun setMetronomeVolumePercent(volume: Int) = updateMetronomeConfig { it.copy(volumePercent = volume.coerceIn(com.onigiri.keycue.model.MetronomeConfig.MIN_VOLUME_PERCENT, com.onigiri.keycue.model.MetronomeConfig.MAX_VOLUME_PERCENT)) }
+    fun setMetronomeBeatOffsetMs(offsetMs: Long) = updateMetronomeConfig { it.copy(beatOffsetMs = offsetMs.coerceIn(com.onigiri.keycue.model.MetronomeConfig.MIN_BEAT_OFFSET_MS, com.onigiri.keycue.model.MetronomeConfig.MAX_BEAT_OFFSET_MS)) }
 
     companion object {
         fun provideFactory(context: Context): ViewModelProvider.Factory =

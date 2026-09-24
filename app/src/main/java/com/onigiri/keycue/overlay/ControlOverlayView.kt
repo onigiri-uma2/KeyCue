@@ -160,8 +160,10 @@ class ControlOverlayView(
     // ガイドクイックトグル
     private var currentShowFallingNotes: Boolean = true
     private var currentShowApproachCircles: Boolean = true
+    private var currentMetronomeEnabled: Boolean = false
     private lateinit var notesToggleBtn: Button
     private lateinit var circleToggleBtn: Button
+    private lateinit var metronomeToggleBtn: Button
 
     // 長押し連続入力のキャンセル関数リスト（onDetachedFromWindowで一括解除）
     private val repeatPressCancelers = mutableListOf<() -> Unit>()
@@ -1235,7 +1237,7 @@ class ControlOverlayView(
             }
 
             val label = TextView(context).apply {
-                text = "Guide"
+                text = "Guide / Metro"
                 setTextColor(Color.parseColor("#CFD8DC"))
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
                 layoutParams = LinearLayout.LayoutParams(
@@ -1247,13 +1249,16 @@ class ControlOverlayView(
             }
             addView(label)
 
+            // 1行目: Notes ON/OFF, Circle ON/OFF
             val buttonRow = LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT
-                )
+                ).apply {
+                    bottomMargin = dpToPx(4)
+                }
 
                 notesToggleBtn = createQuickToggleButton("Notes ON") {
                     callbacks.onShowFallingNotesChange(!currentShowFallingNotes)
@@ -1267,7 +1272,25 @@ class ControlOverlayView(
                 addView(circleToggleBtn)
             }
             addView(buttonRow)
+
+            // 2行目: Metronome ON/OFF
+            val metroRow = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+
+                metronomeToggleBtn = createQuickToggleButton("Metro OFF") {
+                    callbacks.onMetronomeEnabledChange(!currentMetronomeEnabled)
+                }
+                addView(metronomeToggleBtn)
+            }
+            addView(metroRow)
+
             updateGuideQuickToggleStyle()
+            updateMetronomeToggleStyle()
         }
     }
 
@@ -1307,6 +1330,22 @@ class ControlOverlayView(
         currentShowFallingNotes = showFallingNotes
         currentShowApproachCircles = showApproachCircles
         updateGuideQuickToggleStyle()
+    }
+
+    private fun updateMetronomeToggleStyle() {
+        if (!::metronomeToggleBtn.isInitialized) return
+
+        metronomeToggleBtn.text = if (currentMetronomeEnabled) "Metro ON" else "Metro OFF"
+        metronomeToggleBtn.background = createRoundedDrawable(
+            cornerRadiusDp = 4f,
+            fillColor = if (currentMetronomeEnabled) Color.parseColor("#00796B") else Color.parseColor("#37474F")
+        )
+        metronomeToggleBtn.setTextColor(if (currentMetronomeEnabled) Color.WHITE else Color.parseColor("#90A4AE"))
+    }
+
+    fun updateMetronomeState(enabled: Boolean) {
+        currentMetronomeEnabled = enabled
+        updateMetronomeToggleStyle()
     }
 
     private fun createMiniButton(text: String, bgColor: Int, onClick: (() -> Unit)? = null): Button {

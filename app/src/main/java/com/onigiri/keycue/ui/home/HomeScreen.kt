@@ -248,6 +248,13 @@ fun HomeScreen(
         onShowSongSelectionChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showSongSelection = it) } },
         onShowFittingChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showFitting = it) } },
         onShowGuideToggleChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showGuideToggle = it) } },
+        onMetronomeEnabledChange = { viewModel.setMetronomeEnabled(it) },
+        onMetronomeBpmChange = { viewModel.setMetronomeBpm(it) },
+        onMetronomeBeatsPerBarChange = { viewModel.setMetronomeBeatsPerBar(it) },
+        onMetronomeSubdivisionChange = { viewModel.setMetronomeSubdivision(it) },
+        onMetronomeAccentEnabledChange = { viewModel.setMetronomeAccentEnabled(it) },
+        onMetronomeVolumeChange = { viewModel.setMetronomeVolumePercent(it) },
+        onMetronomeBeatOffsetChange = { viewModel.setMetronomeBeatOffsetMs(it) },
         onDismissError = { viewModel.clearError() }
     )
 }
@@ -302,6 +309,13 @@ fun HomeScreenContent(
     onShowSongSelectionChange: (Boolean) -> Unit = {},
     onShowFittingChange: (Boolean) -> Unit = {},
     onShowGuideToggleChange: (Boolean) -> Unit = {},
+    onMetronomeEnabledChange: (Boolean) -> Unit = {},
+    onMetronomeBpmChange: (Int) -> Unit = {},
+    onMetronomeBeatsPerBarChange: (Int) -> Unit = {},
+    onMetronomeSubdivisionChange: (com.onigiri.keycue.model.BeatSubdivision) -> Unit = {},
+    onMetronomeAccentEnabledChange: (Boolean) -> Unit = {},
+    onMetronomeVolumeChange: (Int) -> Unit = {},
+    onMetronomeBeatOffsetChange: (Long) -> Unit = {},
     onDismissError: () -> Unit = {}
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
@@ -452,6 +466,13 @@ fun HomeScreenContent(
                         onShowSongSelectionChange = onShowSongSelectionChange,
                         onShowFittingChange = onShowFittingChange,
                         onShowGuideToggleChange = onShowGuideToggleChange,
+                        onMetronomeEnabledChange = onMetronomeEnabledChange,
+                        onMetronomeBpmChange = onMetronomeBpmChange,
+                        onMetronomeBeatsPerBarChange = onMetronomeBeatsPerBarChange,
+                        onMetronomeSubdivisionChange = onMetronomeSubdivisionChange,
+                        onMetronomeAccentEnabledChange = onMetronomeAccentEnabledChange,
+                        onMetronomeVolumeChange = onMetronomeVolumeChange,
+                        onMetronomeBeatOffsetChange = onMetronomeBeatOffsetChange,
                         onDismissError = onDismissError
                     )
                 }
@@ -511,6 +532,13 @@ private fun HomeScreenNarrowContent(
     onShowSongSelectionChange: (Boolean) -> Unit = {},
     onShowFittingChange: (Boolean) -> Unit = {},
     onShowGuideToggleChange: (Boolean) -> Unit = {},
+    onMetronomeEnabledChange: (Boolean) -> Unit = {},
+    onMetronomeBpmChange: (Int) -> Unit = {},
+    onMetronomeBeatsPerBarChange: (Int) -> Unit = {},
+    onMetronomeSubdivisionChange: (com.onigiri.keycue.model.BeatSubdivision) -> Unit = {},
+    onMetronomeAccentEnabledChange: (Boolean) -> Unit = {},
+    onMetronomeVolumeChange: (Int) -> Unit = {},
+    onMetronomeBeatOffsetChange: (Long) -> Unit = {},
     onDismissError: () -> Unit
 ) {
     Column(
@@ -577,7 +605,14 @@ private fun HomeScreenNarrowContent(
             onShowRecentSongsChange = onShowRecentSongsChange,
             onShowSongSelectionChange = onShowSongSelectionChange,
             onShowFittingChange = onShowFittingChange,
-            onShowGuideToggleChange = onShowGuideToggleChange
+            onShowGuideToggleChange = onShowGuideToggleChange,
+            onMetronomeEnabledChange = onMetronomeEnabledChange,
+            onMetronomeBpmChange = onMetronomeBpmChange,
+            onMetronomeBeatsPerBarChange = onMetronomeBeatsPerBarChange,
+            onMetronomeSubdivisionChange = onMetronomeSubdivisionChange,
+            onMetronomeAccentEnabledChange = onMetronomeAccentEnabledChange,
+            onMetronomeVolumeChange = onMetronomeVolumeChange,
+            onMetronomeBeatOffsetChange = onMetronomeBeatOffsetChange
         )
 
         // 演奏支援開始ボタン
@@ -664,6 +699,13 @@ private fun HomeScreenWideContent(
     onShowSongSelectionChange: (Boolean) -> Unit = {},
     onShowFittingChange: (Boolean) -> Unit = {},
     onShowGuideToggleChange: (Boolean) -> Unit = {},
+    onMetronomeEnabledChange: (Boolean) -> Unit = {},
+    onMetronomeBpmChange: (Int) -> Unit = {},
+    onMetronomeBeatsPerBarChange: (Int) -> Unit = {},
+    onMetronomeSubdivisionChange: (com.onigiri.keycue.model.BeatSubdivision) -> Unit = {},
+    onMetronomeAccentEnabledChange: (Boolean) -> Unit = {},
+    onMetronomeVolumeChange: (Int) -> Unit = {},
+    onMetronomeBeatOffsetChange: (Long) -> Unit = {},
     onDismissError: () -> Unit
 ) {
     Row(
@@ -785,7 +827,14 @@ private fun HomeScreenWideContent(
                 onShowRecentSongsChange = onShowRecentSongsChange,
                 onShowSongSelectionChange = onShowSongSelectionChange,
                 onShowFittingChange = onShowFittingChange,
-                onShowGuideToggleChange = onShowGuideToggleChange
+                onShowGuideToggleChange = onShowGuideToggleChange,
+                onMetronomeEnabledChange = onMetronomeEnabledChange,
+                onMetronomeBpmChange = onMetronomeBpmChange,
+                onMetronomeBeatsPerBarChange = onMetronomeBeatsPerBarChange,
+                onMetronomeSubdivisionChange = onMetronomeSubdivisionChange,
+                onMetronomeAccentEnabledChange = onMetronomeAccentEnabledChange,
+                onMetronomeVolumeChange = onMetronomeVolumeChange,
+                onMetronomeBeatOffsetChange = onMetronomeBeatOffsetChange
             )
         }
     }

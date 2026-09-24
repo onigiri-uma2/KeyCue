@@ -19,6 +19,9 @@ import android.net.Uri
 import com.onigiri.keycue.model.PlaybackSession
 import com.onigiri.keycue.model.RecentSongEntry
 import com.onigiri.keycue.model.SongData
+import com.onigiri.keycue.audio.MetronomeScheduler
+import com.onigiri.keycue.audio.MetronomeSoundPlayer
+import com.onigiri.keycue.audio.SoundPoolMetronomeSoundPlayer
 import com.onigiri.keycue.song.SongSelectionCoordinator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -99,6 +102,9 @@ class OverlayService : Service() {
     private var isFrameLoopRunning = false
     private var isRecentSongLoading = false
 
+    private var metronomeSoundPlayer: MetronomeSoundPlayer? = null
+    private var metronomeScheduler: MetronomeScheduler? = null
+
     // ディスプレイの垂直同期信号 (VSYNC) に合わせて60fps/120fpsでフレーム描画を駆動するChoreographerコールバック
     private val frameCallback = object : android.view.Choreographer.FrameCallback {
         override fun doFrame(frameTimeNanos: Long) {
@@ -118,6 +124,18 @@ class OverlayService : Service() {
         OverlayNotificationFactory.createNotificationChannel(this)
 
         settingsRepository = SharedPreferencesSettingsRepository.getInstance(this)
+
+        val soundPlayer = SoundPoolMetronomeSoundPlayer(this)
+        metronomeSoundPlayer = soundPlayer
+        metronomeScheduler = MetronomeScheduler(
+            timeProvider = { playbackEngine.getCurrentPositionMs(allowNegative = false) },
+            speedProvider = { playbackEngine.targetPlaybackSpeed },
+            isPlayingProvider = { playbackEngine.state.value is PlaybackState.Playing },
+            durationProvider = { loadedSong?.durationMs ?: 0L },
+            loopBoundsProvider = { Pair(playbackEngine.loopStartMs, playbackEngine.loopEndMs) },
+            soundPlayer = soundPlayer,
+            scope = serviceScope
+        )
 
         windowController = OverlayWindowController(
             context = this,
@@ -157,6 +175,7 @@ class OverlayService : Service() {
             },
             onSeekTo = { pos ->
                 playbackEngine.seekTo(pos)
+                metronomeScheduler?.onSeek(pos)
                 renderCurrentFrame(forceControlUpdate = true)
             },
             onSetLoopStart = {
@@ -188,6 +207,12 @@ class OverlayService : Service() {
             },
             onSelectRecentSong = { entry ->
                 handleSelectRecentSong(entry)
+            },
+            onMetronomeEnabledChange = { enabled ->
+                serviceScope.launch {
+                    val current = settingsRepository.metronomeConfig.value
+                    settingsRepository.saveMetronomeConfig(current.copy(enabled = enabled))
+                }
             }
         )
 
@@ -226,6 +251,9 @@ class OverlayService : Service() {
         val session = sessionRepository.currentSession.value
         applySong(session?.song)
         applyPlaybackConfig(settingsRepository.playbackConfig.value)
+        val metroConfig = settingsRepository.metronomeConfig.value
+        metronomeScheduler?.updateConfig(metroConfig)
+        windowController?.updateMetronomeState(metroConfig.enabled)
         windowController?.updateControlOverlayConfig(settingsRepository.controlOverlayConfig.value)
         windowController?.updateRecentSongs(
             songs = settingsRepository.recentSongs.value,
@@ -242,11 +270,13 @@ class OverlayService : Service() {
         playbackEngine.setSong(song)
         noteScheduler.prepare(song.events)
         loadedSong = song
+        metronomeScheduler?.onSongChanged()
     }
 
     private fun applyPlaybackConfig(config: com.onigiri.keycue.model.PlaybackConfig) {
         playbackEngine.countdownMs = config.countdownMs
         playbackEngine.setSpeed(config.speed)
+        metronomeScheduler?.onSpeedChanged()
     }
 
     private fun handlePlayPause() {
@@ -260,26 +290,31 @@ class OverlayService : Service() {
 
     private fun handleStop() {
         playbackEngine.stop()
+        metronomeScheduler?.stop()
         renderCurrentFrame(forceControlUpdate = true)
     }
 
     private fun handleRestart() {
         playbackEngine.restart(skipCountdown = false)
+        metronomeScheduler?.onSeek(0L)
     }
 
     private fun handleSeekBack() {
         playbackEngine.seekBack(10_000L)
+        metronomeScheduler?.onSeek(playbackEngine.getCurrentPositionMs())
         renderCurrentFrame(forceControlUpdate = true)
     }
 
     private fun handleSeekForward() {
         playbackEngine.seekForward(10_000L)
+        metronomeScheduler?.onSeek(playbackEngine.getCurrentPositionMs())
         renderCurrentFrame(forceControlUpdate = true)
     }
 
     private fun observePlaybackState() {
         serviceScope.launch {
             playbackEngine.state.collect { state ->
+                metronomeScheduler?.onPlaybackStateChanged(state)
                 when (state) {
                     is PlaybackState.Playing, is PlaybackState.CountingDown -> {
                         startFrameLoop()
@@ -330,6 +365,12 @@ class OverlayService : Service() {
                     songs = songs,
                     currentSongUri = sessionRepository.currentSession.value?.uri?.toString()
                 )
+            }
+        }
+        serviceScope.launch {
+            settingsRepository.metronomeConfig.collect { config ->
+                metronomeScheduler?.updateConfig(config)
+                windowController?.updateMetronomeState(config.enabled)
             }
         }
     }
@@ -605,6 +646,7 @@ class OverlayService : Service() {
     private fun stopOverlayAndSelf() {
         stopFrameLoop()
         playbackEngine.stop()
+        metronomeScheduler?.stop()
         windowController?.destroy()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             stopForeground(STOP_FOREGROUND_REMOVE)
@@ -623,6 +665,9 @@ class OverlayService : Service() {
         sessionCollectJob?.cancel()
         sessionCollectJob = null
         playbackEngine.release()
+        metronomeScheduler?.release()
+        metronomeScheduler = null
+        metronomeSoundPlayer = null
         loadedSong = null
         windowController?.destroy()
         windowController = null

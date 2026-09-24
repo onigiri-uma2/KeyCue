@@ -59,10 +59,18 @@ fun SettingsAccordionSection(
     onShowRecentSongsChange: (Boolean) -> Unit = {},
     onShowSongSelectionChange: (Boolean) -> Unit = {},
     onShowFittingChange: (Boolean) -> Unit = {},
-    onShowGuideToggleChange: (Boolean) -> Unit = {}
+    onShowGuideToggleChange: (Boolean) -> Unit = {},
+    onMetronomeEnabledChange: (Boolean) -> Unit = {},
+    onMetronomeBpmChange: (Int) -> Unit = {},
+    onMetronomeBeatsPerBarChange: (Int) -> Unit = {},
+    onMetronomeSubdivisionChange: (com.onigiri.keycue.model.BeatSubdivision) -> Unit = {},
+    onMetronomeAccentEnabledChange: (Boolean) -> Unit = {},
+    onMetronomeVolumeChange: (Int) -> Unit = {},
+    onMetronomeBeatOffsetChange: (Long) -> Unit = {}
 ) {
     var midiMappingExpanded by rememberSaveable { mutableStateOf(false) }
     var timingExpanded by rememberSaveable { mutableStateOf(true) }
+    var metronomeExpanded by rememberSaveable { mutableStateOf(false) }
     var visualExpanded by rememberSaveable { mutableStateOf(false) }
     var permissionExpanded by rememberSaveable { mutableStateOf(!uiState.overlayPermissionGranted) }
 
@@ -120,7 +128,33 @@ fun SettingsAccordionSection(
         )
     }
 
-    // 2. ガイド・ノート表示設定
+    // 2. メトロノーム設定
+    val metro = uiState.metronomeConfig
+    val subText = if (metro.subdivision == com.onigiri.keycue.model.BeatSubdivision.QUARTER) "4分" else "8分"
+    val metronomeSummary = if (metro.enabled) {
+        "ON / ${metro.bpm} BPM / ${metro.beatsPerBar}/4 (${subText}) / 音量${metro.volumePercent}%"
+    } else {
+        "OFF (${metro.bpm} BPM / ${metro.beatsPerBar}/4)"
+    }
+    ExpandableCard(
+        title = "メトロノーム",
+        summary = metronomeSummary,
+        expanded = metronomeExpanded,
+        onExpandedChange = { metronomeExpanded = it }
+    ) {
+        MetronomeConfigContent(
+            config = uiState.metronomeConfig,
+            onEnabledChange = onMetronomeEnabledChange,
+            onBpmChange = onMetronomeBpmChange,
+            onBeatsPerBarChange = onMetronomeBeatsPerBarChange,
+            onSubdivisionChange = onMetronomeSubdivisionChange,
+            onAccentEnabledChange = onMetronomeAccentEnabledChange,
+            onVolumeChange = onMetronomeVolumeChange,
+            onBeatOffsetChange = onMetronomeBeatOffsetChange
+        )
+    }
+
+    // 3. ガイド・ノート表示設定
     val radiusPercentStr = String.format(Locale.US, "%.1f", uiState.visualConfig.guideRadiusRatio * 100)
     val visualSummary = "サイズ $radiusPercentStr% / ノート${if (uiState.visualConfig.showFallingNotes) "ON" else "OFF"}"
     ExpandableCard(
