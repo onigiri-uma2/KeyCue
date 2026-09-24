@@ -93,6 +93,13 @@ class MetronomeSyncCoordinator(
         currentConfig = newConfig
         val song = currentSong
 
+        val isEnabling = (oldConfig == null || !oldConfig.enabled) && newConfig.enabled
+        if (isEnabling) {
+            // OFF -> ON 時は新しいタイムラインの解決完了まで一時的に発音を明示抑止（即時ミュート保証）
+            // （通常再生中のパラメータ変更時は再生を中断せず、解決完了時にシームレスに新タイムラインへ差し替える）
+            scheduler.prepareForEnable()
+        }
+
         // 音量やOFF時の即時停止はスケジューラへ即時適用
         scheduler.updateConfig(newConfig, rebuildTimeline = false)
 

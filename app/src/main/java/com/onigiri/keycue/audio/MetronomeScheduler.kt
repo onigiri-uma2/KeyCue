@@ -177,7 +177,6 @@ class MetronomeScheduler(
 
             if (!oldConfig.enabled && normalized.enabled) {
                 // OFF -> ON: 現在位置より後の拍から開始
-                // ただし、新曲非同期構築中 (!isTimelineReady) の場合は勝手に解除せず、構築完了を待つ
                 if (rebuildTimeline && isTimelineReady) {
                     timeline = rebuildTimelineLocked()
                     val currentPos = timeProvider()
@@ -186,6 +185,12 @@ class MetronomeScheduler(
                     // 直前拍の再発音・誤発音を防止（nextIdxが0なら-1L、1以上ならその直前インデックス）
                     lastPlayedBeatIndex = nextIdx - 1
                     lastObservedPositionMs = currentPos
+                    currentGeneration++
+                    notifyResync()
+                } else if (!rebuildTimeline) {
+                    // 非同期で新タイムラインを解決する場合、構築完了まで一時的に発音を明示抑止（即時ミュート保証）
+                    isTimelineReady = false
+                    soundPlayer.stop()
                     currentGeneration++
                     notifyResync()
                 }
@@ -325,6 +330,18 @@ class MetronomeScheduler(
             nextClickIndex = nextIdx
             lastPlayedBeatIndex = nextIdx - 1
             lastObservedPositionMs = rewindPositionMs
+            currentGeneration++
+            notifyResync()
+        }
+    }
+
+    /**
+     * メトロノームが OFF から ON に切り替わる際、新タイムラインの非同期構築完了まで一時的に発音を停止する。
+     */
+    fun prepareForEnable() {
+        synchronized(stateLock) {
+            soundPlayer.stop()
+            isTimelineReady = false
             currentGeneration++
             notifyResync()
         }
