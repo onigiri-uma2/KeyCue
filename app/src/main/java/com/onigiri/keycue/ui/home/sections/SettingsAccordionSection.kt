@@ -137,9 +137,9 @@ fun SettingsAccordionSection(
     val modeName = if (metro.timingMode == com.onigiri.keycue.model.MetronomeTimingMode.AUTO) "自動" else "手動"
     val subText = if (metro.subdivision == com.onigiri.keycue.model.BeatSubdivision.QUARTER) "4分" else "8分"
     val metronomeSummary = if (metro.enabled) {
-        "ON / $modeName ($currentBpm BPM, $currentTs / $subText) / 音量${metro.volumePercent}%"
+        "ON / $modeName (曲頭: $currentBpm BPM, $currentTs / $subText) / 音量${metro.volumePercent}%"
     } else {
-        "OFF / $modeName ($currentBpm BPM, $currentTs)"
+        "OFF / $modeName (曲頭: $currentBpm BPM, $currentTs)"
     }
     ExpandableCard(
         title = "メトロノーム",

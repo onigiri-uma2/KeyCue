@@ -47,7 +47,12 @@ data class HomeUiState(
     val midiMappingSettings: com.onigiri.keycue.model.MidiMappingSettings = com.onigiri.keycue.model.MidiMappingSettings(),
     val resolvedMidiMapping: com.onigiri.keycue.model.ResolvedMidiMapping? = null,
     val controlOverlayConfig: com.onigiri.keycue.model.ControlOverlayConfig = com.onigiri.keycue.model.ControlOverlayConfig(),
-    val metronomeConfig: com.onigiri.keycue.model.MetronomeConfig = com.onigiri.keycue.model.MetronomeConfig()
+    val metronomeConfig: com.onigiri.keycue.model.MetronomeConfig = com.onigiri.keycue.model.MetronomeConfig(),
+    val resolvedTimeline: com.onigiri.keycue.audio.BeatTimeline = com.onigiri.keycue.audio.MetronomeTimingResolver.resolveTimeline(
+        config = com.onigiri.keycue.model.MetronomeConfig(),
+        timingMetadata = null,
+        durationMs = 0L
+    )
 ) {
     fun withoutSong(): HomeUiState = copy(
         songTitle = null,
@@ -59,16 +64,11 @@ data class HomeUiState(
         songFormat = null,
         noteCount = 0,
         songData = null,
-        resolvedMidiMapping = null
-    )
-
-    /**
-     * 現在の楽曲情報とメトロノーム設定から解決されたタイムライン（UI表示用）。
-     */
-    val resolvedTimeline: com.onigiri.keycue.audio.BeatTimeline
-        get() = com.onigiri.keycue.audio.MetronomeTimingResolver.resolveTimeline(
+        resolvedMidiMapping = null,
+        resolvedTimeline = com.onigiri.keycue.audio.MetronomeTimingResolver.resolveTimeline(
             config = metronomeConfig,
-            timingMetadata = songData?.timingMetadata,
-            durationMs = songData?.durationMs ?: durationMs
+            timingMetadata = null,
+            durationMs = 0L
         )
+    )
 }

@@ -6,6 +6,7 @@ import com.onigiri.keycue.model.timing.TimeSignature
 import com.onigiri.keycue.song.midi.TempoMap
 import com.onigiri.keycue.song.midi.TimeSignatureMap
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
@@ -62,26 +63,47 @@ class MidiBeatTimeline(
             if (sectionEndTick <= sectionStartTick) continue
 
             // 小節長（tick） = ppqn * 4 * numerator / denominator
+            // 整数tickに収まらない拍子でも端数累積を防ぐためDouble精度で計算
             val measureTicks = ppqn.toDouble() * 4.0 * currentTs.timeSignature.numerator / currentTs.timeSignature.denominator
-            val clicksPerMeasure = max(1, (measureTicks / stepTicks).roundToInt())
+            if (measureTicks <= 0.0) continue
 
-            var clickInMeasure = 0
-            var currentTick = sectionStartTick.toDouble()
+            // 4分音符グリッドと小節境界が一致しない場合（例: 5/8や7/8で4分音符クリック時）のクリック仕様:
+            // 各小節は必ず小節開始境界（barStartTick）を小節頭（ダウンビート）として開始し、
+            // 小節内で stepTicks ごとにクリックを配置する。小節終端を超えるクリックは破棄され、
+            // 次の小節は正確な小節境界から新たにダウンビートで再開する（小節境界リセット仕様）。
+            var measureIndex = 0
+            while (list.size < MAX_BEATS_LIMIT) {
+                val barStartTick = sectionStartTick.toDouble() + (measureIndex * measureTicks)
+                if (barStartTick >= sectionEndTick) break
 
-            while (currentTick < sectionEndTick && list.size < MAX_BEATS_LIMIT) {
-                val timeMs = Math.round(tempoMap.tickToMs(currentTick)) + beatOffsetMs
-                val isAccent = accentEnabled && (clickInMeasure == 0)
+                val nextBarStartTick = sectionStartTick.toDouble() + ((measureIndex + 1) * measureTicks)
+                val barEndTick = min(sectionEndTick.toDouble(), nextBarStartTick)
 
+                // 小節頭 (ダウンビート)
+                val downbeatTimeMs = Math.round(tempoMap.tickToMs(barStartTick)) + beatOffsetMs
                 list.add(
                     MetronomeBeat(
                         index = list.size.toLong(),
-                        timeMs = timeMs,
-                        isAccent = isAccent
+                        timeMs = downbeatTimeMs,
+                        isAccent = accentEnabled
                     )
                 )
 
-                clickInMeasure = (clickInMeasure + 1) % clicksPerMeasure
-                currentTick += stepTicks
+                // 小節内の後続クリック（小節境界と重複しないよう barEndTick - 1.0 未満）
+                var clickTick = barStartTick + stepTicks
+                while (clickTick < barEndTick - 1.0 && list.size < MAX_BEATS_LIMIT) {
+                    val clickTimeMs = Math.round(tempoMap.tickToMs(clickTick)) + beatOffsetMs
+                    list.add(
+                        MetronomeBeat(
+                            index = list.size.toLong(),
+                            timeMs = clickTimeMs,
+                            isAccent = false
+                        )
+                    )
+                    clickTick += stepTicks
+                }
+
+                measureIndex++
             }
 
             if (list.size >= MAX_BEATS_LIMIT) break

@@ -79,7 +79,8 @@ class HomeViewModel(
                         countdownMs = state.config.countdownMs,
                         fitConfigured = state.profile != null,
                         visualConfig = state.visualConfig,
-                        midiMappingSettings = state.mappingSettings
+                        midiMappingSettings = state.mappingSettings,
+                        resolvedTimeline = getOrResolveTimeline(state.session?.song, current.metronomeConfig)
                     )
                 }
             }
@@ -92,12 +93,60 @@ class HomeViewModel(
             }
         }
 
-        // メトロノーム設定の変更を監視
+        // メトロノーム設定の変更を監視（音量等のみの変更ではタイムラインを再生成しない）
         scope.launch {
             settingsRepository.metronomeConfig.collect { config ->
-                _uiState.update { it.copy(metronomeConfig = config) }
+                _uiState.update { current ->
+                    val timeline = getOrResolveTimeline(current.songData, config)
+                    current.copy(metronomeConfig = config, resolvedTimeline = timeline)
+                }
             }
         }
+    }
+
+    private data class TimelineCacheKey(
+        val timingMetadata: com.onigiri.keycue.model.timing.SongTimingMetadata?,
+        val durationMs: Long,
+        val timingMode: com.onigiri.keycue.model.MetronomeTimingMode,
+        val bpm: Int,
+        val beatsPerBar: Int,
+        val subdivision: com.onigiri.keycue.model.BeatSubdivision,
+        val accentEnabled: Boolean,
+        val beatOffsetMs: Long
+    )
+
+    private var lastTimelineCacheKey: TimelineCacheKey? = null
+    private var cachedTimeline: com.onigiri.keycue.audio.BeatTimeline = com.onigiri.keycue.audio.MetronomeTimingResolver.resolveTimeline(
+        config = com.onigiri.keycue.model.MetronomeConfig(),
+        timingMetadata = null,
+        durationMs = 0L
+    )
+
+    private fun getOrResolveTimeline(
+        songData: com.onigiri.keycue.model.SongData?,
+        config: com.onigiri.keycue.model.MetronomeConfig
+    ): com.onigiri.keycue.audio.BeatTimeline {
+        val key = TimelineCacheKey(
+            timingMetadata = songData?.timingMetadata,
+            durationMs = songData?.durationMs ?: 0L,
+            timingMode = config.timingMode,
+            bpm = config.bpm,
+            beatsPerBar = config.beatsPerBar,
+            subdivision = config.subdivision,
+            accentEnabled = config.accentEnabled,
+            beatOffsetMs = config.beatOffsetMs
+        )
+        if (key == lastTimelineCacheKey) {
+            return cachedTimeline
+        }
+        val resolved = com.onigiri.keycue.audio.MetronomeTimingResolver.resolveTimeline(
+            config = config,
+            timingMetadata = songData?.timingMetadata,
+            durationMs = songData?.durationMs ?: 0L
+        )
+        lastTimelineCacheKey = key
+        cachedTimeline = resolved
+        return resolved
     }
 
     private data class RepositoryState(

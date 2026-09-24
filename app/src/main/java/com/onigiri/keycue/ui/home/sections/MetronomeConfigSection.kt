@@ -161,11 +161,16 @@ fun MetronomeConfigContent(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        text = "現在のBPM：",
+                        text = "曲頭BPM：",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    val bpmSource = if (timeline.isBpmAuto) "(楽曲自動)" else "(手動)"
+                    val bpmSource = when (timeline.sourceKind) {
+                        TimingSourceKind.MIDI -> "(楽曲自動)"
+                        TimingSourceKind.MIDI_DEFAULT -> "(MIDI標準デフォルト)"
+                        TimingSourceKind.SKY_STUDIO -> if (timeline.isBpmAuto) "(楽曲自動)" else "(手動)"
+                        TimingSourceKind.MANUAL -> "(手動)"
+                    }
                     Text(
                         text = "$currentBpm $bpmSource",
                         style = MaterialTheme.typography.bodySmall,
@@ -178,11 +183,16 @@ fun MetronomeConfigContent(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        text = "現在の拍子：",
+                        text = "曲頭拍子：",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    val tsSource = if (timeline.isTimeSignatureAuto) "(楽曲自動)" else "(手動)"
+                    val tsSource = when (timeline.sourceKind) {
+                        TimingSourceKind.MIDI -> "(楽曲自動)"
+                        TimingSourceKind.MIDI_DEFAULT -> "(MIDI標準デフォルト)"
+                        TimingSourceKind.SKY_STUDIO -> if (timeline.isTimeSignatureAuto) "(楽曲自動)" else "(手動)"
+                        TimingSourceKind.MANUAL -> "(手動)"
+                    }
                     Text(
                         text = "$currentTs $tsSource",
                         style = MaterialTheme.typography.bodySmall,

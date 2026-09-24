@@ -122,6 +122,17 @@ class SkyStudioTimingRegressionTest {
         assertNotNull(timing.invalidReason)
     }
 
+    // 6b. bpm=240.4 -> 丸め前の浮動小数点値で厳密に範囲外判定
+    @Test
+    fun testBpm240_4_outOfRange_fallsBackToManual() {
+        val song = parseString(createSkyJson(bpmField = "240.4"))
+        val timing = song.timingMetadata as? SongTimingMetadata.SkyStudio
+        assertNotNull(timing)
+        assertNull(timing!!.validBpm)
+        assertEquals(240.4, timing.rawBpm!!, 0.001)
+        assertNotNull(timing.invalidReason)
+    }
+
     // 7. bpm が数値文字列 "150"
     @Test
     fun testBpmNumericString_isParsed() {

@@ -173,15 +173,16 @@ class SkyStudioJsonParser(
             )
         }
 
-        val roundedBpm = Math.round(bpmDouble).toInt()
-        if (roundedBpm !in 40..240) {
+        // 浮動小数点での丸め前BPMで40.0〜240.0の安全範囲を判定
+        if (bpmDouble < 40.0 || bpmDouble > 240.0) {
             return SongTimingMetadata.SkyStudio(
                 rawBpm = bpmDouble,
                 validBpm = null,
-                invalidReason = "BPM out of valid range (40..240): $bpmDouble"
+                invalidReason = "BPM out of valid range (40.0..240.0): $bpmDouble"
             )
         }
 
+        val roundedBpm = Math.round(bpmDouble).toInt()
         return SongTimingMetadata.SkyStudio(
             rawBpm = bpmDouble,
             validBpm = roundedBpm,

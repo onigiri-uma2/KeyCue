@@ -396,4 +396,131 @@ class BeatTimelineRegressionTest {
             lastTime = beat.timeMs
         }
     }
+
+    // 11. 5/8 拍子の小節頭アクセント検証 (4分クリックおよび8分クリック)
+    @Test
+    fun testTimeSignature_5_8_quarterAndEighthModes() {
+        val ppqn = 480
+        val tempoMap = TempoMap(ppqn, listOf(RawTempoEvent(0L, 500_000L))) // 120 BPM (4分音符=500ms, 8分音符=250ms)
+        val tsEvents = listOf(
+            RawTimeSignatureEvent(tick = 0L, numerator = 5, denominator = 8, clocksPerClick = 24, notated32ndNotesPerQuarter = 8)
+        )
+        val tsMap = TimeSignatureMap(tsEvents)
+
+        // 8分音符クリック (stepTicks = 240 -> 250ms)
+        // 小節0: 0ms(強), 250ms, 500ms, 750ms, 1000ms
+        // 小節1: 1250ms(強: 1200tick), 1500ms, 1750ms, 2000ms, 2250ms
+        // 小節2: 2500ms(強: 2400tick)
+        val eighthTimeline = MidiBeatTimeline(
+            ppqn = ppqn,
+            tempoMap = tempoMap,
+            timeSignatureMap = tsMap,
+            subdivision = BeatSubdivision.EIGHTH,
+            accentEnabled = true,
+            beatOffsetMs = 0L,
+            songDurationMs = 5000L
+        )
+        assertEquals(0L, eighthTimeline.beatForIndex(0L)!!.timeMs)
+        assertTrue(eighthTimeline.beatForIndex(0L)!!.isAccent)
+
+        assertEquals(250L, eighthTimeline.beatForIndex(1L)!!.timeMs)
+        assertFalse(eighthTimeline.beatForIndex(1L)!!.isAccent)
+
+        assertEquals(1250L, eighthTimeline.beatForIndex(5L)!!.timeMs)
+        assertTrue("小節1の頭(1200tick -> 1250ms)はアクセントであること", eighthTimeline.beatForIndex(5L)!!.isAccent)
+
+        assertEquals(2500L, eighthTimeline.beatForIndex(10L)!!.timeMs)
+        assertTrue("小節2の頭(2400tick -> 2500ms)はアクセントであること", eighthTimeline.beatForIndex(10L)!!.isAccent)
+
+        // 4分音符クリック (stepTicks = 480 -> 500ms)
+        // 小節0: 0ms(強: 0tick), 500ms(480tick), 1000ms(960tick)
+        // 小節1: 1250ms(強: 1200tick), 1750ms(1680tick), 2250ms(2160tick)
+        // 小節2: 2500ms(強: 2400tick)
+        val quarterTimeline = MidiBeatTimeline(
+            ppqn = ppqn,
+            tempoMap = tempoMap,
+            timeSignatureMap = tsMap,
+            subdivision = BeatSubdivision.QUARTER,
+            accentEnabled = true,
+            beatOffsetMs = 0L,
+            songDurationMs = 5000L
+        )
+        // 小節0
+        assertEquals(0L, quarterTimeline.beatForIndex(0L)!!.timeMs)
+        assertTrue(quarterTimeline.beatForIndex(0L)!!.isAccent)
+
+        assertEquals(500L, quarterTimeline.beatForIndex(1L)!!.timeMs)
+        assertFalse(quarterTimeline.beatForIndex(1L)!!.isAccent)
+
+        assertEquals(1000L, quarterTimeline.beatForIndex(2L)!!.timeMs)
+        assertFalse(quarterTimeline.beatForIndex(2L)!!.isAccent)
+
+        // 小節1 (1200 tick -> 1250ms)
+        assertEquals(1250L, quarterTimeline.beatForIndex(3L)!!.timeMs)
+        assertTrue("小節1の頭(1200tick -> 1250ms)が正確にアクセントであること", quarterTimeline.beatForIndex(3L)!!.isAccent)
+
+        assertEquals(1750L, quarterTimeline.beatForIndex(4L)!!.timeMs)
+        assertFalse(quarterTimeline.beatForIndex(4L)!!.isAccent)
+
+        assertEquals(2250L, quarterTimeline.beatForIndex(5L)!!.timeMs)
+        assertFalse(quarterTimeline.beatForIndex(5L)!!.isAccent)
+
+        // 小節2 (2400 tick -> 2500ms)
+        assertEquals(2500L, quarterTimeline.beatForIndex(6L)!!.timeMs)
+        assertTrue("小節2の頭(2400tick -> 2500ms)が正確にアクセントであること", quarterTimeline.beatForIndex(6L)!!.isAccent)
+    }
+
+    // 12. 7/8 拍子の小節頭アクセント検証 (4分クリックおよび8分クリック)
+    @Test
+    fun testTimeSignature_7_8_quarterAndEighthModes() {
+        val ppqn = 480
+        val tempoMap = TempoMap(ppqn, listOf(RawTempoEvent(0L, 500_000L))) // 120 BPM
+        val tsEvents = listOf(
+            RawTimeSignatureEvent(tick = 0L, numerator = 7, denominator = 8, clocksPerClick = 24, notated32ndNotesPerQuarter = 8)
+        )
+        val tsMap = TimeSignatureMap(tsEvents)
+
+        // 小節長 = 480 * 4 * 7 / 8 = 1680 tick -> 1680 * (500,000 / 480) us = 1,750,000 us = 1750ms
+        // 8分音符モード: 小節0に7クリック(各250ms)、小節1の頭は index 7 (1750ms)
+        val eighthTimeline = MidiBeatTimeline(
+            ppqn = ppqn,
+            tempoMap = tempoMap,
+            timeSignatureMap = tsMap,
+            subdivision = BeatSubdivision.EIGHTH,
+            accentEnabled = true,
+            beatOffsetMs = 0L,
+            songDurationMs = 5000L
+        )
+        assertEquals(0L, eighthTimeline.beatForIndex(0L)!!.timeMs)
+        assertTrue(eighthTimeline.beatForIndex(0L)!!.isAccent)
+        assertEquals(1750L, eighthTimeline.beatForIndex(7L)!!.timeMs)
+        assertTrue("7/8の小節1頭(1680tick -> 1750ms)がアクセントであること", eighthTimeline.beatForIndex(7L)!!.isAccent)
+
+        // 4分音符モード:
+        // 小節0: 0ms(強: 0tick), 500ms(480tick), 1000ms(960tick), 1500ms(1440tick) (計4クリック)
+        // 小節1: 1750ms(強: 1680tick), 2250ms(2160tick), 2750ms(2640tick), 3250ms(3120tick)
+        // 小節2: 3500ms(強: 3360tick)
+        val quarterTimeline = MidiBeatTimeline(
+            ppqn = ppqn,
+            tempoMap = tempoMap,
+            timeSignatureMap = tsMap,
+            subdivision = BeatSubdivision.QUARTER,
+            accentEnabled = true,
+            beatOffsetMs = 0L,
+            songDurationMs = 5000L
+        )
+        assertEquals(0L, quarterTimeline.beatForIndex(0L)!!.timeMs)
+        assertTrue(quarterTimeline.beatForIndex(0L)!!.isAccent)
+        assertFalse(quarterTimeline.beatForIndex(1L)!!.isAccent)
+        assertFalse(quarterTimeline.beatForIndex(2L)!!.isAccent)
+        assertFalse(quarterTimeline.beatForIndex(3L)!!.isAccent)
+
+        // 小節1
+        assertEquals(1750L, quarterTimeline.beatForIndex(4L)!!.timeMs)
+        assertTrue("7/8の小節1頭(1680tick -> 1750ms)がアクセントであること", quarterTimeline.beatForIndex(4L)!!.isAccent)
+
+        // 小節2
+        assertEquals(3500L, quarterTimeline.beatForIndex(8L)!!.timeMs)
+        assertTrue("7/8の小節2頭(3360tick -> 3500ms)がアクセントであること", quarterTimeline.beatForIndex(8L)!!.isAccent)
+    }
 }
