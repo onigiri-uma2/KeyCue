@@ -54,6 +54,9 @@ class PlaybackEngine(
     var loopEndMs: Long? = null
         private set
 
+    /** ABリピートによる巻き戻りが発生した際のリスナー */
+    var onLoopRewound: ((Long) -> Unit)? = null
+
     /**
      * ABリピートが有効条件を満たしているかどうかを判定する。
      * 条件: A/B双方が設定済み、A < B、かつ区間長が MIN_LOOP_DURATION_MS (300ms) 以上。
@@ -319,6 +322,7 @@ class PlaybackEngine(
                 val loopTarget = getLoopTarget(currentPos)
                 if (loopTarget != null) {
                     seekTo(loopTarget)
+                    onLoopRewound?.invoke(loopTarget)
                     continue
                 }
 

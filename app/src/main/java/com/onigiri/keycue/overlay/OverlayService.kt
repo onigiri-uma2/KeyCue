@@ -143,6 +143,10 @@ class OverlayService : Service() {
             scope = serviceScope
         )
 
+        playbackEngine.onLoopRewound = { targetPos ->
+            metronomeScheduler?.onLoopRewound(targetPos)
+        }
+
         windowController = OverlayWindowController(
             context = this,
             onOpenApp = { openMainActivity() },
@@ -678,6 +682,7 @@ class OverlayService : Service() {
         stopFrameLoop()
         sessionCollectJob?.cancel()
         sessionCollectJob = null
+        playbackEngine.onLoopRewound = null
         playbackEngine.release()
         metronomeScheduler?.release()
         metronomeScheduler = null

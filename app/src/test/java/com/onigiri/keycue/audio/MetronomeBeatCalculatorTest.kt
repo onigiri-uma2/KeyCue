@@ -193,4 +193,31 @@ class MetronomeBeatCalculatorTest {
         val invalidOffset = MetronomeConfig.normalize(beatOffsetMs = 5000L)
         assertEquals(MetronomeConfig.MAX_BEAT_OFFSET_MS, invalidOffset.beatOffsetMs)
     }
+
+    @Test
+    fun `BPM140において丸め後時刻429msでfindNextClickIndexFromPositionを呼んでもindex 1が返る`() {
+        val config = MetronomeConfig(bpm = 140)
+        // BPM140: 60000 / 140 = 428.5714... ms
+        // index 0 = 0ms
+        // index 1 = round(428.5714...) = 429ms
+        // index 2 = round(857.1428...) = 857ms
+        assertEquals(429L, MetronomeBeatCalculator.calculateBeat(config, 1).timeMs)
+
+        // 429ms 位置から次拍を探したとき、ceilの浮動小数点端数により2へスキップされず、正しく1が返る
+        val nextIdx = MetronomeBeatCalculator.findNextClickIndexFromPosition(config, 429L)
+        assertEquals("429ms時点でindex 1が選ばれる", 1L, nextIdx)
+    }
+
+    @Test
+    fun `許容遅延のちょうど境界(予定500ms、許容30ms、現在位置530ms)でも500ms拍が候補に含まれる`() {
+        val config = MetronomeConfig(bpm = 120) // 0, 500, 1000...
+        // 500msの拍に対して現在位置が 530ms、許容遅延が 30ms の場合
+        // 530 - 30 = 500ms なので、500ms拍（index 1）がちょうど境界で候補に含まれるべき
+        val candidate = MetronomeBeatCalculator.findCandidateClickIndex(config, currentPositionMs = 530L, toleratedDelayMs = 30L)
+        assertEquals("境界ぴったりの530msでもindex 1(500ms)が採用される", 1L, candidate)
+
+        // 531ms の場合は 531 - 30 = 501ms > 500ms となりスキップされて index 2(1000ms) となる
+        val nextCandidate = MetronomeBeatCalculator.findCandidateClickIndex(config, currentPositionMs = 531L, toleratedDelayMs = 30L)
+        assertEquals("境界を1ms超えた531msではindex 2(1000ms)が採用される", 2L, nextCandidate)
+    }
 }

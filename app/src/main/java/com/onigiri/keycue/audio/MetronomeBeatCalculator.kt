@@ -3,6 +3,7 @@ package com.onigiri.keycue.audio
 import com.onigiri.keycue.model.BeatSubdivision
 import com.onigiri.keycue.model.MetronomeConfig
 import kotlin.math.ceil
+import kotlin.math.floor
 import kotlin.math.round
 
 /**
@@ -88,21 +89,17 @@ object MetronomeBeatCalculator {
         val clickIntervalMs = calculateClickIntervalMs(config)
         // 許容遅延を加味した有効下限楽曲時刻
         val thresholdMs = currentPositionMs - toleratedDelayMs
-        // thresholdMs <= beatOffsetMs + index * clickIntervalMs
-        // index >= (thresholdMs - beatOffsetMs) / clickIntervalMs
         val rawIndex = (thresholdMs - config.beatOffsetMs) / clickIntervalMs
-        var candidateIndex = ceil(rawIndex).toLong().coerceAtLeast(0L)
+        // 端数msの丸め（round）によってインデックスが飛び越されないよう、手前から探索を開始
+        var candidateIndex = (floor(rawIndex).toLong() - 2L).coerceAtLeast(0L)
 
-        // 負の予定時刻の拍（timeMs < 0）は通常再生では鳴らさないためスキップ
         while (true) {
             val beat = calculateBeat(config, candidateIndex)
-            if (beat.timeMs >= 0L) {
-                break
+            if (beat.timeMs >= thresholdMs && beat.timeMs >= 0L) {
+                return candidateIndex
             }
             candidateIndex++
         }
-
-        return candidateIndex
     }
 
     /**
@@ -114,19 +111,16 @@ object MetronomeBeatCalculator {
         targetPositionMs: Long
     ): Long {
         val clickIntervalMs = calculateClickIntervalMs(config)
-        // targetPositionMs <= beatOffsetMs + index * clickIntervalMs
-        // index >= (targetPositionMs - beatOffsetMs) / clickIntervalMs
         val rawIndex = (targetPositionMs - config.beatOffsetMs) / clickIntervalMs
-        var candidateIndex = ceil(rawIndex).toLong().coerceAtLeast(0L)
+        // 端数msの丸め（round）によってインデックスが飛び越されないよう、手前から探索を開始
+        var candidateIndex = (floor(rawIndex).toLong() - 2L).coerceAtLeast(0L)
 
         while (true) {
             val beat = calculateBeat(config, candidateIndex)
             if (beat.timeMs >= targetPositionMs && beat.timeMs >= 0L) {
-                break
+                return candidateIndex
             }
             candidateIndex++
         }
-
-        return candidateIndex
     }
 }

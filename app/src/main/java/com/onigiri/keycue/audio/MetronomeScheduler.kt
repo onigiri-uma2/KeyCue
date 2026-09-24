@@ -18,7 +18,9 @@ import kotlinx.coroutines.withTimeoutOrNull
  * 2. 描画フレームレートやUI更新周期（100ms）に依存せず、専用Coroutine内でミリ秒単位の到達判定を行う。
  * 3. 処理遅延（スパイクやフレーム落ち）時に過去の拍をまとめて連打（追いかけ再生）せず、実時間換算の許容遅延を超えた拍は破棄して現在位置以降へ再同期する。
  * 4. 再生速度（speed）を考慮し、実時間での許容遅延（デフォルト30ms）を再生速度倍率で楽曲時間へ換算して判定する。
- * 5. Pause / Resume / Seek / ABリピート / 速度変更 / 設定変更において、排他制御（stateLock）を用いてスレッド競合を防ぎ、拍の二重発音や発音漏れを防止する。
+ * 5. 初回再生・Resume・Seek後を明示的に区別し、手動Seek後やResume時に直前拍が遅延許容で誤発音されるのを防止する。
+ * 6. Seek世代番号（seekGeneration）を導入し、Tickerが位置取得してからロック取得するまでの間に発生した古い位置スナップショットを安全に破棄する。
+ * 7. 排他制御（stateLock）を用いて制御スレッドと発音Tickerスレッドの競合を完全に直列化する。
  *
  * @param timeProvider 現在の楽曲再生位置（ミリ秒）を提供する関数
  * @param speedProvider 現在の再生速度比率を提供する関数
@@ -49,7 +51,7 @@ class MetronomeScheduler(
         const val DEFAULT_TOLERATED_DELAY_MS = DEFAULT_TOLERATED_REAL_TIME_DELAY_MS
 
         /** 時間逆行（ABリピート巻き戻り等）を検出する閾値（ミリ秒） */
-        private const val REWIND_DETECT_THRESHOLD_MS = 150L
+        private const val REWIND_DETECT_THRESHOLD_MS = 50L
     }
 
     /** 互換用プロパティ */
@@ -65,6 +67,13 @@ class MetronomeScheduler(
     private var lastPlayedBeatIndex: Long = -1L
     private var nextClickIndex: Long = 0L
     private var lastObservedPositionMs: Long = 0L
+
+    // 再生セッション状態の明示的フラグ（初回再生・Resume・Seek後を分離）
+    private var hasStartedInitialPlay = false
+    private var isPendingSeek = false
+
+    // Seek世代番号（古い位置スナップショットの破棄用）
+    private var currentGeneration: Long = 0L
 
     init {
         if (autoStartTicker) {
@@ -92,10 +101,12 @@ class MetronomeScheduler(
                 // 直前拍の再発音・誤発音を防止（nextIdxが0なら-1L、1以上ならその直前インデックス）
                 lastPlayedBeatIndex = nextIdx - 1
                 lastObservedPositionMs = currentPos
+                currentGeneration++
                 notifyResync()
             } else if (oldConfig.enabled && !normalized.enabled) {
                 // ON -> OFF: 以後の発音を即座に停止
                 soundPlayer.stop()
+                currentGeneration++
                 notifyResync()
             } else if (normalized.enabled) {
                 // パラメータ変更の確認（BPM, 拍子, 分割, オフセット等）
@@ -111,6 +122,7 @@ class MetronomeScheduler(
                     nextClickIndex = nextIdx
                     lastPlayedBeatIndex = nextIdx - 1
                     lastObservedPositionMs = currentPos
+                    currentGeneration++
                     notifyResync()
                 }
             }
@@ -128,30 +140,49 @@ class MetronomeScheduler(
                     val speed = speedProvider().coerceAtLeast(0.01f)
                     val toleratedSongDelayMs = (toleratedRealTimeDelayMs * speed).toLong()
 
-                    if (lastPlayedBeatIndex < 0L) {
-                        // 初期開始（第1拍を取りこぼさないよう許容遅延を加味）
+                    if (isPendingSeek) {
+                        // 手動Seek直後のPlaying通知: Seek先以降の拍から再開（遅延許容で直前拍を拾わない）
+                        isPendingSeek = false
+                        hasStartedInitialPlay = true
+                        nextClickIndex = MetronomeBeatCalculator.findNextClickIndexFromPosition(
+                            config = currentConfig,
+                            targetPositionMs = currentPos
+                        )
+                        lastPlayedBeatIndex = nextClickIndex - 1
+                    } else if (!hasStartedInitialPlay) {
+                        // 初期開始時のみ: 第1拍を取りこぼさないよう許容遅延を加味
+                        hasStartedInitialPlay = true
                         nextClickIndex = MetronomeBeatCalculator.findCandidateClickIndex(
                             config = currentConfig,
                             currentPositionMs = currentPos,
                             toleratedDelayMs = toleratedSongDelayMs
                         )
+                        lastPlayedBeatIndex = nextClickIndex - 1
                     } else {
-                        // Resume時: Pause直前の拍を再発音しないよう、現在位置以降の拍から開始
+                        // 通常のResume: Pause直前の拍を再発音しないよう、現在位置以降の拍から開始
                         nextClickIndex = MetronomeBeatCalculator.findNextClickIndexFromPosition(
                             config = currentConfig,
                             targetPositionMs = currentPos
                         )
+                        lastPlayedBeatIndex = nextClickIndex - 1
                     }
                     lastObservedPositionMs = currentPos
+                    currentGeneration++
                     notifyResync()
                 }
-                is PlaybackState.Paused, is PlaybackState.Stopped, is PlaybackState.Finished, is PlaybackState.CountingDown -> {
+                is PlaybackState.Stopped -> {
                     soundPlayer.stop()
-                    if (state is PlaybackState.Stopped) {
-                        lastPlayedBeatIndex = -1L
-                        nextClickIndex = 0L
-                        lastObservedPositionMs = 0L
-                    }
+                    hasStartedInitialPlay = false
+                    isPendingSeek = false
+                    lastPlayedBeatIndex = -1L
+                    nextClickIndex = 0L
+                    lastObservedPositionMs = 0L
+                    currentGeneration++
+                    notifyResync()
+                }
+                is PlaybackState.Paused, is PlaybackState.Finished, is PlaybackState.CountingDown -> {
+                    soundPlayer.stop()
+                    currentGeneration++
                     notifyResync()
                 }
             }
@@ -168,9 +199,12 @@ class MetronomeScheduler(
     fun onSeek(targetPositionMs: Long) {
         synchronized(stateLock) {
             val safePos = targetPositionMs.coerceAtLeast(0L)
-            lastPlayedBeatIndex = -1L
-            nextClickIndex = MetronomeBeatCalculator.findNextClickIndexFromPosition(currentConfig, safePos)
+            val nextIdx = MetronomeBeatCalculator.findNextClickIndexFromPosition(currentConfig, safePos)
+            nextClickIndex = nextIdx
+            lastPlayedBeatIndex = nextIdx - 1
             lastObservedPositionMs = safePos
+            isPendingSeek = true
+            currentGeneration++
             notifyResync()
         }
     }
@@ -180,6 +214,7 @@ class MetronomeScheduler(
      */
     fun onSpeedChanged() {
         synchronized(stateLock) {
+            currentGeneration++
             notifyResync()
         }
     }
@@ -189,6 +224,7 @@ class MetronomeScheduler(
      */
     fun onLoopBoundsChanged() {
         synchronized(stateLock) {
+            currentGeneration++
             notifyResync()
         }
     }
@@ -208,6 +244,7 @@ class MetronomeScheduler(
                 toleratedDelayMs = toleratedSongDelayMs
             )
             lastObservedPositionMs = rewindPositionMs
+            currentGeneration++
             notifyResync()
         }
     }
@@ -218,9 +255,12 @@ class MetronomeScheduler(
     fun onSongChanged() {
         synchronized(stateLock) {
             soundPlayer.stop()
+            hasStartedInitialPlay = false
+            isPendingSeek = false
             lastPlayedBeatIndex = -1L
             nextClickIndex = 0L
             lastObservedPositionMs = 0L
+            currentGeneration++
             notifyResync()
         }
     }
@@ -232,12 +272,17 @@ class MetronomeScheduler(
     /**
      * 指定された現在楽曲位置 [currentPos] における発音判定と状態更新を1ステップ分同期的に処理する。
      *
-     * バックグラウンドループおよび単体テストから呼び出され、決定論的な動作を担保します。
+     * [generation] を指定した場合、現在の世代番号と一致しない場合は古いスナップショットとして処理を破棄します。
      *
      * @return このステップで発音が行われた場合は true、待機またはスキップの場合は false
      */
-    fun processTick(currentPos: Long): Boolean {
+    fun processTick(currentPos: Long, generation: Long? = null): Boolean {
         synchronized(stateLock) {
+            if (generation != null && generation != currentGeneration) {
+                // Seekや状態遷移により世代が進んでいる場合、古い位置スナップショットを破棄
+                return false
+            }
+
             val isPlaying = isPlayingProvider()
             val config = currentConfig
             val duration = durationProvider()
@@ -251,7 +296,7 @@ class MetronomeScheduler(
 
             val (_, loopEnd) = loopBoundsProvider()
 
-            // 1. 時間巻き戻り検知（ABリピート巻き戻り等）
+            // 1. 時間巻き戻り検知（ABリピート巻き戻り等のバックアップ検出）
             if (currentPos < lastObservedPositionMs - REWIND_DETECT_THRESHOLD_MS) {
                 lastPlayedBeatIndex = -1L
                 nextClickIndex = MetronomeBeatCalculator.findCandidateClickIndex(
@@ -324,12 +369,18 @@ class MetronomeScheduler(
                     continue
                 }
 
-                val currentPos = timeProvider()
-                val speed = speedProvider().coerceAtLeast(0.01f)
-                val (_, loopEnd) = loopBoundsProvider()
+                // ロック内で現在位置と現在世代番号をアトミックに取得
+                val (currentPos, gen, speed, loopBounds) = synchronized(stateLock) {
+                    val pos = timeProvider()
+                    val gen = currentGeneration
+                    val spd = speedProvider().coerceAtLeast(0.01f)
+                    val bounds = loopBoundsProvider()
+                    Tuple4(pos, gen, spd, bounds)
+                }
+                val (_, loopEnd) = loopBounds
 
-                // 現在時刻で発音処理を評価
-                val played = processTick(currentPos)
+                // 現在時刻で発音処理を評価（古い世代の場合は安全にスキップされる）
+                val played = processTick(currentPos, gen)
                 if (played) {
                     continue
                 }
@@ -355,11 +406,16 @@ class MetronomeScheduler(
                         resyncChannel.receive()
                     }
                 } else {
-                    processTick(timeProvider())
+                    val (freshPos, freshGen) = synchronized(stateLock) {
+                        timeProvider() to currentGeneration
+                    }
+                    processTick(freshPos, freshGen)
                 }
             }
         }
     }
+
+    private data class Tuple4<A, B, C, D>(val a: A, val b: B, val c: C, val d: D)
 
     /**
      * スケジューラを停止する。
@@ -367,6 +423,7 @@ class MetronomeScheduler(
     fun stop() {
         synchronized(stateLock) {
             soundPlayer.stop()
+            currentGeneration++
             notifyResync()
         }
     }

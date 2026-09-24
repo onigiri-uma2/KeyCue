@@ -414,4 +414,57 @@ class MetronomeSchedulerTest {
         assertFalse("Speed 50% では遅れ20ms(実時間40ms > 30ms)はスキップされる", f.scheduler.processTick(1020L))
         assertEquals("1000ms拍はスキップされ発音数変わらず", 2, f.soundPlayer.playedBeats.size)
     }
+
+    @Test
+    fun `Pause中に510msへSeekしてResumeした場合、直前の500ms拍は鳴らず次の1000ms拍から開始する`() {
+        f.scheduler.updateConfig(MetronomeConfig(enabled = true, bpm = 120)) // 0, 500, 1000...
+
+        // 初期再生: 0ms
+        f.currentPositionMs = 0L
+        f.setPlaying(true)
+        f.scheduler.processTick(0L) // 0ms発音
+        assertEquals(1, f.soundPlayer.playedBeats.size)
+
+        // 500ms拍が鳴る前の 200ms で Pause
+        f.currentPositionMs = 200L
+        f.setPlaying(false)
+
+        // Pause中に 510ms へ手動Seek
+        f.currentPositionMs = 510L
+        f.scheduler.onSeek(510L)
+
+        // Resume: 再生再開
+        f.setPlaying(true)
+
+        // 510ms時点（Seek先）では直前の500ms拍（10ms遅れ）は鳴らない
+        assertFalse("Seek後は直前の500ms拍は拾われず発音しない", f.scheduler.processTick(510L))
+        assertEquals(1, f.soundPlayer.playedBeats.size)
+
+        // 1000msに到達した時点で次の拍が発音される
+        f.currentPositionMs = 1000L
+        assertTrue("1000ms拍が発音される", f.scheduler.processTick(1000L))
+        assertEquals(2, f.soundPlayer.playedBeats.size)
+    }
+
+    @Test
+    fun `Seek世代番号が異なる古い位置スナップショットのprocessTickは安全に破棄される`() {
+        f.scheduler.updateConfig(MetronomeConfig(enabled = true, bpm = 120))
+        f.currentPositionMs = 0L
+        f.setPlaying(true)
+        f.scheduler.processTick(0L) // 0ms拍発音
+        assertEquals(1, f.soundPlayer.playedBeats.size)
+
+        // Tickerが 500ms 位置のスナップショットを取得したとする（この時の世代を仮に 10 とする）
+        val stalePositionMs = 500L
+        val staleGeneration = 0L // 初期世代
+
+        // その直前にメインスレッドで別位置へ Seek が発生（世代が進む）
+        f.currentPositionMs = 20_000L
+        f.scheduler.onSeek(20_000L)
+
+        // 遅れてやってきた古い位置・古い世代スナップショットの processTick は破棄される
+        val played = f.scheduler.processTick(stalePositionMs, staleGeneration)
+        assertFalse("古い世代スナップショットは処理されず破棄される", played)
+        assertEquals(1, f.soundPlayer.playedBeats.size)
+    }
 }
