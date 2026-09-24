@@ -62,10 +62,19 @@ class MetronomeSchedulerTest {
             speedProvider = { speed },
             isPlayingProvider = { isCurrentlyPlaying },
             durationProvider = { durationMs },
-            loopBoundsProvider = { Pair(loopStartMs, loopEndMs) },
+            loopBoundsProvider = {
+                val start = loopStartMs
+                val end = loopEndMs
+                if (start != null && end != null && start < end && (end - start >= 300L)) {
+                    Pair(start, end)
+                } else {
+                    Pair(null, null)
+                }
+            },
             soundPlayer = soundPlayer,
             scope = testScope,
-            toleratedDelayMs = 30L
+            toleratedRealTimeDelayMs = 30L,
+            autoStartTicker = false
         )
 
         fun setPlaying(playing: Boolean) {
@@ -332,5 +341,77 @@ class MetronomeSchedulerTest {
         f.isCurrentlyPlaying = false
         f.scheduler.onSongChanged()
         assertTrue("stopが呼ばれた", f.soundPlayer.stoppedCount > 0)
+    }
+
+    @Test
+    fun `B地点のみ設定された無効なループ状態ではB地点以降もクリックが鳴り続ける`() {
+        f.scheduler.updateConfig(MetronomeConfig(enabled = true, bpm = 120)) // 0, 500, 1000, 1500, 2000...
+        // Aは未設定、Bのみ 1750ms に設定（PlaybackEngineでは無効なループ）
+        f.loopStartMs = null
+        f.loopEndMs = 1750L
+        f.scheduler.onLoopBoundsChanged()
+
+        f.currentPositionMs = 0L
+        f.setPlaying(true)
+        f.scheduler.processTick(0L)
+        assertEquals(1, f.soundPlayer.playedBeats.size) // 0ms
+
+        f.currentPositionMs = 1500L
+        f.scheduler.processTick(1500L)
+        assertEquals(2, f.soundPlayer.playedBeats.size) // 1500ms
+
+        // B地点 (1750ms) を超えた 2000ms でもループ無効のため鳴り続ける
+        f.currentPositionMs = 2000L
+        assertTrue("B地点以降も発音される", f.scheduler.processTick(2000L))
+        assertEquals(3, f.soundPlayer.playedBeats.size)
+    }
+
+    @Test
+    fun `再生中510msでMetroをONにした場合、直前の500ms拍は鳴らず次の1000ms拍から開始する`() {
+        // 初期状態は OFF
+        f.currentPositionMs = 510L
+        f.setPlaying(true)
+
+        // 510ms地点で Metro を ON
+        f.scheduler.updateConfig(MetronomeConfig(enabled = true, bpm = 120))
+
+        // 直後に 510ms で tick または state変更が評価されても直前(500ms)は鳴らない
+        assertFalse("510ms時点では直前の500ms拍は鳴らない", f.scheduler.processTick(510L))
+        assertEquals(0, f.soundPlayer.playedBeats.size)
+
+        // 1000ms に到達した時点で初めて発音される
+        f.currentPositionMs = 1000L
+        assertTrue("1000ms拍が発音される", f.scheduler.processTick(1000L))
+        assertEquals(1, f.soundPlayer.playedBeats.size)
+    }
+
+    @Test
+    fun `再生速度に応じて実時間遅延許容が楽曲時間へ正しく換算される`() {
+        f.scheduler.updateConfig(MetronomeConfig(enabled = true, bpm = 120)) // 0, 500, 1000...
+
+        // Speed 200% (2.0f): 実時間30ms許容 = 楽曲時間60ms許容
+        f.speed = 2.0f
+        f.scheduler.onSpeedChanged()
+
+        f.currentPositionMs = 0L
+        f.setPlaying(true)
+        f.scheduler.processTick(0L) // 0ms拍発音
+        assertEquals(1, f.soundPlayer.playedBeats.size)
+
+        // 次の拍は 500ms。楽曲位置が 550ms（遅れ50ms）に到達
+        // Speed 200% では楽曲時間60msまで許容内なので 500ms拍が発音される
+        f.currentPositionMs = 550L
+        assertTrue("Speed 200% では遅れ50ms(実時間25ms < 30ms)でも発音される", f.scheduler.processTick(550L))
+        assertEquals(2, f.soundPlayer.playedBeats.size)
+
+        // Speed 50% (0.5f): 実時間30ms許容 = 楽曲時間15ms許容
+        f.speed = 0.5f
+        f.scheduler.onSpeedChanged()
+
+        // 次の拍は 1000ms。楽曲位置が 1020ms（遅れ20ms）に到達
+        // Speed 50% では楽曲時間15ms（実時間30ms）を超えるため 1000ms拍はスキップされる
+        f.currentPositionMs = 1020L
+        assertFalse("Speed 50% では遅れ20ms(実時間40ms > 30ms)はスキップされる", f.scheduler.processTick(1020L))
+        assertEquals("1000ms拍はスキップされ発音数変わらず", 2, f.soundPlayer.playedBeats.size)
     }
 }

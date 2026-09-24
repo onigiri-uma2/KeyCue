@@ -132,7 +132,13 @@ class OverlayService : Service() {
             speedProvider = { playbackEngine.targetPlaybackSpeed },
             isPlayingProvider = { playbackEngine.state.value is PlaybackState.Playing },
             durationProvider = { loadedSong?.durationMs ?: 0L },
-            loopBoundsProvider = { Pair(playbackEngine.loopStartMs, playbackEngine.loopEndMs) },
+            loopBoundsProvider = {
+                if (playbackEngine.isLoopValid()) {
+                    playbackEngine.loopStartMs to playbackEngine.loopEndMs
+                } else {
+                    null to null
+                }
+            },
             soundPlayer = soundPlayer,
             scope = serviceScope
         )
@@ -180,14 +186,17 @@ class OverlayService : Service() {
             },
             onSetLoopStart = {
                 playbackEngine.setLoopStart()
+                metronomeScheduler?.onLoopBoundsChanged()
                 renderCurrentFrame(forceControlUpdate = true)
             },
             onSetLoopEnd = {
                 playbackEngine.setLoopEnd()
+                metronomeScheduler?.onLoopBoundsChanged()
                 renderCurrentFrame(forceControlUpdate = true)
             },
             onClearLoop = {
                 playbackEngine.clearLoop()
+                metronomeScheduler?.onLoopBoundsChanged()
                 renderCurrentFrame(forceControlUpdate = true)
             },
             onCountdownChange = { newMs ->
@@ -313,8 +322,13 @@ class OverlayService : Service() {
 
     private fun observePlaybackState() {
         serviceScope.launch {
+            var lastStateKind: kotlin.reflect.KClass<out PlaybackState>? = null
             playbackEngine.state.collect { state ->
-                metronomeScheduler?.onPlaybackStateChanged(state)
+                val currentKind = state::class
+                if (currentKind != lastStateKind) {
+                    lastStateKind = currentKind
+                    metronomeScheduler?.onPlaybackStateChanged(state)
+                }
                 when (state) {
                     is PlaybackState.Playing, is PlaybackState.CountingDown -> {
                         startFrameLoop()

@@ -54,6 +54,8 @@ class SoundPoolMetronomeSoundPlayer(
     private var isAccentLoaded = false
 
     private var lastStreamId: Int = 0
+    private var isReleased = false
+    private val lock = Any()
 
     init {
         val audioAttributes = AudioAttributes.Builder()
@@ -67,11 +69,15 @@ class SoundPoolMetronomeSoundPlayer(
             .build()
 
         soundPool.setOnLoadCompleteListener { _, sampleId, status ->
-            if (status == 0) {
-                if (sampleId == beatSoundId) isBeatLoaded = true
-                if (sampleId == accentSoundId) isAccentLoaded = true
-            } else {
-                Log.w(TAG, "Failed to load metronome sound sampleId=$sampleId, status=$status")
+            synchronized(lock) {
+                if (!isReleased) {
+                    if (status == 0) {
+                        if (sampleId == beatSoundId) isBeatLoaded = true
+                        if (sampleId == accentSoundId) isAccentLoaded = true
+                    } else {
+                        Log.w(TAG, "Failed to load metronome sound sampleId=$sampleId, status=$status")
+                    }
+                }
             }
         }
 
@@ -87,50 +93,68 @@ class SoundPoolMetronomeSoundPlayer(
         val clampedVolPercent = volumePercent.coerceIn(0, 100)
         if (clampedVolPercent <= 0) return
 
-        val targetSoundId = if (isAccent) accentSoundId else beatSoundId
-        val isLoaded = if (isAccent) isAccentLoaded else isBeatLoaded
+        synchronized(lock) {
+            if (isReleased) return
 
-        if (!isLoaded || targetSoundId == 0) {
-            // 音源未ロード時は安全にスキップ
-            return
-        }
+            val targetSoundId = if (isAccent) accentSoundId else beatSoundId
+            val isLoaded = if (isAccent) isAccentLoaded else isBeatLoaded
 
-        val volume = clampedVolPercent / 100f
-        try {
-            // 直前のストリームが存在する場合は停止して不要な重なりを防ぐ
-            if (lastStreamId != 0) {
-                soundPool.stop(lastStreamId)
+            if (!isLoaded || targetSoundId == 0) {
+                // 音源未ロード時は安全にスキップ
+                return
             }
-            lastStreamId = soundPool.play(
-                targetSoundId,
-                volume, // leftVolume
-                volume, // rightVolume
-                1,      // priority
-                0,      // loop (0 = no loop)
-                1.0f    // rate
-            )
-        } catch (e: Exception) {
-            Log.w(TAG, "Exception during soundPool.play", e)
+
+            val volume = clampedVolPercent / 100f
+            try {
+                // 直前のストリームが存在する場合は停止して不要な重なりを防ぐ
+                if (lastStreamId != 0) {
+                    soundPool.stop(lastStreamId)
+                }
+                lastStreamId = soundPool.play(
+                    targetSoundId,
+                    volume, // leftVolume
+                    volume, // rightVolume
+                    1,      // priority
+                    0,      // loop (0 = no loop)
+                    1.0f    // rate
+                )
+            } catch (e: Exception) {
+                Log.w(TAG, "Exception during soundPool.play", e)
+            }
         }
     }
 
     override fun stop() {
-        if (lastStreamId != 0) {
-            try {
-                soundPool.stop(lastStreamId)
-            } catch (e: Exception) {
-                Log.w(TAG, "Exception during soundPool.stop", e)
+        synchronized(lock) {
+            if (isReleased) return
+            if (lastStreamId != 0) {
+                try {
+                    soundPool.stop(lastStreamId)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Exception during soundPool.stop", e)
+                }
+                lastStreamId = 0
             }
-            lastStreamId = 0
         }
     }
 
     override fun release() {
-        stop()
-        try {
-            soundPool.release()
-        } catch (e: Exception) {
-            Log.w(TAG, "Exception during soundPool.release", e)
+        synchronized(lock) {
+            if (isReleased) return
+            isReleased = true
+            if (lastStreamId != 0) {
+                try {
+                    soundPool.stop(lastStreamId)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Exception during soundPool.stop", e)
+                }
+                lastStreamId = 0
+            }
+            try {
+                soundPool.release()
+            } catch (e: Exception) {
+                Log.w(TAG, "Exception during soundPool.release", e)
+            }
         }
     }
 }
