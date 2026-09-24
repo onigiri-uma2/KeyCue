@@ -467,4 +467,204 @@ class MetronomeSchedulerAutoSyncTest {
         assertTrue(fixture.scheduler.processTick(250L))
         assertEquals(2, fixture.soundPlayer.playedBeats.size)
     }
+
+    // 12. 構築中の即時ミュート保証（Playing通知やupdateConfigでも勝手に解除されない）
+    @Test
+    fun testImmediateMuteDuringTimelineResolution() {
+        val config = MetronomeConfig(enabled = true, timingMode = MetronomeTimingMode.AUTO)
+        fixture.scheduler.updateConfig(config)
+        fixture.isCurrentlyPlaying = true
+
+        // 新曲変更開始: prepareForSongChange
+        fixture.scheduler.prepareForSongChange()
+        assertFalse("非同期構築開始直後はisReadyがfalseであること", fixture.scheduler.isReady)
+
+        // 構築中に再生状態がPlayingになっても、準備完了フラグは解除されないこと
+        fixture.scheduler.onPlaybackStateChanged(PlaybackState.Playing(0L))
+        assertFalse("Playing通知でもisReadyは勝手に解除されないこと", fixture.scheduler.isReady)
+
+        // 構築中にprocessTickが呼ばれても一切発音しないこと
+        fixture.currentPositionMs = 0L
+        assertFalse("構築中はprocessTickがfalseを返すこと", fixture.scheduler.processTick(0L))
+        fixture.currentPositionMs = 500L
+        assertFalse(fixture.scheduler.processTick(500L))
+        assertEquals("クリック音は鳴っていないこと", 0, fixture.soundPlayer.playedBeats.size)
+
+        // 構築中に設定変更(updateConfig)が来ても、準備完了フラグは解除されないこと
+        val updatedConfig = config.copy(bpm = 150, subdivision = BeatSubdivision.EIGHTH)
+        fixture.scheduler.updateConfig(updatedConfig)
+        assertFalse("updateConfigでもisReadyは勝手に解除されないこと", fixture.scheduler.isReady)
+
+        // 依然としてprocessTickは発音しないこと
+        assertFalse(fixture.scheduler.processTick(500L))
+        assertEquals(0, fixture.soundPlayer.playedBeats.size)
+
+        // 新曲タイムラインが完成して適用されると、isReadyがtrueになり発音可能になること
+        val manualTimeline = ManualBeatTimeline(updatedConfig)
+        fixture.scheduler.applyResolvedTimeline(manualTimeline)
+        assertTrue("applyResolvedTimeline後はisReadyがtrueになること", fixture.scheduler.isReady)
+
+        fixture.currentPositionMs = 0L
+        assertTrue(fixture.scheduler.processTick(0L))
+        assertEquals(1, fixture.soundPlayer.playedBeats.size)
+    }
+
+    // 13. 競合ケース: 構築中に AUTO -> MANUAL 切り替え
+    @Test
+    fun testRaceCondition_autoToManualDuringResolution() {
+        val midiMeta = createMidiMetadata(
+            tempoChanges = listOf(0L to 250_000L) // 240 BPM
+        )
+        val initialConfig = MetronomeConfig(
+            enabled = true,
+            timingMode = MetronomeTimingMode.AUTO,
+            bpm = 120 // 手動デフォルト
+        )
+        fixture.scheduler.updateConfig(initialConfig)
+
+        // --- シナリオ再現 ---
+        // 1. 新曲読み込み開始: 世代番号1を発行し、AUTOのタイムライン計算をシミュレート
+        fixture.scheduler.prepareForSongChange(midiMeta)
+        var timelineRequestGeneration = 1L
+        val req1Gen = timelineRequestGeneration
+        val req1Config = initialConfig
+
+        // 2. 構築中にユーザーがMANUALモード(BPM=120)へ変更
+        val manualConfig = initialConfig.copy(timingMode = MetronomeTimingMode.MANUAL, bpm = 120)
+        val req2Gen = ++timelineRequestGeneration
+        fixture.scheduler.updateConfig(manualConfig)
+
+        // 3. 遅れて完了したリクエスト1 (AUTO, 240 BPM) の解決結果
+        val staleAutoTimeline = MetronomeTimingResolver.resolveTimeline(
+            config = req1Config,
+            timingMetadata = midiMeta,
+            durationMs = 60_000L
+        )
+
+        // 世代番号チェック: req1Gen (1) != timelineRequestGeneration (2) のため破棄される
+        if (req1Gen == timelineRequestGeneration) {
+            fixture.scheduler.applyResolvedTimeline(staleAutoTimeline, midiMeta)
+        }
+
+        // まだ古いタイムラインは適用されていないこと
+        assertFalse("古いタイムラインは破棄され、未解決のまま", fixture.scheduler.isReady)
+
+        // 4. 最新設定(MANUAL, BPM=120)の解決結果が完了して適用される
+        val manualTimeline = MetronomeTimingResolver.resolveTimeline(
+            config = manualConfig,
+            timingMetadata = midiMeta,
+            durationMs = 60_000L
+        )
+        if (req2Gen == timelineRequestGeneration) {
+            fixture.scheduler.applyResolvedTimeline(manualTimeline, midiMeta)
+        }
+
+        assertTrue("最新のタイムラインが適用されて準備完了", fixture.scheduler.isReady)
+        assertEquals(120.0, fixture.scheduler.currentBpm(0L), 0.001)
+        assertEquals(TimingSourceKind.MANUAL, fixture.scheduler.currentTimingSourceKind)
+    }
+
+    // 14. 競合ケース: 構築中に 拍分割変更 (4分音符 -> 8分音符)
+    @Test
+    fun testRaceCondition_subdivisionChangeDuringResolution() {
+        val midiMeta = createMidiMetadata(
+            tempoChanges = listOf(0L to 500_000L) // 120 BPM: 4分音符=500ms
+        )
+        val initialConfig = MetronomeConfig(
+            enabled = true,
+            timingMode = MetronomeTimingMode.AUTO,
+            subdivision = BeatSubdivision.QUARTER
+        )
+        fixture.scheduler.updateConfig(initialConfig)
+
+        // 1. 新曲読み込み開始 (QUARTER)
+        fixture.scheduler.prepareForSongChange(midiMeta)
+        var timelineRequestGeneration = 1L
+        val req1Gen = timelineRequestGeneration
+        val req1Config = initialConfig
+
+        // 2. 構築中に拍分割を8分音符(EIGHTH)に変更
+        val eighthConfig = initialConfig.copy(subdivision = BeatSubdivision.EIGHTH)
+        val req2Gen = ++timelineRequestGeneration
+        fixture.scheduler.updateConfig(eighthConfig)
+
+        // 3. 遅れて完了したリクエスト1 (QUARTER)
+        val staleQuarterTimeline = MetronomeTimingResolver.resolveTimeline(
+            config = req1Config,
+            timingMetadata = midiMeta,
+            durationMs = 60_000L
+        )
+        if (req1Gen == timelineRequestGeneration) {
+            fixture.scheduler.applyResolvedTimeline(staleQuarterTimeline, midiMeta)
+        }
+        assertFalse(fixture.scheduler.isReady)
+
+        // 4. リクエスト2 (EIGHTH) が完了して適用
+        val eighthTimeline = MetronomeTimingResolver.resolveTimeline(
+            config = eighthConfig,
+            timingMetadata = midiMeta,
+            durationMs = 60_000L
+        )
+        if (req2Gen == timelineRequestGeneration) {
+            fixture.scheduler.applyResolvedTimeline(eighthTimeline, midiMeta)
+        }
+        assertTrue(fixture.scheduler.isReady)
+
+        // 8分音符(250ms)でも発音されることの検証
+        fixture.isCurrentlyPlaying = true
+        fixture.scheduler.onPlaybackStateChanged(PlaybackState.Playing(0L))
+        fixture.currentPositionMs = 0L
+        assertTrue(fixture.scheduler.processTick(0L)) // 0ms (表拍)
+
+        fixture.currentPositionMs = 250L
+        assertTrue("8分音符の裏拍(250ms)でもクリックが鳴ること", fixture.scheduler.processTick(250L))
+    }
+
+    // 15. 競合ケース: 構築中に 別曲選択 (曲A -> 曲B)
+    @Test
+    fun testRaceCondition_songSwitchDuringResolution() {
+        val songAMeta = createMidiMetadata(
+            tempoChanges = listOf(0L to 600_000L) // 100 BPM
+        )
+        val songBMeta = createMidiMetadata(
+            tempoChanges = listOf(0L to 300_000L) // 200 BPM
+        )
+        val config = MetronomeConfig(enabled = true, timingMode = MetronomeTimingMode.AUTO)
+        fixture.scheduler.updateConfig(config)
+
+        // 1. 曲A選択開始 (世代1)
+        fixture.scheduler.prepareForSongChange(songAMeta)
+        var timelineRequestGeneration = 1L
+        val reqAGen = timelineRequestGeneration
+
+        // 2. 構築中にユーザーが別曲Bを選択 (世代2)
+        fixture.scheduler.prepareForSongChange(songBMeta)
+        val reqBGen = ++timelineRequestGeneration
+
+        // 3. 曲Aの非同期解決が遅れて完了
+        val songATimeline = MetronomeTimingResolver.resolveTimeline(
+            config = config,
+            timingMetadata = songAMeta,
+            durationMs = 60_000L
+        )
+        if (reqAGen == timelineRequestGeneration) {
+            fixture.scheduler.applyResolvedTimeline(songATimeline, songAMeta)
+        }
+        // 曲Aの結果は適用されず破棄される
+        assertFalse(fixture.scheduler.isReady)
+
+        // 4. 曲Bの非同期解決が完了
+        val songBTimeline = MetronomeTimingResolver.resolveTimeline(
+            config = config,
+            timingMetadata = songBMeta,
+            durationMs = 60_000L
+        )
+        if (reqBGen == timelineRequestGeneration) {
+            fixture.scheduler.applyResolvedTimeline(songBTimeline, songBMeta)
+        }
+        assertTrue(fixture.scheduler.isReady)
+
+        // 曲Bのテンポ (200 BPM) が正しく反映されていること
+        assertEquals(200.0, fixture.scheduler.currentBpm(0L), 0.001)
+    }
 }

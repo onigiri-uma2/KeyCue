@@ -77,6 +77,12 @@ class MetronomeScheduler(
     // Seek世代番号（古い位置スナップショットの破棄用）
     private var currentGeneration: Long = 0L
 
+    // タイムライン準備状態（新曲非同期構築中はfalseとなり即時ミュートを保証）
+    private var isTimelineReady: Boolean = true
+
+    /** 現在タイムラインが発音可能な準備状態にあるかどうか */
+    val isReady: Boolean get() = synchronized(stateLock) { isTimelineReady }
+
     init {
         if (autoStartTicker) {
             startSchedulerJob()
@@ -97,14 +103,16 @@ class MetronomeScheduler(
     fun updateTimingMetadata(metadata: com.onigiri.keycue.model.timing.SongTimingMetadata?) {
         synchronized(stateLock) {
             currentTimingMetadata = metadata
-            timeline = rebuildTimelineLocked()
-            val currentPos = timeProvider()
-            val nextIdx = timeline.nextBeatIndexAtOrAfter(currentPos)
-            nextClickIndex = nextIdx
-            lastPlayedBeatIndex = nextIdx - 1
-            lastObservedPositionMs = currentPos
-            currentGeneration++
-            notifyResync()
+            if (isTimelineReady) {
+                timeline = rebuildTimelineLocked()
+                val currentPos = timeProvider()
+                val nextIdx = timeline.nextBeatIndexAtOrAfter(currentPos)
+                nextClickIndex = nextIdx
+                lastPlayedBeatIndex = nextIdx - 1
+                lastObservedPositionMs = currentPos
+                currentGeneration++
+                notifyResync()
+            }
         }
     }
 
@@ -114,6 +122,7 @@ class MetronomeScheduler(
     fun updateTimeline(newTimeline: BeatTimeline) {
         synchronized(stateLock) {
             timeline = newTimeline
+            isTimelineReady = true
             val currentPos = timeProvider()
             val nextIdx = timeline.nextBeatIndexAtOrAfter(currentPos)
             nextClickIndex = nextIdx
@@ -167,15 +176,18 @@ class MetronomeScheduler(
 
             if (!oldConfig.enabled && normalized.enabled) {
                 // OFF -> ON: 現在位置より後の拍から開始
-                timeline = rebuildTimelineLocked()
-                val currentPos = timeProvider()
-                val nextIdx = timeline.nextBeatIndexAtOrAfter(currentPos)
-                nextClickIndex = nextIdx
-                // 直前拍の再発音・誤発音を防止（nextIdxが0なら-1L、1以上ならその直前インデックス）
-                lastPlayedBeatIndex = nextIdx - 1
-                lastObservedPositionMs = currentPos
-                currentGeneration++
-                notifyResync()
+                // ただし、新曲非同期構築中 (!isTimelineReady) の場合は勝手に解除せず、構築完了を待つ
+                if (isTimelineReady) {
+                    timeline = rebuildTimelineLocked()
+                    val currentPos = timeProvider()
+                    val nextIdx = timeline.nextBeatIndexAtOrAfter(currentPos)
+                    nextClickIndex = nextIdx
+                    // 直前拍の再発音・誤発音を防止（nextIdxが0なら-1L、1以上ならその直前インデックス）
+                    lastPlayedBeatIndex = nextIdx - 1
+                    lastObservedPositionMs = currentPos
+                    currentGeneration++
+                    notifyResync()
+                }
             } else if (oldConfig.enabled && !normalized.enabled) {
                 // ON -> OFF: 以後の発音を即座に停止
                 soundPlayer.stop()
@@ -190,7 +202,7 @@ class MetronomeScheduler(
                         oldConfig.beatOffsetMs != normalized.beatOffsetMs ||
                         oldConfig.accentEnabled != normalized.accentEnabled
 
-                if (gridChanged) {
+                if (gridChanged && isTimelineReady) {
                     timeline = rebuildTimelineLocked()
                     val currentPos = timeProvider()
                     val nextIdx = timeline.nextBeatIndexAtOrAfter(currentPos)
@@ -326,6 +338,7 @@ class MetronomeScheduler(
             soundPlayer.stop()
             currentTimingMetadata = metadata
             timeline = ManualBeatTimeline(currentConfig)
+            isTimelineReady = false // 構築完了まで発音を停止（即時ミュート保証）
             hasStartedInitialPlay = false
             isPendingSeek = false
             lastPlayedBeatIndex = -1L
@@ -346,6 +359,7 @@ class MetronomeScheduler(
         synchronized(stateLock) {
             currentTimingMetadata = metadata
             timeline = newTimeline
+            isTimelineReady = true // 準備完了
             val currentPos = timeProvider()
             val nextIdx = timeline.nextBeatIndexAtOrAfter(currentPos)
             nextClickIndex = nextIdx
@@ -364,6 +378,7 @@ class MetronomeScheduler(
             soundPlayer.stop()
             currentTimingMetadata = metadata
             timeline = rebuildTimelineLocked()
+            isTimelineReady = true
             hasStartedInitialPlay = false
             isPendingSeek = false
             lastPlayedBeatIndex = -1L
@@ -396,7 +411,8 @@ class MetronomeScheduler(
             val config = currentConfig
             val duration = durationProvider()
 
-            if (!isPlaying || !config.enabled || duration <= 0L) {
+            // タイムライン構築中 (!isTimelineReady) や停止中は一切発音しない（即時ミュート保証）
+            if (!isPlaying || !config.enabled || duration <= 0L || !isTimelineReady) {
                 return false
             }
 
@@ -469,23 +485,24 @@ class MetronomeScheduler(
         if (schedulerJob != null) return
         schedulerJob = scope.launch(Dispatchers.Default) {
             while (isActive) {
-                val (isPlaying, configEnabled, duration) = synchronized(stateLock) {
-                    Triple(isPlayingProvider(), currentConfig.enabled, durationProvider())
+                val shouldWait = synchronized(stateLock) {
+                    !isPlayingProvider() || !currentConfig.enabled || durationProvider() <= 0L || !isTimelineReady
                 }
 
-                // 再生中でない、メトロノーム無効、または楽曲が存在しない場合はシグナル待機
-                if (!isPlaying || !configEnabled || duration <= 0L) {
+                // 再生中でない、メトロノーム無効、楽曲が存在しない、またはタイムライン構築中の場合はシグナル待機
+                if (shouldWait) {
                     resyncChannel.receive()
                     continue
                 }
 
                 // ロック内で現在位置と現在世代番号をアトミックに取得
-                val (currentPos, gen, speed, loopBounds) = synchronized(stateLock) {
+                val (currentPos, gen, speed, loopBounds, songDuration) = synchronized(stateLock) {
                     val pos = timeProvider()
                     val gen = currentGeneration
                     val spd = speedProvider().coerceAtLeast(0.01f)
                     val bounds = loopBoundsProvider()
-                    Tuple4(pos, gen, spd, bounds)
+                    val dur = durationProvider()
+                    SchedulerContext(pos, gen, spd, bounds, dur)
                 }
                 val (_, loopEnd) = loopBounds
 
@@ -508,7 +525,7 @@ class MetronomeScheduler(
                     withTimeoutOrNull(50L) { resyncChannel.receive() }
                     continue
                 }
-                if (beat.timeMs >= duration) {
+                if (beat.timeMs >= songDuration) {
                     withTimeoutOrNull(100L) { resyncChannel.receive() }
                     continue
                 }
@@ -530,7 +547,13 @@ class MetronomeScheduler(
         }
     }
 
-    private data class Tuple4<A, B, C, D>(val a: A, val b: B, val c: C, val d: D)
+    private data class SchedulerContext(
+        val currentPos: Long,
+        val generation: Long,
+        val speed: Float,
+        val loopBounds: Pair<Long?, Long?>,
+        val songDuration: Long
+    )
 
     /**
      * スケジューラを停止する。
