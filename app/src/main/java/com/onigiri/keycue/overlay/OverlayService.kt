@@ -22,6 +22,7 @@ import com.onigiri.keycue.model.RecentSongEntry
 import com.onigiri.keycue.model.SongData
 import com.onigiri.keycue.audio.MetronomeScheduler
 import com.onigiri.keycue.audio.MetronomeSoundPlayer
+import com.onigiri.keycue.audio.MetronomeSyncCoordinator
 import com.onigiri.keycue.audio.MetronomeTimingResolver
 import com.onigiri.keycue.audio.SoundPoolMetronomeSoundPlayer
 import com.onigiri.keycue.song.SongSelectionCoordinator
@@ -107,8 +108,7 @@ class OverlayService : Service() {
 
     private var metronomeSoundPlayer: MetronomeSoundPlayer? = null
     private var metronomeScheduler: MetronomeScheduler? = null
-    private var timelineRequestGeneration: Long = 0L
-    private var timelineResolutionJob: Job? = null
+    private var metronomeSyncCoordinator: MetronomeSyncCoordinator? = null
 
     // ディスプレイの垂直同期信号 (VSYNC) に合わせて60fps/120fpsでフレーム描画を駆動するChoreographerコールバック
     private val frameCallback = object : android.view.Choreographer.FrameCallback {
@@ -132,7 +132,7 @@ class OverlayService : Service() {
 
         val soundPlayer = SoundPoolMetronomeSoundPlayer(this)
         metronomeSoundPlayer = soundPlayer
-        metronomeScheduler = MetronomeScheduler(
+        val scheduler = MetronomeScheduler(
             timeProvider = { playbackEngine.getCurrentPositionMs(allowNegative = false) },
             speedProvider = { playbackEngine.targetPlaybackSpeed },
             isPlayingProvider = { playbackEngine.state.value is PlaybackState.Playing },
@@ -147,15 +147,23 @@ class OverlayService : Service() {
             soundPlayer = soundPlayer,
             scope = serviceScope
         )
+        metronomeScheduler = scheduler
+
+        metronomeSyncCoordinator = MetronomeSyncCoordinator(
+            scope = serviceScope,
+            scheduler = scheduler,
+            onTimelineApplied = {
+                renderCurrentFrame(forceControlUpdate = true)
+            }
+        )
 
         playbackEngine.onLoopRewound = { targetPos ->
-            metronomeScheduler?.onLoopRewound(targetPos)
+            scheduler.onLoopRewound(targetPos)
         }
 
-        sessionRepository.currentSession.value?.song?.let { song ->
-            metronomeScheduler?.updateTimingMetadata(song.timingMetadata)
-        }
-        metronomeScheduler?.updateConfig(settingsRepository.metronomeConfig.value)
+        val initialSong = sessionRepository.currentSession.value?.song
+        val initialMetroConfig = settingsRepository.metronomeConfig.value
+        metronomeSyncCoordinator?.onSongChanged(initialSong, initialMetroConfig)
 
         windowController = OverlayWindowController(
             context = this,
@@ -275,7 +283,7 @@ class OverlayService : Service() {
         applySong(session?.song)
         applyPlaybackConfig(settingsRepository.playbackConfig.value)
         val metroConfig = settingsRepository.metronomeConfig.value
-        metronomeScheduler?.updateConfig(metroConfig)
+        metronomeSyncCoordinator?.onConfigChanged(metroConfig)
         windowController?.updateMetronomeState(metroConfig.enabled)
         windowController?.updateControlOverlayConfig(settingsRepository.controlOverlayConfig.value)
         windowController?.updateRecentSongs(
@@ -294,34 +302,8 @@ class OverlayService : Service() {
         noteScheduler.prepare(song.events)
         loadedSong = song
 
-        // メトロノームを即座に安全状態へリセット（古い曲の拍を停止・破棄し、新曲のタイムライン構築完了まで即時ミュート）
-        metronomeScheduler?.prepareForSongChange(song.timingMetadata)
-
         val config = settingsRepository.metronomeConfig.value
-        launchTimelineResolution(song, config)
-    }
-
-    private fun launchTimelineResolution(song: SongData, config: MetronomeConfig) {
-        val generation = ++timelineRequestGeneration
-        timelineResolutionJob?.cancel()
-        val metadata = song.timingMetadata
-        val durationMs = song.durationMs
-
-        // タイムライン構築をバックグラウンドスレッドで実行
-        timelineResolutionJob = serviceScope.launch(Dispatchers.Default) {
-            val resolvedTimeline = MetronomeTimingResolver.resolveTimeline(
-                config = config,
-                timingMetadata = metadata,
-                durationMs = durationMs
-            )
-            withContext(Dispatchers.Main) {
-                // 要求世代番号が一致している場合のみ適用（曲切替や設定変更途中の古い結果を破棄）
-                if (generation == timelineRequestGeneration) {
-                    metronomeScheduler?.applyResolvedTimeline(resolvedTimeline, metadata)
-                    renderCurrentFrame(forceControlUpdate = true)
-                }
-            }
-        }
+        metronomeSyncCoordinator?.onSongChanged(song, config)
     }
 
     private fun applyPlaybackConfig(config: com.onigiri.keycue.model.PlaybackConfig) {
@@ -425,21 +407,7 @@ class OverlayService : Service() {
         }
         serviceScope.launch {
             settingsRepository.metronomeConfig.collect { config ->
-                val scheduler = metronomeScheduler
-                if (scheduler != null) {
-                    scheduler.updateConfig(config)
-                    if (!scheduler.isReady) {
-                        // タイムライン構築中に設定が変更された場合は、進行中の非同期解決を破棄し最新設定で再構築
-                        val song = loadedSong
-                        if (song != null) {
-                            launchTimelineResolution(song, config)
-                        }
-                    } else {
-                        // 通常稼働時の設定変更では、未完了の非同期解決があればキャンセルし世代を進める
-                        timelineRequestGeneration++
-                        timelineResolutionJob?.cancel()
-                    }
-                }
+                metronomeSyncCoordinator?.onConfigChanged(config)
                 renderCurrentFrame(forceControlUpdate = true)
             }
         }
@@ -746,8 +714,8 @@ class OverlayService : Service() {
         stopFrameLoop()
         sessionCollectJob?.cancel()
         sessionCollectJob = null
-        timelineResolutionJob?.cancel()
-        timelineResolutionJob = null
+        metronomeSyncCoordinator?.cancel()
+        metronomeSyncCoordinator = null
         playbackEngine.onLoopRewound = null
         playbackEngine.release()
         metronomeScheduler?.release()

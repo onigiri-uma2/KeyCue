@@ -165,10 +165,11 @@ class MetronomeScheduler(
     /**
      * メトロノーム設定を更新する。
      *
-     * 有効状態やBPM・拍子・分割・オフセットの変更時は、拍グリッドを再同期します。
+     * [rebuildTimeline] が true の場合、有効状態やBPM・拍子・分割・オフセットの変更時は、拍グリッドを同期的に再同期します。
+     * 非同期でタイムラインを解決して適用する場合は [rebuildTimeline] を false に指定し、解決完了後に [applyResolvedTimeline] を呼び出します。
      * 音量変更のみの場合は拍グリッドのリセットを行わず、音量のみ即時適用します。
      */
-    fun updateConfig(newConfig: MetronomeConfig) {
+    fun updateConfig(newConfig: MetronomeConfig, rebuildTimeline: Boolean = true) {
         val normalized = newConfig.normalized()
         synchronized(stateLock) {
             val oldConfig = currentConfig
@@ -177,7 +178,7 @@ class MetronomeScheduler(
             if (!oldConfig.enabled && normalized.enabled) {
                 // OFF -> ON: 現在位置より後の拍から開始
                 // ただし、新曲非同期構築中 (!isTimelineReady) の場合は勝手に解除せず、構築完了を待つ
-                if (isTimelineReady) {
+                if (rebuildTimeline && isTimelineReady) {
                     timeline = rebuildTimelineLocked()
                     val currentPos = timeProvider()
                     val nextIdx = timeline.nextBeatIndexAtOrAfter(currentPos)
@@ -202,7 +203,7 @@ class MetronomeScheduler(
                         oldConfig.beatOffsetMs != normalized.beatOffsetMs ||
                         oldConfig.accentEnabled != normalized.accentEnabled
 
-                if (gridChanged && isTimelineReady) {
+                if (gridChanged && rebuildTimeline && isTimelineReady) {
                     timeline = rebuildTimelineLocked()
                     val currentPos = timeProvider()
                     val nextIdx = timeline.nextBeatIndexAtOrAfter(currentPos)
