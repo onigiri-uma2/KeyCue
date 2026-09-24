@@ -229,20 +229,23 @@ class MetronomeScheduler(
         }
     }
 
+    /** 現在のスケジューラ世代番号（テストおよび検証用） */
+    val generation: Long get() = synchronized(stateLock) { currentGeneration }
+
     /**
      * ABリピート巻き戻り発生を明示的に通知する。
+     *
+     * A地点以降の拍のみを発音対象とするため、遅延許容を適用せず現在位置以降の拍から再開します。
+     * （A地点が拍境界に完全一致する場合は、その拍を含めて発音可能）
      */
     fun onLoopRewound(rewindPositionMs: Long) {
         synchronized(stateLock) {
-            val speed = speedProvider().coerceAtLeast(0.01f)
-            val toleratedSongDelayMs = (toleratedRealTimeDelayMs * speed).toLong()
-
-            lastPlayedBeatIndex = -1L
-            nextClickIndex = MetronomeBeatCalculator.findCandidateClickIndex(
+            val nextIdx = MetronomeBeatCalculator.findNextClickIndexFromPosition(
                 config = currentConfig,
-                currentPositionMs = rewindPositionMs,
-                toleratedDelayMs = toleratedSongDelayMs
+                targetPositionMs = rewindPositionMs
             )
+            nextClickIndex = nextIdx
+            lastPlayedBeatIndex = nextIdx - 1
             lastObservedPositionMs = rewindPositionMs
             currentGeneration++
             notifyResync()
@@ -298,12 +301,12 @@ class MetronomeScheduler(
 
             // 1. 時間巻き戻り検知（ABリピート巻き戻り等のバックアップ検出）
             if (currentPos < lastObservedPositionMs - REWIND_DETECT_THRESHOLD_MS) {
-                lastPlayedBeatIndex = -1L
-                nextClickIndex = MetronomeBeatCalculator.findCandidateClickIndex(
+                val nextIdx = MetronomeBeatCalculator.findNextClickIndexFromPosition(
                     config = config,
-                    currentPositionMs = currentPos,
-                    toleratedDelayMs = toleratedSongDelayMs
+                    targetPositionMs = currentPos
                 )
+                nextClickIndex = nextIdx
+                lastPlayedBeatIndex = nextIdx - 1
             }
             lastObservedPositionMs = currentPos
 

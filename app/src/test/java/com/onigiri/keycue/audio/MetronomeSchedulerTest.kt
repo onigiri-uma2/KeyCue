@@ -454,17 +454,92 @@ class MetronomeSchedulerTest {
         f.scheduler.processTick(0L) // 0ms拍発音
         assertEquals(1, f.soundPlayer.playedBeats.size)
 
-        // Tickerが 500ms 位置のスナップショットを取得したとする（この時の世代を仮に 10 とする）
+        // TickerがSeek直前に位置スナップショットと世代番号を取得したとする
         val stalePositionMs = 500L
-        val staleGeneration = 0L // 初期世代
+        val generationBeforeSeek = f.scheduler.generation
 
-        // その直前にメインスレッドで別位置へ Seek が発生（世代が進む）
+        // その直後にメインスレッドで別位置へ Seek が発生（世代番号がインクリメントされる）
         f.currentPositionMs = 20_000L
         f.scheduler.onSeek(20_000L)
+        assertTrue("Seek実行により世代番号が進んでいる", f.scheduler.generation > generationBeforeSeek)
 
-        // 遅れてやってきた古い位置・古い世代スナップショットの processTick は破棄される
-        val played = f.scheduler.processTick(stalePositionMs, staleGeneration)
+        // Seek前に取得した世代番号を持つ古い processTick は安全に破棄される
+        val played = f.scheduler.processTick(stalePositionMs, generationBeforeSeek)
         assertFalse("古い世代スナップショットは処理されず破棄される", played)
         assertEquals(1, f.soundPlayer.playedBeats.size)
+    }
+
+    @Test
+    fun `ABループ巻き戻し時にA地点直前の拍(500ms)は鳴らず、A地点以降の拍から再開する`() {
+        f.scheduler.updateConfig(MetronomeConfig(enabled = true, bpm = 120)) // 0, 500, 1000, 1500...
+        // A = 510ms, B = 1750ms
+        f.loopStartMs = 510L
+        f.loopEndMs = 1750L
+
+        // 通常再生を0msで開始
+        f.currentPositionMs = 0L
+        f.setPlaying(true)
+        f.scheduler.processTick(0L) // 0ms発音
+        assertEquals(1, f.soundPlayer.playedBeats.size)
+
+        // 1000ms拍
+        f.currentPositionMs = 1000L
+        assertTrue(f.scheduler.processTick(1000L))
+        assertEquals(2, f.soundPlayer.playedBeats.size)
+
+        // 1500ms拍
+        f.currentPositionMs = 1500L
+        assertTrue(f.scheduler.processTick(1500L))
+        assertEquals(3, f.soundPlayer.playedBeats.size)
+
+        // B到達 -> A地点(510ms)へ巻き戻り
+        f.currentPositionMs = 510L
+        f.scheduler.onLoopRewound(510L)
+
+        // 巻き戻し後の510ms時点でも、直前の500ms拍（10ms遅れ）は鳴らない
+        assertFalse("巻き戻し後にA地点直前の500ms拍は鳴らない", f.scheduler.processTick(510L))
+        assertEquals(3, f.soundPlayer.playedBeats.size)
+
+        // 再び1000msに到達した時点で発音
+        f.currentPositionMs = 1000L
+        assertTrue(f.scheduler.processTick(1000L))
+        assertEquals(4, f.soundPlayer.playedBeats.size)
+    }
+
+    @Test
+    fun `ABループのA地点が拍境界(500ms)に完全一致する場合は、ループ直後にその拍が鳴る`() {
+        f.scheduler.updateConfig(MetronomeConfig(enabled = true, bpm = 120)) // 0, 500, 1000, 1500...
+        // A = 500ms, B = 1750ms（A地点が500ms拍境界に完全一致）
+        f.loopStartMs = 500L
+        f.loopEndMs = 1750L
+
+        // 通常再生を0msで開始
+        f.currentPositionMs = 0L
+        f.setPlaying(true)
+        f.scheduler.processTick(0L) // 0ms発音
+        assertEquals(1, f.soundPlayer.playedBeats.size)
+
+        // 500ms拍
+        f.currentPositionMs = 500L
+        assertTrue(f.scheduler.processTick(500L))
+        assertEquals(2, f.soundPlayer.playedBeats.size)
+
+        // 1000ms拍
+        f.currentPositionMs = 1000L
+        assertTrue(f.scheduler.processTick(1000L))
+        assertEquals(3, f.soundPlayer.playedBeats.size)
+
+        // 1500ms拍
+        f.currentPositionMs = 1500L
+        assertTrue(f.scheduler.processTick(1500L))
+        assertEquals(4, f.soundPlayer.playedBeats.size)
+
+        // B到達 -> A地点(500ms)へ巻き戻り
+        f.currentPositionMs = 500L
+        f.scheduler.onLoopRewound(500L)
+
+        // 拍境界一致なので、ループ後の500ms拍が再び発音される
+        assertTrue("A地点が拍境界に一致する場合、ループ直後の500ms拍が鳴る", f.scheduler.processTick(500L))
+        assertEquals(5, f.soundPlayer.playedBeats.size)
     }
 }
