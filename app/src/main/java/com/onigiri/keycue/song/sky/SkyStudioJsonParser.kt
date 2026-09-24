@@ -2,6 +2,7 @@ package com.onigiri.keycue.song.sky
 
 import com.onigiri.keycue.model.NoteEvent
 import com.onigiri.keycue.model.SongData
+import com.onigiri.keycue.model.timing.SongTimingMetadata
 import com.onigiri.keycue.song.SongParser
 import org.json.JSONArray
 import org.json.JSONException
@@ -79,6 +80,9 @@ class SkyStudioJsonParser(
         val songName = rootObject.optString("name", "").trim()
         val resolvedTitle = if (songName.isNotEmpty()) songName else defaultTitle
 
+        // 2.5 BPMメタデータの安全な解析
+        val timingMetadata = parseSkyStudioBpm(rootObject)
+
         // 3. songNotes 配列の検証と取得（譜面本体が存在しない場合は構文エラー）
         val songNotesArray = rootObject.optJSONArray("songNotes")
             ?: throw InvalidSkyStudioJsonException("Sky Studio譜面に必要な 'songNotes' が見つかりません")
@@ -118,7 +122,70 @@ class SkyStudioJsonParser(
         return SongData(
             title = resolvedTitle,
             durationMs = durationMs,
-            events = noteEvents
+            events = noteEvents,
+            timingMetadata = timingMetadata
+        )
+    }
+
+    /**
+     * Sky Studio JSON から BPM を安全に抽出・検証する。
+     *
+     * 40〜240 BPM の範囲内である場合のみ [SongTimingMetadata.SkyStudio.validBpm] に設定し、
+     * 範囲外や不正値の場合は手動BPMへのフォールバックとして保持する。
+     */
+    private fun parseSkyStudioBpm(rootObject: JSONObject): SongTimingMetadata.SkyStudio {
+        if (!rootObject.has("bpm")) {
+            return SongTimingMetadata.SkyStudio(
+                rawBpm = null,
+                validBpm = null,
+                invalidReason = "BPM field not found"
+            )
+        }
+
+        val rawValue = rootObject.opt("bpm")
+        if (rawValue == null || rawValue == JSONObject.NULL) {
+            return SongTimingMetadata.SkyStudio(
+                rawBpm = null,
+                validBpm = null,
+                invalidReason = "BPM field is null"
+            )
+        }
+
+        val bpmDouble = when (rawValue) {
+            is Number -> rawValue.toDouble()
+            is String -> rawValue.trim().toDoubleOrNull()
+            else -> null
+        }
+
+        if (bpmDouble == null || bpmDouble.isNaN() || bpmDouble.isInfinite()) {
+            return SongTimingMetadata.SkyStudio(
+                rawBpm = null,
+                validBpm = null,
+                invalidReason = "BPM is not a valid number: $rawValue"
+            )
+        }
+
+        if (bpmDouble <= 0.0) {
+            return SongTimingMetadata.SkyStudio(
+                rawBpm = bpmDouble,
+                validBpm = null,
+                invalidReason = "BPM must be greater than 0: $bpmDouble"
+            )
+        }
+
+        val roundedBpm = Math.round(bpmDouble).toInt()
+        if (roundedBpm !in 40..240) {
+            return SongTimingMetadata.SkyStudio(
+                rawBpm = bpmDouble,
+                validBpm = null,
+                invalidReason = "BPM out of valid range (40..240): $bpmDouble"
+            )
+        }
+
+        return SongTimingMetadata.SkyStudio(
+            rawBpm = bpmDouble,
+            validBpm = roundedBpm,
+            invalidReason = null
         )
     }
 

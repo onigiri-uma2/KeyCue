@@ -434,6 +434,7 @@ class HomeViewModel(
     }
 
     fun setMetronomeEnabled(enabled: Boolean) = updateMetronomeConfig { it.copy(enabled = enabled) }
+    fun setMetronomeTimingMode(mode: com.onigiri.keycue.model.MetronomeTimingMode) = updateMetronomeConfig { it.copy(timingMode = mode) }
     fun setMetronomeBpm(bpm: Int) = updateMetronomeConfig { it.copy(bpm = bpm.coerceIn(com.onigiri.keycue.model.MetronomeConfig.MIN_BPM, com.onigiri.keycue.model.MetronomeConfig.MAX_BPM)) }
     fun setMetronomeBeatsPerBar(beats: Int) = updateMetronomeConfig { it.copy(beatsPerBar = beats) }
     fun setMetronomeSubdivision(subdivision: com.onigiri.keycue.model.BeatSubdivision) = updateMetronomeConfig { it.copy(subdivision = subdivision) }

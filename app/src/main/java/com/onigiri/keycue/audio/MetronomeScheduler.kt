@@ -60,6 +60,8 @@ class MetronomeScheduler(
     private val stateLock = Any()
 
     private var currentConfig: MetronomeConfig = MetronomeConfig()
+    private var currentTimingMetadata: com.onigiri.keycue.model.timing.SongTimingMetadata? = null
+    private var timeline: BeatTimeline = ManualBeatTimeline(currentConfig)
     private val resyncChannel = Channel<Unit>(Channel.CONFLATED)
     private var schedulerJob: Job? = null
 
@@ -81,6 +83,76 @@ class MetronomeScheduler(
         }
     }
 
+    private fun rebuildTimelineLocked(): BeatTimeline {
+        return MetronomeTimingResolver.resolveTimeline(
+            config = currentConfig,
+            timingMetadata = currentTimingMetadata,
+            durationMs = durationProvider()
+        )
+    }
+
+    /**
+     * 楽曲のタイミングメタデータ（MIDI Set Tempo/Time Signature、Sky Studio BPM等）を更新する。
+     */
+    fun updateTimingMetadata(metadata: com.onigiri.keycue.model.timing.SongTimingMetadata?) {
+        synchronized(stateLock) {
+            currentTimingMetadata = metadata
+            timeline = rebuildTimelineLocked()
+            val currentPos = timeProvider()
+            val nextIdx = timeline.nextBeatIndexAtOrAfter(currentPos)
+            nextClickIndex = nextIdx
+            lastPlayedBeatIndex = nextIdx - 1
+            lastObservedPositionMs = currentPos
+            currentGeneration++
+            notifyResync()
+        }
+    }
+
+    /**
+     * テストまたはカスタム制御用にタイムラインを直接差し替える。
+     */
+    fun updateTimeline(newTimeline: BeatTimeline) {
+        synchronized(stateLock) {
+            timeline = newTimeline
+            val currentPos = timeProvider()
+            val nextIdx = timeline.nextBeatIndexAtOrAfter(currentPos)
+            nextClickIndex = nextIdx
+            lastPlayedBeatIndex = nextIdx - 1
+            lastObservedPositionMs = currentPos
+            currentGeneration++
+            notifyResync()
+        }
+    }
+
+    /**
+     * 現在位置におけるBPMを取得する。
+     */
+    fun currentBpm(positionMs: Long = timeProvider()): Double = synchronized(stateLock) {
+        timeline.bpmAt(positionMs)
+    }
+
+    /**
+     * 現在位置における拍子を取得する。
+     */
+    fun currentTimeSignature(positionMs: Long = timeProvider()): com.onigiri.keycue.model.timing.TimeSignature = synchronized(stateLock) {
+        timeline.timeSignatureAt(positionMs)
+    }
+
+    /** 現在のタイミング情報源種別 */
+    val currentTimingSourceKind: TimingSourceKind get() = synchronized(stateLock) {
+        timeline.sourceKind
+    }
+
+    /** BPMが楽曲から自動取得されたものかどうか */
+    val isBpmAuto: Boolean get() = synchronized(stateLock) {
+        timeline.isBpmAuto
+    }
+
+    /** 拍子が楽曲から自動取得されたものかどうか */
+    val isTimeSignatureAuto: Boolean get() = synchronized(stateLock) {
+        timeline.isTimeSignatureAuto
+    }
+
     /**
      * メトロノーム設定を更新する。
      *
@@ -95,8 +167,9 @@ class MetronomeScheduler(
 
             if (!oldConfig.enabled && normalized.enabled) {
                 // OFF -> ON: 現在位置より後の拍から開始
+                timeline = rebuildTimelineLocked()
                 val currentPos = timeProvider()
-                val nextIdx = MetronomeBeatCalculator.findNextClickIndexFromPosition(normalized, currentPos)
+                val nextIdx = timeline.nextBeatIndexAtOrAfter(currentPos)
                 nextClickIndex = nextIdx
                 // 直前拍の再発音・誤発音を防止（nextIdxが0なら-1L、1以上ならその直前インデックス）
                 lastPlayedBeatIndex = nextIdx - 1
@@ -109,16 +182,18 @@ class MetronomeScheduler(
                 currentGeneration++
                 notifyResync()
             } else if (normalized.enabled) {
-                // パラメータ変更の確認（BPM, 拍子, 分割, オフセット等）
-                val gridChanged = oldConfig.bpm != normalized.bpm ||
+                // パラメータ変更の確認（モード, BPM, 拍子, 分割, オフセット等）
+                val gridChanged = oldConfig.timingMode != normalized.timingMode ||
+                        oldConfig.bpm != normalized.bpm ||
                         oldConfig.beatsPerBar != normalized.beatsPerBar ||
                         oldConfig.subdivision != normalized.subdivision ||
                         oldConfig.beatOffsetMs != normalized.beatOffsetMs ||
                         oldConfig.accentEnabled != normalized.accentEnabled
 
                 if (gridChanged) {
+                    timeline = rebuildTimelineLocked()
                     val currentPos = timeProvider()
-                    val nextIdx = MetronomeBeatCalculator.findNextClickIndexFromPosition(normalized, currentPos)
+                    val nextIdx = timeline.nextBeatIndexAtOrAfter(currentPos)
                     nextClickIndex = nextIdx
                     lastPlayedBeatIndex = nextIdx - 1
                     lastObservedPositionMs = currentPos
@@ -144,26 +219,19 @@ class MetronomeScheduler(
                         // 手動Seek直後のPlaying通知: Seek先以降の拍から再開（遅延許容で直前拍を拾わない）
                         isPendingSeek = false
                         hasStartedInitialPlay = true
-                        nextClickIndex = MetronomeBeatCalculator.findNextClickIndexFromPosition(
-                            config = currentConfig,
-                            targetPositionMs = currentPos
-                        )
+                        nextClickIndex = timeline.nextBeatIndexAtOrAfter(currentPos)
                         lastPlayedBeatIndex = nextClickIndex - 1
                     } else if (!hasStartedInitialPlay) {
                         // 初期開始時のみ: 第1拍を取りこぼさないよう許容遅延を加味
                         hasStartedInitialPlay = true
-                        nextClickIndex = MetronomeBeatCalculator.findCandidateClickIndex(
-                            config = currentConfig,
-                            currentPositionMs = currentPos,
+                        nextClickIndex = timeline.candidateBeatIndex(
+                            positionMs = currentPos,
                             toleratedDelayMs = toleratedSongDelayMs
                         )
                         lastPlayedBeatIndex = nextClickIndex - 1
                     } else {
                         // 通常のResume: Pause直前の拍を再発音しないよう、現在位置以降の拍から開始
-                        nextClickIndex = MetronomeBeatCalculator.findNextClickIndexFromPosition(
-                            config = currentConfig,
-                            targetPositionMs = currentPos
-                        )
+                        nextClickIndex = timeline.nextBeatIndexAtOrAfter(currentPos)
                         lastPlayedBeatIndex = nextClickIndex - 1
                     }
                     lastObservedPositionMs = currentPos
@@ -199,7 +267,7 @@ class MetronomeScheduler(
     fun onSeek(targetPositionMs: Long) {
         synchronized(stateLock) {
             val safePos = targetPositionMs.coerceAtLeast(0L)
-            val nextIdx = MetronomeBeatCalculator.findNextClickIndexFromPosition(currentConfig, safePos)
+            val nextIdx = timeline.nextBeatIndexAtOrAfter(safePos)
             nextClickIndex = nextIdx
             lastPlayedBeatIndex = nextIdx - 1
             lastObservedPositionMs = safePos
@@ -240,10 +308,7 @@ class MetronomeScheduler(
      */
     fun onLoopRewound(rewindPositionMs: Long) {
         synchronized(stateLock) {
-            val nextIdx = MetronomeBeatCalculator.findNextClickIndexFromPosition(
-                config = currentConfig,
-                targetPositionMs = rewindPositionMs
-            )
+            val nextIdx = timeline.nextBeatIndexAtOrAfter(rewindPositionMs)
             nextClickIndex = nextIdx
             lastPlayedBeatIndex = nextIdx - 1
             lastObservedPositionMs = rewindPositionMs
@@ -255,9 +320,11 @@ class MetronomeScheduler(
     /**
      * 楽曲変更時（新曲読み込み、Recent切替等）の初期化を行う。
      */
-    fun onSongChanged() {
+    fun onSongChanged(metadata: com.onigiri.keycue.model.timing.SongTimingMetadata? = null) {
         synchronized(stateLock) {
             soundPlayer.stop()
+            currentTimingMetadata = metadata
+            timeline = rebuildTimelineLocked()
             hasStartedInitialPlay = false
             isPendingSeek = false
             lastPlayedBeatIndex = -1L
@@ -301,27 +368,29 @@ class MetronomeScheduler(
 
             // 1. 時間巻き戻り検知（ABリピート巻き戻り等のバックアップ検出）
             if (currentPos < lastObservedPositionMs - REWIND_DETECT_THRESHOLD_MS) {
-                val nextIdx = MetronomeBeatCalculator.findNextClickIndexFromPosition(
-                    config = config,
-                    targetPositionMs = currentPos
-                )
+                val nextIdx = timeline.nextBeatIndexAtOrAfter(currentPos)
                 nextClickIndex = nextIdx
                 lastPlayedBeatIndex = nextIdx - 1
             }
             lastObservedPositionMs = currentPos
 
             // 2. 次のクリック予定拍を計算
-            var beat = MetronomeBeatCalculator.calculateBeat(config, nextClickIndex)
+            var beat = timeline.beatForIndex(nextClickIndex)
 
             // 3. 処理遅延チェック: 予定時刻が現在位置より大幅に遅れている場合は未来へ再同期（古い拍スキップ）
-            val overdueMs = currentPos - beat.timeMs
-            if (overdueMs > toleratedSongDelayMs) {
-                nextClickIndex = MetronomeBeatCalculator.findCandidateClickIndex(
-                    config = config,
-                    currentPositionMs = currentPos,
-                    toleratedDelayMs = toleratedSongDelayMs
-                )
-                beat = MetronomeBeatCalculator.calculateBeat(config, nextClickIndex)
+            if (beat != null) {
+                val overdueMs = currentPos - beat.timeMs
+                if (overdueMs > toleratedSongDelayMs) {
+                    nextClickIndex = timeline.candidateBeatIndex(
+                        positionMs = currentPos,
+                        toleratedDelayMs = toleratedSongDelayMs
+                    )
+                    beat = timeline.beatForIndex(nextClickIndex)
+                }
+            }
+
+            if (beat == null) {
+                return false
             }
 
             // 4. 有効なABリピートのB地点以降は発音禁止
@@ -346,9 +415,8 @@ class MetronomeScheduler(
                 nextClickIndex = beat.index + 1
                 true
             } else if (delayMs > toleratedSongDelayMs) {
-                nextClickIndex = MetronomeBeatCalculator.findCandidateClickIndex(
-                    config = config,
-                    currentPositionMs = currentPos,
+                nextClickIndex = timeline.candidateBeatIndex(
+                    positionMs = currentPos,
                     toleratedDelayMs = toleratedSongDelayMs
                 )
                 false
@@ -388,8 +456,13 @@ class MetronomeScheduler(
                     continue
                 }
 
-                val (beat, _) = synchronized(stateLock) {
-                    MetronomeBeatCalculator.calculateBeat(currentConfig, nextClickIndex) to currentConfig
+                val beat = synchronized(stateLock) {
+                    timeline.beatForIndex(nextClickIndex)
+                }
+
+                if (beat == null) {
+                    withTimeoutOrNull(100L) { resyncChannel.receive() }
+                    continue
                 }
 
                 if (loopEnd != null && beat.timeMs >= loopEnd) {

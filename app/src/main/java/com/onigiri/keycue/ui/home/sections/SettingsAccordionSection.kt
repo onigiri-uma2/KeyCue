@@ -61,6 +61,7 @@ fun SettingsAccordionSection(
     onShowFittingChange: (Boolean) -> Unit = {},
     onShowGuideToggleChange: (Boolean) -> Unit = {},
     onMetronomeEnabledChange: (Boolean) -> Unit = {},
+    onMetronomeTimingModeChange: (com.onigiri.keycue.model.MetronomeTimingMode) -> Unit = {},
     onMetronomeBpmChange: (Int) -> Unit = {},
     onMetronomeBeatsPerBarChange: (Int) -> Unit = {},
     onMetronomeSubdivisionChange: (com.onigiri.keycue.model.BeatSubdivision) -> Unit = {},
@@ -130,11 +131,15 @@ fun SettingsAccordionSection(
 
     // 2. メトロノーム設定
     val metro = uiState.metronomeConfig
+    val timeline = uiState.resolvedTimeline
+    val currentBpm = Math.round(timeline.bpmAt(0L)).toInt()
+    val currentTs = timeline.timeSignatureAt(0L).displayString
+    val modeName = if (metro.timingMode == com.onigiri.keycue.model.MetronomeTimingMode.AUTO) "自動" else "手動"
     val subText = if (metro.subdivision == com.onigiri.keycue.model.BeatSubdivision.QUARTER) "4分" else "8分"
     val metronomeSummary = if (metro.enabled) {
-        "ON / ${metro.bpm} BPM / ${metro.beatsPerBar}/4 (${subText}) / 音量${metro.volumePercent}%"
+        "ON / $modeName ($currentBpm BPM, $currentTs / $subText) / 音量${metro.volumePercent}%"
     } else {
-        "OFF (${metro.bpm} BPM / ${metro.beatsPerBar}/4)"
+        "OFF / $modeName ($currentBpm BPM, $currentTs)"
     }
     ExpandableCard(
         title = "メトロノーム",
@@ -144,7 +149,9 @@ fun SettingsAccordionSection(
     ) {
         MetronomeConfigContent(
             config = uiState.metronomeConfig,
+            timeline = timeline,
             onEnabledChange = onMetronomeEnabledChange,
+            onTimingModeChange = onMetronomeTimingModeChange,
             onBpmChange = onMetronomeBpmChange,
             onBeatsPerBarChange = onMetronomeBeatsPerBarChange,
             onSubdivisionChange = onMetronomeSubdivisionChange,

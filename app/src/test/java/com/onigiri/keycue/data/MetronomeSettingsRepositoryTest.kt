@@ -142,6 +142,61 @@ class MetronomeSettingsRepositoryTest {
         assertEquals(MetronomeConfig.MAX_BEAT_OFFSET_MS, config.beatOffsetMs)
     }
 
+    @Test
+    fun `新規インストール時は初期タイミングモードがAUTOかつenabled=falseであること`() {
+        val fakePrefs = createFakePrefs(emptyMap())
+        val repo = SharedPreferencesSettingsRepository(fakePrefs)
+
+        val config = repo.metronomeConfig.value
+        assertFalse("初期値はOFF", config.enabled)
+        assertEquals("新規インストール時はAUTO", com.onigiri.keycue.model.MetronomeTimingMode.AUTO, config.timingMode)
+    }
+
+    @Test
+    fun `旧メトロノーム設定が存在する環境からの移行時は初期モードがMANUALになること`() {
+        // 第1段階でBPM=140が保存されており、timingModeキーは存在しない
+        val legacyPrefsMap = mapOf<String, Any>(
+            "metronome_bpm" to 140,
+            "metronome_beats_per_bar" to 3,
+            "metronome_enabled" to true
+        )
+        val fakePrefs = createFakePrefs(legacyPrefsMap)
+        val repo = SharedPreferencesSettingsRepository(fakePrefs)
+
+        val config = repo.metronomeConfig.value
+        assertTrue("保存済みのenabledが反映", config.enabled)
+        assertEquals("保存済みのBPMが反映", 140, config.bpm)
+        assertEquals("保存済みの拍子が反映", 3, config.beatsPerBar)
+        assertEquals("既存ユーザーはMANUALにフォールバック", com.onigiri.keycue.model.MetronomeTimingMode.MANUAL, config.timingMode)
+    }
+
+    @Test
+    fun `明示的に保存されたタイミングモードが再起動後も正しく復元されること`() = runBlocking {
+        val fakePrefs = createFakePrefs(emptyMap())
+        val repo1 = SharedPreferencesSettingsRepository(fakePrefs)
+
+        // AUTOで保存
+        repo1.saveMetronomeConfig(
+            MetronomeConfig(
+                enabled = true,
+                timingMode = com.onigiri.keycue.model.MetronomeTimingMode.AUTO,
+                bpm = 150
+            )
+        )
+
+        // 別インスタンスでロード
+        val repo2 = SharedPreferencesSettingsRepository(fakePrefs)
+        assertEquals(com.onigiri.keycue.model.MetronomeTimingMode.AUTO, repo2.metronomeConfig.value.timingMode)
+        assertEquals(150, repo2.metronomeConfig.value.bpm)
+
+        // MANUALに変更して保存
+        repo2.saveMetronomeConfig(repo2.metronomeConfig.value.copy(timingMode = com.onigiri.keycue.model.MetronomeTimingMode.MANUAL))
+
+        // 再度別インスタンスでロード
+        val repo3 = SharedPreferencesSettingsRepository(fakePrefs)
+        assertEquals(com.onigiri.keycue.model.MetronomeTimingMode.MANUAL, repo3.metronomeConfig.value.timingMode)
+    }
+
     private fun createFakePrefs(initialData: Map<String, Any>): SharedPreferences {
         val map = HashMap<String, Any>(initialData)
         return Proxy.newProxyInstance(

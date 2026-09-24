@@ -317,11 +317,11 @@ class OverlayWindowController(
     }
 
     /**
-     * メトロノームの有効状態を更新し、Control Overlay に反映する。
+     * メトロノームの有効状態と現在情報を更新し、Control Overlay に反映する。
      */
-    fun updateMetronomeState(enabled: Boolean) {
+    fun updateMetronomeState(enabled: Boolean, infoText: String = "") {
         currentMetronomeEnabled = enabled
-        controlOverlayView?.updateMetronomeState(enabled)
+        controlOverlayView?.updateMetronomeState(enabled, infoText)
     }
 
     /**

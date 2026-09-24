@@ -11,10 +11,12 @@ package com.onigiri.keycue.model
  * @param subdivision 1拍の分割単位（4分音符または8分音符）
  * @param accentEnabled 小節頭（第1拍）のアクセント音を有効にするかどうか
  * @param volumePercent クリック音量パーセント（0〜100%）
+ * @param timingMode タイミング情報源モード（AUTO: 楽曲メタデータ連動、MANUAL: 手動BPM・拍子）
  * @param beatOffsetMs 楽曲時間軸に対する拍位置オフセット（-2000〜+2000ミリ秒）
  */
 data class MetronomeConfig(
     val enabled: Boolean = false,
+    val timingMode: MetronomeTimingMode = MetronomeTimingMode.AUTO,
     val bpm: Int = DEFAULT_BPM,
     val beatsPerBar: Int = DEFAULT_BEATS_PER_BAR,
     val subdivision: BeatSubdivision = BeatSubdivision.QUARTER,
@@ -27,6 +29,7 @@ data class MetronomeConfig(
      */
     fun normalized(): MetronomeConfig = normalize(
         enabled = enabled,
+        timingMode = timingMode,
         bpm = bpm,
         beatsPerBar = beatsPerBar,
         subdivision = subdivision,
@@ -65,6 +68,7 @@ data class MetronomeConfig(
          */
         fun normalize(
             enabled: Boolean = false,
+            timingMode: MetronomeTimingMode = MetronomeTimingMode.AUTO,
             bpm: Int = DEFAULT_BPM,
             beatsPerBar: Int = DEFAULT_BEATS_PER_BAR,
             subdivision: BeatSubdivision = BeatSubdivision.QUARTER,
@@ -79,6 +83,7 @@ data class MetronomeConfig(
 
             return MetronomeConfig(
                 enabled = enabled,
+                timingMode = timingMode,
                 bpm = clampedBpm,
                 beatsPerBar = normalizedBeatsPerBar,
                 subdivision = subdivision,
@@ -88,6 +93,16 @@ data class MetronomeConfig(
             )
         }
     }
+}
+
+/**
+ * メトロノームのタイミング情報源モード。
+ */
+enum class MetronomeTimingMode {
+    /** 楽曲メタデータ（MIDI Set Tempo/Time Signature、Sky Studio BPM）に基づく自動連動 */
+    AUTO,
+    /** ユーザーが設定した手動BPM・拍子 */
+    MANUAL
 }
 
 /**

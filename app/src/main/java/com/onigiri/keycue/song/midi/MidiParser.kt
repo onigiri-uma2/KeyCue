@@ -2,6 +2,7 @@ package com.onigiri.keycue.song.midi
 
 import com.onigiri.keycue.model.NoteEvent
 import com.onigiri.keycue.model.SongData
+import com.onigiri.keycue.model.timing.SongTimingMetadata
 import com.onigiri.keycue.song.SongParser
 import java.io.InputStream
 import kotlin.math.max
@@ -41,12 +42,14 @@ class MidiParser(
      * @return 解析された [SongData]
      */
     /**
-     * MIDIバイナリから生イベントおよびテンポ情報を解析した結果データ。
+     * MIDIバイナリから生イベントおよびテンポ・拍子情報を解析した結果データ。
      */
     data class ExtractedMidiData(
         val tempoMap: TempoMap,
+        val timeSignatureMap: TimeSignatureMap,
         val rawEvents: List<RawMidiNoteEvent>,
-        val globalMaxTick: Long
+        val globalMaxTick: Long,
+        val ppqn: Int
     )
 
     fun parse(bytes: ByteArray, title: String): SongData {
@@ -67,10 +70,17 @@ class MidiParser(
             calculatedDurationMs
         }
 
+        val timingMetadata = SongTimingMetadata.Midi(
+            ppqn = extracted.ppqn,
+            tempoMap = extracted.tempoMap,
+            timeSignatureMap = extracted.timeSignatureMap
+        )
+
         return SongData(
             title = title,
             durationMs = finalDurationMs,
-            events = noteEvents
+            events = noteEvents,
+            timingMetadata = timingMetadata
         )
     }
 
@@ -121,6 +131,7 @@ class MidiParser(
         }
 
         val rawTempoEvents = mutableListOf<RawTempoEvent>()
+        val rawTimeSignatureEvents = mutableListOf<RawTimeSignatureEvent>()
         val rawNoteOns = mutableListOf<RawNoteOn>()
         var tracksRead = 0
         var globalMaxTick = 0L
@@ -217,7 +228,42 @@ class MidiParser(
                                 val b1 = reader.readByte()
                                 val b2 = reader.readByte()
                                 val usPerQuarter = ((b0 shl 16) or (b1 shl 8) or b2).toLong()
-                                rawTempoEvents.add(RawTempoEvent(currentTick, usPerQuarter))
+                                if (usPerQuarter > 0L) {
+                                    rawTempoEvents.add(
+                                        RawTempoEvent(
+                                            tick = currentTick,
+                                            usPerQuarter = usPerQuarter,
+                                            trackIndex = tracksRead - 1,
+                                            eventIndex = rawTempoEvents.size
+                                        )
+                                    )
+                                }
+                            } else {
+                                reader.skip(metaLength)
+                            }
+                        }
+                        0x58 -> {
+                            // Time Signature: nn dd cc bb (4バイト)
+                            if (metaLength == 4) {
+                                val numerator = reader.readByte()
+                                val denominatorExponent = reader.readByte()
+                                val clocksPerClick = reader.readByte()
+                                val notated32ndNotesPerQuarter = reader.readByte()
+
+                                if (numerator > 0 && denominatorExponent in 0..16) {
+                                    val denominator = 1 shl denominatorExponent
+                                    rawTimeSignatureEvents.add(
+                                        RawTimeSignatureEvent(
+                                            tick = currentTick,
+                                            numerator = numerator,
+                                            denominator = denominator,
+                                            clocksPerClick = clocksPerClick,
+                                            notated32ndNotesPerQuarter = notated32ndNotesPerQuarter,
+                                            trackIndex = tracksRead - 1,
+                                            eventIndex = rawTimeSignatureEvents.size
+                                        )
+                                    )
+                                }
                             } else {
                                 reader.skip(metaLength)
                             }
@@ -247,6 +293,7 @@ class MidiParser(
         }
 
         val tempoMap = TempoMap(ppqn, rawTempoEvents)
+        val timeSignatureMap = TimeSignatureMap(rawTimeSignatureEvents)
         val rawEvents = rawNoteOns.map { rawNote ->
             RawMidiNoteEvent(
                 timeMs = tempoMap.tickToMs(rawNote.tick),
@@ -255,19 +302,18 @@ class MidiParser(
                 channel = rawNote.channel
             )
         }
-        return ExtractedMidiData(tempoMap, rawEvents, globalMaxTick)
+        return ExtractedMidiData(tempoMap, timeSignatureMap, rawEvents, globalMaxTick, ppqn)
     }
 
     /**
-     * 指定された [com.onigiri.keycue.model.ResolvedMidiMapping] を適用して [SongData] を生成する。
+     * 抽出済みの [ExtractedMidiData] と [com.onigiri.keycue.model.ResolvedMidiMapping] を再利用して [SongData] を生成する。
+     * （MIDIバイナリの再パースを行わない高速パス）
      */
     fun parseWithResolvedMapping(
-        bytes: ByteArray,
+        extracted: ExtractedMidiData,
         title: String,
         mapping: com.onigiri.keycue.model.ResolvedMidiMapping
     ): SongData {
-        val extracted = extractRawEvents(bytes)
-
         val noteEvents = mutableListOf<NoteEvent>()
         for (event in extracted.rawEvents) {
             val key = mapping.keyOf(event.midiNote) ?: continue
@@ -283,11 +329,30 @@ class MidiParser(
             calculatedDurationMs
         }
 
+        val timingMetadata = SongTimingMetadata.Midi(
+            ppqn = extracted.ppqn,
+            tempoMap = extracted.tempoMap,
+            timeSignatureMap = extracted.timeSignatureMap
+        )
+
         return SongData(
             title = title,
             durationMs = finalDurationMs,
-            events = noteEvents
+            events = noteEvents,
+            timingMetadata = timingMetadata
         )
+    }
+
+    /**
+     * 指定された [com.onigiri.keycue.model.ResolvedMidiMapping] を適用して [SongData] を生成する（後方互換ラッパー）。
+     */
+    fun parseWithResolvedMapping(
+        bytes: ByteArray,
+        title: String,
+        mapping: com.onigiri.keycue.model.ResolvedMidiMapping
+    ): SongData {
+        val extracted = extractRawEvents(bytes)
+        return parseWithResolvedMapping(extracted, title, mapping)
     }
 
     private data class RawNoteOn(

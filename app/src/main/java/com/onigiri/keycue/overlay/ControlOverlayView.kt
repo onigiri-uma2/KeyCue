@@ -1332,10 +1332,33 @@ class ControlOverlayView(
         updateGuideQuickToggleStyle()
     }
 
+    private var currentMetronomeInfo: String = ""
+
     private fun updateMetronomeToggleStyle() {
         if (!::metronomeToggleBtn.isInitialized) return
 
-        metronomeToggleBtn.text = if (currentMetronomeEnabled) "Metro ON" else "Metro OFF"
+        if (currentMetronomeEnabled) {
+            val label = if (currentMetronomeInfo.isNotEmpty()) {
+                "Metro ON\n$currentMetronomeInfo"
+            } else {
+                "Metro ON"
+            }
+            metronomeToggleBtn.text = label
+            metronomeToggleBtn.setTextSize(
+                TypedValue.COMPLEX_UNIT_SP,
+                if (currentMetronomeInfo.isNotEmpty()) 9f else 11f
+            )
+            metronomeToggleBtn.layoutParams = LinearLayout.LayoutParams(
+                0,
+                if (currentMetronomeInfo.isNotEmpty()) dpToPx(34) else dpToPx(28),
+                1f
+            )
+        } else {
+            metronomeToggleBtn.text = "Metro OFF"
+            metronomeToggleBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+            metronomeToggleBtn.layoutParams = LinearLayout.LayoutParams(0, dpToPx(28), 1f)
+        }
+
         metronomeToggleBtn.background = createRoundedDrawable(
             cornerRadiusDp = 4f,
             fillColor = if (currentMetronomeEnabled) Color.parseColor("#00796B") else Color.parseColor("#37474F")
@@ -1343,8 +1366,9 @@ class ControlOverlayView(
         metronomeToggleBtn.setTextColor(if (currentMetronomeEnabled) Color.WHITE else Color.parseColor("#90A4AE"))
     }
 
-    fun updateMetronomeState(enabled: Boolean) {
+    fun updateMetronomeState(enabled: Boolean, infoText: String = "") {
         currentMetronomeEnabled = enabled
+        currentMetronomeInfo = infoText
         updateMetronomeToggleStyle()
     }
 

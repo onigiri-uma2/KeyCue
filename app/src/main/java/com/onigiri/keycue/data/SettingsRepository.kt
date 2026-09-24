@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import com.onigiri.keycue.model.ControlOverlayConfig
 import com.onigiri.keycue.model.BeatSubdivision
 import com.onigiri.keycue.model.MetronomeConfig
+import com.onigiri.keycue.model.MetronomeTimingMode
 import com.onigiri.keycue.model.NormalizedPoint
 import com.onigiri.keycue.model.PlaybackConfig
 import com.onigiri.keycue.model.RecentSongEntry
@@ -208,6 +209,7 @@ class SharedPreferencesSettingsRepository internal constructor(
         private const val KEY_RECENT_SONGS = "recent_songs"
 
         private const val KEY_METRONOME_ENABLED = "metronome_enabled"
+        private const val KEY_METRONOME_TIMING_MODE = "metronome_timing_mode"
         private const val KEY_METRONOME_BPM = "metronome_bpm"
         private const val KEY_METRONOME_BEATS_PER_BAR = "metronome_beats_per_bar"
         private const val KEY_METRONOME_SUBDIVISION = "metronome_subdivision"
@@ -380,6 +382,31 @@ class SharedPreferencesSettingsRepository internal constructor(
 
     private fun loadInitialMetronomeConfig(): MetronomeConfig {
         val enabled = prefs.getBoolean(KEY_METRONOME_ENABLED, false)
+        val timingMode = if (prefs.contains(KEY_METRONOME_TIMING_MODE)) {
+            val modeName = prefs.getString(KEY_METRONOME_TIMING_MODE, MetronomeTimingMode.AUTO.name)
+            try {
+                MetronomeTimingMode.valueOf(modeName ?: MetronomeTimingMode.AUTO.name)
+            } catch (_: Exception) {
+                MetronomeTimingMode.AUTO
+            }
+        } else {
+            // 旧バージョンからの移行判定:
+            // 旧メトロノーム設定キーが存在する場合は、既存の手動設定ユーザーと判断して初期モードを MANUAL にする。
+            // 存在しない（新規インストール）の場合は、初期モードを AUTO にする。
+            val hasLegacySettings = prefs.contains(KEY_METRONOME_BPM) ||
+                    prefs.contains(KEY_METRONOME_BEATS_PER_BAR) ||
+                    prefs.contains(KEY_METRONOME_ENABLED) ||
+                    prefs.contains(KEY_METRONOME_SUBDIVISION) ||
+                    prefs.contains(KEY_METRONOME_ACCENT_ENABLED) ||
+                    prefs.contains(KEY_METRONOME_VOLUME_PERCENT) ||
+                    prefs.contains(KEY_METRONOME_BEAT_OFFSET_MS)
+
+            if (hasLegacySettings) {
+                MetronomeTimingMode.MANUAL
+            } else {
+                MetronomeTimingMode.AUTO
+            }
+        }
         val bpm = prefs.getInt(KEY_METRONOME_BPM, MetronomeConfig.DEFAULT_BPM)
         val beatsPerBar = prefs.getInt(KEY_METRONOME_BEATS_PER_BAR, MetronomeConfig.DEFAULT_BEATS_PER_BAR)
         val subName = prefs.getString(KEY_METRONOME_SUBDIVISION, BeatSubdivision.QUARTER.name)
@@ -394,6 +421,7 @@ class SharedPreferencesSettingsRepository internal constructor(
 
         return MetronomeConfig.normalize(
             enabled = enabled,
+            timingMode = timingMode,
             bpm = bpm,
             beatsPerBar = beatsPerBar,
             subdivision = subdivision,
@@ -560,6 +588,7 @@ class SharedPreferencesSettingsRepository internal constructor(
         _metronomeConfig.value = normalized
         prefs.edit()
             .putBoolean(KEY_METRONOME_ENABLED, normalized.enabled)
+            .putString(KEY_METRONOME_TIMING_MODE, normalized.timingMode.name)
             .putInt(KEY_METRONOME_BPM, normalized.bpm)
             .putInt(KEY_METRONOME_BEATS_PER_BAR, normalized.beatsPerBar)
             .putString(KEY_METRONOME_SUBDIVISION, normalized.subdivision.name)

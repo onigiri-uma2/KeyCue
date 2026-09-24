@@ -147,6 +147,11 @@ class OverlayService : Service() {
             metronomeScheduler?.onLoopRewound(targetPos)
         }
 
+        sessionRepository.currentSession.value?.song?.let { song ->
+            metronomeScheduler?.updateTimingMetadata(song.timingMetadata)
+        }
+        metronomeScheduler?.updateConfig(settingsRepository.metronomeConfig.value)
+
         windowController = OverlayWindowController(
             context = this,
             onOpenApp = { openMainActivity() },
@@ -283,7 +288,7 @@ class OverlayService : Service() {
         playbackEngine.setSong(song)
         noteScheduler.prepare(song.events)
         loadedSong = song
-        metronomeScheduler?.onSongChanged()
+        metronomeScheduler?.onSongChanged(song.timingMetadata)
     }
 
     private fun applyPlaybackConfig(config: com.onigiri.keycue.model.PlaybackConfig) {
@@ -388,7 +393,7 @@ class OverlayService : Service() {
         serviceScope.launch {
             settingsRepository.metronomeConfig.collect { config ->
                 metronomeScheduler?.updateConfig(config)
-                windowController?.updateMetronomeState(config.enabled)
+                renderCurrentFrame(forceControlUpdate = true)
             }
         }
     }
@@ -628,6 +633,18 @@ class OverlayService : Service() {
                 loopEndMs = loopEnd,
                 countdownMs = config.countdownMs
             )
+
+            val metroConfig = settingsRepository.metronomeConfig.value
+            val metroInfo = if (metroConfig.enabled && metronomeScheduler != null) {
+                val queryPos = if (currentPos < 0L) 0L else currentPos
+                val bpm = Math.round(metronomeScheduler!!.currentBpm(queryPos)).toInt()
+                val ts = metronomeScheduler!!.currentTimeSignature(queryPos)
+                val modeStr = if (metroConfig.timingMode == com.onigiri.keycue.model.MetronomeTimingMode.AUTO) "AUTO" else "MANUAL"
+                "$modeStr $bpm BPM / ${ts.displayString}"
+            } else {
+                ""
+            }
+            windowController?.updateMetronomeState(metroConfig.enabled, metroInfo)
         }
     }
 

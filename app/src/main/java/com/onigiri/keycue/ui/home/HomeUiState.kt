@@ -61,4 +61,14 @@ data class HomeUiState(
         songData = null,
         resolvedMidiMapping = null
     )
+
+    /**
+     * 現在の楽曲情報とメトロノーム設定から解決されたタイムライン（UI表示用）。
+     */
+    val resolvedTimeline: com.onigiri.keycue.audio.BeatTimeline
+        get() = com.onigiri.keycue.audio.MetronomeTimingResolver.resolveTimeline(
+            config = metronomeConfig,
+            timingMetadata = songData?.timingMetadata,
+            durationMs = songData?.durationMs ?: durationMs
+        )
 }

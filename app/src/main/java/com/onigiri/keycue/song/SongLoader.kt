@@ -265,7 +265,7 @@ open class SongLoader(
             Pair(resolved, null)
         }
 
-        val song = midiParser.parseWithResolvedMapping(bytes, displayName, resolved)
+        val song = midiParser.parseWithResolvedMapping(extracted, displayName, resolved)
         return Triple(song, resolved, updatedSettings)
     }
 
