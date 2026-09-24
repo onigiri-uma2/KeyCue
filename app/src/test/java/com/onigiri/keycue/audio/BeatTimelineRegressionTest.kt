@@ -523,4 +523,44 @@ class BeatTimelineRegressionTest {
         assertEquals(3500L, quarterTimeline.beatForIndex(8L)!!.timeMs)
         assertTrue("7/8の小節2頭(3360tick -> 3500ms)がアクセントであること", quarterTimeline.beatForIndex(8L)!!.isAccent)
     }
+
+    // 13. 極小PPQN(PPQN=2)での5/8拍子: 小節末尾(tick 4)が境界イプシロンで正しく除外されず含まれること
+    @Test
+    fun testSmallPpqn_5_8_doesNotSkipEndOfBarClick() {
+        val ppqn = 2
+        // 120 BPM: 2 tick = 500ms -> 1 tick = 250ms
+        val tempoMap = TempoMap(ppqn, listOf(RawTempoEvent(0L, 500_000L)))
+        val tsMap = TimeSignatureMap(listOf(RawTimeSignatureEvent(0L, 5, 8, 24, 8)))
+        // 小節長: 2 * 4 * 5 / 8 = 5 tick
+        // 4分音符ステップ: ppqn = 2 tick
+        // 小節0: barStart = 0, barEnd = 5
+        //   - tick 0: ダウンビート (0ms, 強)
+        //   - tick 2: クリック (500ms, 弱)
+        //   - tick 4: クリック (1000ms, 弱) <-- barEndTick(5.0) - 1.0 だと除外されていたが、TICK_EPSILON では確実に含まれる
+        // 小節1: barStart = 5, barEnd = 10
+        //   - tick 5: ダウンビート (1250ms, 強)
+        val timeline = MidiBeatTimeline(
+            ppqn = ppqn,
+            tempoMap = tempoMap,
+            timeSignatureMap = tsMap,
+            subdivision = BeatSubdivision.QUARTER,
+            accentEnabled = true,
+            beatOffsetMs = 0L,
+            songDurationMs = 3000L
+        )
+
+        // 小節0
+        assertEquals(0L, timeline.beatForIndex(0L)!!.timeMs) // tick 0
+        assertTrue(timeline.beatForIndex(0L)!!.isAccent)
+
+        assertEquals(500L, timeline.beatForIndex(1L)!!.timeMs) // tick 2
+        assertFalse(timeline.beatForIndex(1L)!!.isAccent)
+
+        assertEquals(1000L, timeline.beatForIndex(2L)!!.timeMs) // tick 4
+        assertFalse(timeline.beatForIndex(2L)!!.isAccent)
+
+        // 小節1 (tick 5 -> 1250ms)
+        assertEquals(1250L, timeline.beatForIndex(3L)!!.timeMs) // tick 5
+        assertTrue("小節1の頭(tick 5)がアクセントであること", timeline.beatForIndex(3L)!!.isAccent)
+    }
 }

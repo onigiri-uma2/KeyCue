@@ -29,7 +29,7 @@ class MidiBeatTimeline(
     val accentEnabled: Boolean,
     val beatOffsetMs: Long,
     val songDurationMs: Long,
-    override val sourceKind: TimingSourceKind = if (tempoMap.hasExplicitTempo) TimingSourceKind.MIDI else TimingSourceKind.MIDI_DEFAULT,
+    override val sourceKind: TimingSourceKind = if (tempoMap.hasExplicitTempo || timeSignatureMap.hasExplicitTimeSignature) TimingSourceKind.MIDI else TimingSourceKind.MIDI_DEFAULT,
     override val isBpmAuto: Boolean = tempoMap.hasExplicitTempo,
     override val isTimeSignatureAuto: Boolean = timeSignatureMap.hasExplicitTimeSignature
 ) : BeatTimeline {
@@ -37,6 +37,8 @@ class MidiBeatTimeline(
     companion object {
         /** 安全上限拍数（極端に長いファイルでのメモリ保護） */
         private const val MAX_BEATS_LIMIT = 100_000
+        /** 浮動小数点計算による小節終端との重複防止用イプシロン (tick) */
+        private const val TICK_EPSILON = 1e-4
     }
 
     private val beats: List<MetronomeBeat> = buildBeats()
@@ -89,9 +91,9 @@ class MidiBeatTimeline(
                     )
                 )
 
-                // 小節内の後続クリック（小節境界と重複しないよう barEndTick - 1.0 未満）
+                // 小節内の後続クリック（小節境界との重複・浮動小数点誤差を TICK_EPSILON で安全に除外）
                 var clickTick = barStartTick + stepTicks
-                while (clickTick < barEndTick - 1.0 && list.size < MAX_BEATS_LIMIT) {
+                while (barEndTick - clickTick > TICK_EPSILON && list.size < MAX_BEATS_LIMIT) {
                     val clickTimeMs = Math.round(tempoMap.tickToMs(clickTick)) + beatOffsetMs
                     list.add(
                         MetronomeBeat(

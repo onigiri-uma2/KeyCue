@@ -166,8 +166,9 @@ fun MetronomeConfigContent(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     val bpmSource = when (timeline.sourceKind) {
-                        TimingSourceKind.MIDI -> "(楽曲自動)"
-                        TimingSourceKind.MIDI_DEFAULT -> "(MIDI標準デフォルト)"
+                        TimingSourceKind.MIDI, TimingSourceKind.MIDI_DEFAULT -> {
+                            if (timeline.isBpmAuto) "(楽曲自動)" else "(MIDI標準デフォルト)"
+                        }
                         TimingSourceKind.SKY_STUDIO -> if (timeline.isBpmAuto) "(楽曲自動)" else "(手動)"
                         TimingSourceKind.MANUAL -> "(手動)"
                     }
@@ -188,8 +189,9 @@ fun MetronomeConfigContent(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     val tsSource = when (timeline.sourceKind) {
-                        TimingSourceKind.MIDI -> "(楽曲自動)"
-                        TimingSourceKind.MIDI_DEFAULT -> "(MIDI標準デフォルト)"
+                        TimingSourceKind.MIDI, TimingSourceKind.MIDI_DEFAULT -> {
+                            if (timeline.isTimeSignatureAuto) "(楽曲自動)" else "(MIDI標準デフォルト)"
+                        }
                         TimingSourceKind.SKY_STUDIO -> if (timeline.isTimeSignatureAuto) "(楽曲自動)" else "(手動)"
                         TimingSourceKind.MANUAL -> "(手動)"
                     }
