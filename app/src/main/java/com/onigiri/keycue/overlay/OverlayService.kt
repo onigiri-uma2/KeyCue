@@ -21,6 +21,7 @@ import com.onigiri.keycue.model.RecentSongEntry
 import com.onigiri.keycue.model.SongData
 import com.onigiri.keycue.audio.MetronomeScheduler
 import com.onigiri.keycue.audio.MetronomeSoundPlayer
+import com.onigiri.keycue.audio.MetronomeTimingResolver
 import com.onigiri.keycue.audio.SoundPoolMetronomeSoundPlayer
 import com.onigiri.keycue.song.SongSelectionCoordinator
 import kotlinx.coroutines.CoroutineScope
@@ -29,6 +30,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * ゲーム画面上で演奏ガイドおよびコントロールUIを常駐表示するための Foreground Service。
@@ -104,6 +106,7 @@ class OverlayService : Service() {
 
     private var metronomeSoundPlayer: MetronomeSoundPlayer? = null
     private var metronomeScheduler: MetronomeScheduler? = null
+    private var songLoadGeneration: Long = 0L
 
     // ディスプレイの垂直同期信号 (VSYNC) に合わせて60fps/120fpsでフレーム描画を駆動するChoreographerコールバック
     private val frameCallback = object : android.view.Choreographer.FrameCallback {
@@ -288,7 +291,30 @@ class OverlayService : Service() {
         playbackEngine.setSong(song)
         noteScheduler.prepare(song.events)
         loadedSong = song
-        metronomeScheduler?.onSongChanged(song.timingMetadata)
+
+        // メトロノームを即座に安全状態へリセット（古い曲の拍を停止・破棄）
+        metronomeScheduler?.prepareForSongChange(song.timingMetadata)
+
+        val generation = ++songLoadGeneration
+        val config = settingsRepository.metronomeConfig.value
+        val metadata = song.timingMetadata
+        val durationMs = song.durationMs
+
+        // タイムライン構築をバックグラウンドスレッドで実行
+        serviceScope.launch(Dispatchers.Default) {
+            val resolvedTimeline = MetronomeTimingResolver.resolveTimeline(
+                config = config,
+                timingMetadata = metadata,
+                durationMs = durationMs
+            )
+            withContext(Dispatchers.Main) {
+                // 世代番号が一致している場合のみ適用（曲切替途中の古い結果を破棄）
+                if (generation == songLoadGeneration) {
+                    metronomeScheduler?.applyResolvedTimeline(resolvedTimeline, metadata)
+                    renderCurrentFrame(forceControlUpdate = true)
+                }
+            }
+        }
     }
 
     private fun applyPlaybackConfig(config: com.onigiri.keycue.model.PlaybackConfig) {

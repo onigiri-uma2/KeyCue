@@ -18,6 +18,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -50,22 +52,29 @@ class HomeViewModel(
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
     init {
-        // 設定およびセッションの変更フローを合成し、UiState へアトミックに同期
+        // 全ての設定およびセッションの変更フローを単一のFlowに統合し、UiStateへアトミックかつ直列に同期
         scope.launch {
-            kotlinx.coroutines.flow.combine(
+            val settingsFlow = combine(
                 settingsRepository.playbackConfig,
                 settingsRepository.fitProfile,
                 settingsRepository.visualConfig,
                 settingsRepository.midiMappingSettings,
+                settingsRepository.controlOverlayConfig
+            ) { config, profile, visualConfig, mappingSettings, controlOverlayConfig ->
+                SettingsState(config, profile, visualConfig, mappingSettings, controlOverlayConfig)
+            }
+
+            combine(
+                settingsFlow,
+                settingsRepository.metronomeConfig,
                 sessionRepository.currentSession
-            ) { config, profile, visualConfig, mappingSettings, session ->
-                RepositoryState(config, profile, visualConfig, mappingSettings, session)
-            }.collect { state ->
+            ) { settings, metroConfig, session ->
+                UnifiedRepositoryState(settings, metroConfig, session)
+            }.collectLatest { state ->
                 val song = state.session?.song
-                val currentMetro = _uiState.value.metronomeConfig
-                // タイムライン構築をバックグラウンドスレッドで実行
+                // タイムライン構築をバックグラウンドスレッドで実行（collectLatestにより古い計算は自動キャンセル）
                 val timeline = withContext(bgDispatcher) {
-                    getOrResolveTimeline(song, currentMetro)
+                    getOrResolveTimeline(song, state.metronomeConfig)
                 }
 
                 _uiState.update { current ->
@@ -85,40 +94,35 @@ class HomeViewModel(
                     }
 
                     base.copy(
-                        speed = state.config.speed,
-                        noteLeadTimeMs = state.config.noteLeadTimeMs,
-                        approachCircleLeadTimeMs = state.config.approachCircleLeadTimeMs,
-                        countdownMs = state.config.countdownMs,
-                        fitConfigured = state.profile != null,
-                        visualConfig = state.visualConfig,
-                        midiMappingSettings = state.mappingSettings,
+                        speed = state.settings.playbackConfig.speed,
+                        noteLeadTimeMs = state.settings.playbackConfig.noteLeadTimeMs,
+                        approachCircleLeadTimeMs = state.settings.playbackConfig.approachCircleLeadTimeMs,
+                        countdownMs = state.settings.playbackConfig.countdownMs,
+                        fitConfigured = state.settings.profile != null,
+                        visualConfig = state.settings.visualConfig,
+                        midiMappingSettings = state.settings.mappingSettings,
+                        controlOverlayConfig = state.settings.controlOverlayConfig,
+                        metronomeConfig = state.metronomeConfig,
                         resolvedTimeline = timeline
                     )
                 }
             }
         }
-
-        // コントロールオーバーレイ設定の変更を監視
-        scope.launch {
-            settingsRepository.controlOverlayConfig.collect { config ->
-                _uiState.update { it.copy(controlOverlayConfig = config) }
-            }
-        }
-
-        // メトロノーム設定の変更を監視（音量等のみの変更ではタイムラインを再生成しない）
-        scope.launch {
-            settingsRepository.metronomeConfig.collect { config ->
-                val song = _uiState.value.songData
-                // タイムライン解決をバックグラウンドスレッドで実行
-                val timeline = withContext(bgDispatcher) {
-                    getOrResolveTimeline(song, config)
-                }
-                _uiState.update { current ->
-                    current.copy(metronomeConfig = config, resolvedTimeline = timeline)
-                }
-            }
-        }
     }
+
+    private data class SettingsState(
+        val playbackConfig: PlaybackConfig,
+        val profile: com.onigiri.keycue.model.FitProfile?,
+        val visualConfig: com.onigiri.keycue.model.VisualConfig,
+        val mappingSettings: com.onigiri.keycue.model.MidiMappingSettings,
+        val controlOverlayConfig: com.onigiri.keycue.model.ControlOverlayConfig
+    )
+
+    private data class UnifiedRepositoryState(
+        val settings: SettingsState,
+        val metronomeConfig: com.onigiri.keycue.model.MetronomeConfig,
+        val session: com.onigiri.keycue.model.PlaybackSession?
+    )
 
     private data class TimelineCacheKey(
         val timingMetadata: com.onigiri.keycue.model.timing.SongTimingMetadata?,

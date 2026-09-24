@@ -318,7 +318,46 @@ class MetronomeScheduler(
     }
 
     /**
-     * 楽曲変更時（新曲読み込み、Recent切替等）の初期化を行う。
+     * 楽曲変更の開始時に呼び出し、発音を停止して古い曲のクリック予定を破棄する。
+     * バックグラウンドでのタイムライン構築が完了するまでの間、安全なミュート状態を維持します。
+     */
+    fun prepareForSongChange(metadata: com.onigiri.keycue.model.timing.SongTimingMetadata? = null) {
+        synchronized(stateLock) {
+            soundPlayer.stop()
+            currentTimingMetadata = metadata
+            timeline = ManualBeatTimeline(currentConfig)
+            hasStartedInitialPlay = false
+            isPendingSeek = false
+            lastPlayedBeatIndex = -1L
+            nextClickIndex = 0L
+            lastObservedPositionMs = 0L
+            currentGeneration++
+            notifyResync()
+        }
+    }
+
+    /**
+     * バックグラウンドスレッド等で事前に構築された [newTimeline] をSchedulerへ適用する。
+     */
+    fun applyResolvedTimeline(
+        newTimeline: BeatTimeline,
+        metadata: com.onigiri.keycue.model.timing.SongTimingMetadata? = null
+    ) {
+        synchronized(stateLock) {
+            currentTimingMetadata = metadata
+            timeline = newTimeline
+            val currentPos = timeProvider()
+            val nextIdx = timeline.nextBeatIndexAtOrAfter(currentPos)
+            nextClickIndex = nextIdx
+            lastPlayedBeatIndex = nextIdx - 1
+            lastObservedPositionMs = currentPos
+            currentGeneration++
+            notifyResync()
+        }
+    }
+
+    /**
+     * 楽曲変更時（新曲読み込み、Recent切替等）の初期化を行う（同期版・後方互換用）。
      */
     fun onSongChanged(metadata: com.onigiri.keycue.model.timing.SongTimingMetadata? = null) {
         synchronized(stateLock) {

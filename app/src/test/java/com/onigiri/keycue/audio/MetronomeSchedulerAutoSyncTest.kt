@@ -406,4 +406,65 @@ class MetronomeSchedulerAutoSyncTest {
         assertEquals(TimeSignature(3, 4), fixture.scheduler.currentTimeSignature(0L))
         assertEquals(TimingSourceKind.MANUAL, fixture.scheduler.currentTimingSourceKind)
     }
+
+    // 11. 非同期曲切替: prepareForSongChange による即時ミュートと applyResolvedTimeline による新タイムライン適用
+    @Test
+    fun testAsyncSongChange_prepareAndApplyResolvedTimeline() {
+        val oldMeta = createMidiMetadata() // 120 BPM: 0, 500, 1000...
+        val config = MetronomeConfig(enabled = true, timingMode = MetronomeTimingMode.AUTO)
+        fixture.scheduler.updateConfig(config)
+        fixture.scheduler.updateTimingMetadata(oldMeta)
+        fixture.isCurrentlyPlaying = true
+        fixture.scheduler.onPlaybackStateChanged(PlaybackState.Playing(0L))
+
+        // 1. 旧曲で再生中
+        fixture.currentPositionMs = 0L
+        assertTrue(fixture.scheduler.processTick(0L))
+        assertEquals(1, fixture.soundPlayer.playedBeats.size)
+
+        // 2. 曲変更開始: prepareForSongChange を呼び出し（バックグラウンド構築前）
+        val oldGeneration = fixture.scheduler.generation
+        fixture.scheduler.prepareForSongChange()
+        assertTrue("世代番号が進むこと", fixture.scheduler.generation > oldGeneration)
+
+        // prepareForSongChange 後は旧曲のクリック予定は破棄され、古い世代番号の processTick は拒否される
+        assertFalse(fixture.scheduler.processTick(500L, oldGeneration))
+
+        // 3. バックグラウンドで新タイムラインが完成して applyResolvedTimeline が呼ばれる
+        val newPpqn = 480
+        val newTempoMap = TempoMap(newPpqn, listOf(RawTempoEvent(0L, 250_000L))) // 240 BPM (250ms間隔)
+        val newTsMap = TimeSignatureMap(emptyList())
+        val newTimeline = MidiBeatTimeline(
+            ppqn = newPpqn,
+            tempoMap = newTempoMap,
+            timeSignatureMap = newTsMap,
+            subdivision = BeatSubdivision.QUARTER,
+            accentEnabled = true,
+            beatOffsetMs = 0L,
+            songDurationMs = 5000L
+        )
+        val newMeta = SongTimingMetadata.Midi(
+            tempoMap = newTempoMap,
+            timeSignatureMap = newTsMap,
+            ppqn = newPpqn,
+            hasExplicitTempo = true,
+            hasExplicitTimeSignature = false
+        )
+
+        fixture.scheduler.applyResolvedTimeline(newTimeline, newMeta)
+
+        // 新タイムラインのテンポが正しく反映されていること
+        assertEquals(240.0, fixture.scheduler.currentBpm(0L), 0.001)
+
+        // 新曲の再生開始 (0ms で発音)
+        fixture.soundPlayer.clear()
+        fixture.scheduler.onPlaybackStateChanged(PlaybackState.Playing(0L))
+        assertTrue(fixture.scheduler.processTick(0L))
+        assertEquals(1, fixture.soundPlayer.playedBeats.size)
+
+        // 次の拍は 250ms (240 BPM)
+        fixture.currentPositionMs = 250L
+        assertTrue(fixture.scheduler.processTick(250L))
+        assertEquals(2, fixture.soundPlayer.playedBeats.size)
+    }
 }
