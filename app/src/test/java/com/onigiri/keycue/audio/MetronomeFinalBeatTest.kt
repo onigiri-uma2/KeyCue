@@ -15,23 +15,33 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * 楽曲終了境界における最終拍の発音取りこぼし防止および重複防止のテスト。
+ * 楽曲終了境界における最終拍の発音取りこぼし防止、重複防止、
+ * および Finished 遷移時における最終拍の音切れ防止（自然な音声テールの許可）のテスト。
  */
 class MetronomeFinalBeatTest {
 
     private class FakeSoundPlayer : MetronomeSoundPlayer {
-        data class PlayedBeat(val isAccent: Boolean, val volume: Int)
+        data class PlayedBeat(
+            val isAccent: Boolean,
+            val volume: Int,
+            var wasCutOffByStop: Boolean = false
+        )
 
         val playedBeats = mutableListOf<PlayedBeat>()
         var stoppedCount = 0
         var releasedCount = 0
 
+        val lastBeat: PlayedBeat? get() = playedBeats.lastOrNull()
+
         override fun playBeat(isAccent: Boolean, volumePercent: Int) {
-            playedBeats.add(PlayedBeat(isAccent, volumePercent))
+            playedBeats.add(PlayedBeat(isAccent, volumePercent, wasCutOffByStop = false))
         }
 
         override fun stop() {
             stoppedCount++
+            playedBeats.lastOrNull()?.let {
+                it.wasCutOffByStop = true
+            }
         }
 
         override fun release() {
@@ -180,6 +190,114 @@ class MetronomeFinalBeatTest {
         val evaluatedAgain = f.scheduler.evaluateFinalBeat(1000L)
         assertFalse(evaluatedAgain)
         assertEquals(3, f.soundPlayer.playedBeats.size)
+    }
+
+    @Test
+    fun finalBeat_playsNaturalAudioTail_notCutOffOnFinishedTransition() {
+        // 最終クリック発音直後に Finished へ遷移しても stop() で音が切られないことを検証
+        f.durationMs = 1000L
+        val config = MetronomeConfig(
+            enabled = true,
+            timingMode = MetronomeTimingMode.MANUAL,
+            bpm = 120,
+            beatsPerBar = 4,
+            subdivision = BeatSubdivision.QUARTER,
+            volumePercent = 80
+        )
+        val timeline = MetronomeTimingResolver.resolveTimeline(config, timingMetadata = null, durationMs = 1000L)
+        f.scheduler.updateConfig(config)
+        f.scheduler.applyResolvedTimeline(timeline)
+        f.setPlaying(true)
+
+        // 0ms, 500ms 発音
+        f.currentPositionMs = 0L
+        f.scheduler.processTick(f.currentPositionMs)
+        f.currentPositionMs = 500L
+        f.scheduler.processTick(f.currentPositionMs)
+        assertEquals(2, f.soundPlayer.playedBeats.size)
+
+        // 1000ms (最終拍) を発音
+        f.currentPositionMs = 1000L
+        val evaluated = f.scheduler.evaluateFinalBeat(1000L)
+        assertTrue(evaluated)
+        assertEquals(3, f.soundPlayer.playedBeats.size)
+
+        // その直後に PlaybackEngine が Finished 状態へ遷移（固定遅延なし）
+        f.isCurrentlyPlaying = false
+        f.scheduler.onPlaybackStateChanged(PlaybackState.Finished(1000L))
+
+        // 音声停止ポリシーの検証:
+        // Finished では soundPlayer.stop() は呼ばれず、最終クリック音が自然に鳴り終わる（wasCutOffByStop = false）
+        val lastBeat = f.soundPlayer.lastBeat
+        assertTrue("最終拍が存在する", lastBeat != null)
+        assertFalse("最終拍はstop()で切られず自然に鳴り終わる", lastBeat!!.wasCutOffByStop)
+        assertEquals("Finished遷移時はstop()は呼ばれない", 0, f.soundPlayer.stoppedCount)
+
+        // Finished 後は新しいクリックをスケジュール・発音しない
+        f.scheduler.processTick(f.currentPositionMs)
+        assertFalse(f.scheduler.evaluateFinalBeat(1000L))
+        assertEquals(3, f.soundPlayer.playedBeats.size)
+    }
+
+    @Test
+    fun immediateStopPolicies_stopSoundInstantly() {
+        // Pause、手動Stop、設定画面移動、Metro OFF では即座に音を切る（wasCutOffByStop = true）ことを検証
+        val config = MetronomeConfig(
+            enabled = true,
+            timingMode = MetronomeTimingMode.MANUAL,
+            bpm = 120,
+            beatsPerBar = 4
+        )
+        val timeline = MetronomeTimingResolver.resolveTimeline(config, timingMetadata = null, durationMs = 1000L)
+        f.scheduler.updateConfig(config)
+        f.scheduler.applyResolvedTimeline(timeline)
+        f.setPlaying(true)
+
+        // 1. Pause での即時停止
+        f.currentPositionMs = 0L
+        f.scheduler.processTick(0L)
+        assertEquals(1, f.soundPlayer.playedBeats.size)
+        assertFalse(f.soundPlayer.lastBeat!!.wasCutOffByStop)
+
+        f.isCurrentlyPlaying = false
+        f.scheduler.onPlaybackStateChanged(PlaybackState.Paused(50L))
+        assertTrue("Pause時は即時停止される", f.soundPlayer.lastBeat!!.wasCutOffByStop)
+        assertTrue(f.soundPlayer.stoppedCount > 0)
+
+        // 2. 手動Stop での即時停止
+        f.setPlaying(true)
+        f.currentPositionMs = 500L
+        f.scheduler.processTick(500L)
+        assertEquals(2, f.soundPlayer.playedBeats.size)
+        assertFalse(f.soundPlayer.lastBeat!!.wasCutOffByStop)
+
+        f.isCurrentlyPlaying = false
+        f.scheduler.onPlaybackStateChanged(PlaybackState.Stopped)
+        assertTrue("Stop時は即時停止される", f.soundPlayer.lastBeat!!.wasCutOffByStop)
+
+        // 3. 設定画面遷移での即時停止
+        f.setPlaying(true)
+        f.currentPositionMs = 1000L
+        f.scheduler.evaluateFinalBeat(1000L)
+        assertEquals(3, f.soundPlayer.playedBeats.size)
+        assertFalse(f.soundPlayer.lastBeat!!.wasCutOffByStop)
+
+        f.scheduler.pauseForOpeningSettings()
+        assertTrue("設定画面遷移時は即時停止される", f.soundPlayer.lastBeat!!.wasCutOffByStop)
+
+        // 4. Metro OFF での即時停止
+        f.scheduler.onSettingsClosed()
+        f.setPlaying(true)
+        f.durationMs = 2000L
+        f.currentPositionMs = 1500L
+        val extendedTimeline = MetronomeTimingResolver.resolveTimeline(config, timingMetadata = null, durationMs = 2000L)
+        f.scheduler.applyResolvedTimeline(extendedTimeline)
+        f.scheduler.processTick(1500L)
+        assertEquals(4, f.soundPlayer.playedBeats.size)
+        assertFalse(f.soundPlayer.lastBeat!!.wasCutOffByStop)
+
+        f.scheduler.updateConfig(config.copy(enabled = false))
+        assertTrue("Metro OFF時は即時停止される", f.soundPlayer.lastBeat!!.wasCutOffByStop)
     }
 
     @Test

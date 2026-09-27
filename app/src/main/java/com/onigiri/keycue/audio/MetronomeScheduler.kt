@@ -272,8 +272,16 @@ class MetronomeScheduler(
                     currentGeneration++
                     notifyResync()
                 }
-                is PlaybackState.Paused, is PlaybackState.Finished, is PlaybackState.CountingDown -> {
+                is PlaybackState.Paused, is PlaybackState.CountingDown -> {
                     soundPlayer.stop()
+                    currentGeneration++
+                    notifyResync()
+                }
+                is PlaybackState.Finished -> {
+                    // 楽曲終了時（Finished）:
+                    // 直前に evaluateFinalBeat() 等で発音された最終クリック音が途中で切られないよう、
+                    // soundPlayer.stop() は呼び出さず、短い音声テールが自然に鳴り終わることを許可する。
+                    // なお、以後の新規クリック予定は currentGeneration 進めと notifyResync により安全に破棄される。
                     currentGeneration++
                     notifyResync()
                 }
