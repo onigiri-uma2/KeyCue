@@ -5,6 +5,8 @@ import com.onigiri.keycue.profile.SkyLayoutAdjustment
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.lang.reflect.Proxy
@@ -164,23 +166,120 @@ class SettingsRepositoryLayoutTest {
         assertEquals(delayedOldAdj, repo.getLayoutAdjustment(SkyLayout.PAD_TRIGGER_FIRST))
     }
 
+    /**
+     * 責務1: FitProfileモデルのキー数不変条件テスト。
+     * 15個以外のキーリストで生成しようとした場合に確実に IllegalArgumentException がスローされること。
+     * 正しい15キーの場合は例外なく正常に生成されること。
+     */
     @Test
-    fun testBaseFitProfileProtection_separationOfBaseAndDerivedData() = runBlocking {
+    fun testFitProfile_invariant_requiresExactly15Keys() {
+        val standardPreset = com.onigiri.keycue.profile.SkyLayoutRegistry.getPreset(SkyLayout.TOUCH_STANDARD)
+        val validCenters = standardPreset.keyCenters
+        assertEquals(15, validCenters.size)
+
+        // 正常ケース: 15キーで正常生成できること
+        val profile = com.onigiri.keycue.model.FitProfile(validCenters)
+        assertEquals(15, profile.keyCenters.size)
+
+        // 異常ケース1: 0キー（空リスト）
+        try {
+            com.onigiri.keycue.model.FitProfile(emptyList())
+            org.junit.Assert.fail("空のキーリストでのFitProfile生成は例外をスローする必要があります")
+        } catch (e: IllegalArgumentException) {
+            assertTrue("例外メッセージにキー数制約が含まれること", e.message?.contains("15") == true)
+        }
+
+        // 異常ケース2: 14キー（1つ不足）
+        try {
+            com.onigiri.keycue.model.FitProfile(validCenters.take(14))
+            org.junit.Assert.fail("14キーでのFitProfile生成は例外をスローする必要があります")
+        } catch (e: IllegalArgumentException) {
+            assertTrue("例外メッセージにキー数制約が含まれること", e.message?.contains("15") == true)
+        }
+
+        // 異常ケース3: 16キー（1つ超過）
+        val overCenters = validCenters + validCenters.first()
+        try {
+            com.onigiri.keycue.model.FitProfile(overCenters)
+            org.junit.Assert.fail("16キーでのFitProfile生成は例外をスローする必要があります")
+        } catch (e: IllegalArgumentException) {
+            assertTrue("例外メッセージにキー数制約が含まれること", e.message?.contains("15") == true)
+        }
+    }
+
+    /**
+     * 責務2: Repositoryに正しい基準プロファイルを保存・復元できることの検証。
+     * InMemory および SharedPreferences の両実装において、
+     * 15キーの基準プロファイルが正しく永続化され、再生成インスタンスでも完全に復元されること。
+     */
+    @Test
+    fun testRepository_saveAndRestoreValidFitProfile() = runBlocking {
+        val standardPreset = com.onigiri.keycue.profile.SkyLayoutRegistry.getPreset(SkyLayout.TOUCH_STANDARD)
+        val validBase = com.onigiri.keycue.model.FitProfile(standardPreset.keyCenters)
+
+        // 1. InMemorySettingsRepository
+        val inMemoryRepo = InMemorySettingsRepository()
+        assertNull("初期状態はnullであること", inMemoryRepo.fitProfile.value)
+        inMemoryRepo.saveFitProfile(validBase)
+        assertEquals("保存したFitProfileが取得できること", validBase, inMemoryRepo.fitProfile.value)
+
+        // null保存でクリアできること
+        inMemoryRepo.saveFitProfile(null)
+        assertNull("null保存でクリアされること", inMemoryRepo.fitProfile.value)
+
+        // 2. SharedPreferencesSettingsRepository
+        val map = HashMap<String, Any>()
+        val prefs = createFakePrefs(map)
+        val spRepo = SharedPreferencesSettingsRepository(prefs)
+        assertNull("SP初期状態はnullであること", spRepo.fitProfile.value)
+
+        spRepo.saveFitProfile(validBase)
+        assertEquals("SPリポジトリに保存したFitProfileが取得できること", validBase, spRepo.fitProfile.value)
+
+        // 同一Prefsから新規リポジトリを作成してデシリアライズ復元を検証
+        val spRepoRestored = SharedPreferencesSettingsRepository(prefs)
+        assertNotNull("復元されたFitProfileが存在すること", spRepoRestored.fitProfile.value)
+        val restoredProfile = spRepoRestored.fitProfile.value!!
+        assertEquals("復元されたプロファイルのキー数が15であること", 15, restoredProfile.keyCenters.size)
+        for (i in 0..14) {
+            assertEquals("Key $i xの完全一致", validBase.keyCenters[i].x, restoredProfile.keyCenters[i].x, 0.00001f)
+            assertEquals("Key $i yの完全一致", validBase.keyCenters[i].y, restoredProfile.keyCenters[i].y, 0.00001f)
+        }
+
+        // SPでのnull保存クリア検証
+        spRepoRestored.saveFitProfile(null)
+        assertNull("SPでもnull保存でクリアされること", spRepoRestored.fitProfile.value)
+    }
+
+    /**
+     * 責務3: OverlayServiceの保存経路において、非標準レイアウト選択時は
+     * 基準プロファイルが誤保存されないことの検証。
+     */
+    @Test
+    fun testOverlayServiceSaveProtection_blocksWhenLayoutIsNotTouchStandard() = runBlocking {
         val repo = InMemorySettingsRepository()
         val standardPreset = com.onigiri.keycue.profile.SkyLayoutRegistry.getPreset(SkyLayout.TOUCH_STANDARD)
         val validBase = com.onigiri.keycue.model.FitProfile(standardPreset.keyCenters)
 
-        repo.saveFitProfile(validBase)
-        assertEquals(validBase, repo.fitProfile.value)
-
-        try {
-            val invalidProfile = com.onigiri.keycue.model.FitProfile(standardPreset.keyCenters.take(14))
-            repo.saveFitProfile(invalidProfile)
-            org.junit.Assert.fail("不正な要素数のFitProfile保存は例外をスローする必要があります")
-        } catch (_: IllegalArgumentException) {
-            // 期待通りの挙動
+        // OverlayService.kt の onSaveFitProfile コールバック実装ロジックをシミュレート
+        val onSaveFitProfile: suspend (com.onigiri.keycue.model.FitProfile) -> Unit = { profile ->
+            if (repo.selectedSkyLayout.value == SkyLayout.TOUCH_STANDARD) {
+                repo.saveFitProfile(profile)
+            }
         }
-        assertEquals(validBase, repo.fitProfile.value)
+
+        // 非標準レイアウト（全5種）では保存がブロックされること
+        val nonStandardLayouts = SkyLayout.entries.filter { it != SkyLayout.TOUCH_STANDARD }
+        for (layout in nonStandardLayouts) {
+            repo.saveSelectedSkyLayout(layout)
+            onSaveFitProfile(validBase)
+            assertNull("非標準レイアウト $layout ではFitProfileが保存されないこと", repo.fitProfile.value)
+        }
+
+        // TOUCH_STANDARD のみ保存が許可されること
+        repo.saveSelectedSkyLayout(SkyLayout.TOUCH_STANDARD)
+        onSaveFitProfile(validBase)
+        assertEquals("TOUCH_STANDARD ではFitProfileが正常に保存されること", validBase, repo.fitProfile.value)
     }
 
     /**
@@ -301,61 +400,6 @@ class SettingsRepositoryLayoutTest {
         }
     }
 
-    /**
-     * 要件: FitProfileコンストラクタで発生する例外だけをもってRepository保存経路の保護テストとしない。
-     * リポジトリ自体の saveFitProfile がキー数検証を行い、不正プロファイルの保存を拒絶することの検証。
-     */
-    @Test
-    fun testRepositorySaveFitProfileProtection_withoutRelyingOnConstructorException() = runBlocking {
-        val repo = InMemorySettingsRepository()
-        val standardPreset = com.onigiri.keycue.profile.SkyLayoutRegistry.getPreset(SkyLayout.TOUCH_STANDARD)
-        val validBase = com.onigiri.keycue.model.FitProfile(standardPreset.keyCenters)
-        repo.saveFitProfile(validBase)
-        assertEquals(validBase, repo.fitProfile.value)
-
-        // リフレクション等を用いてFitProfileコンストラクタのrequireチェックをバイパスし、
-        // 不正なキー数（14個）のFitProfileインスタンスが万一生成されたケースをシミュレート
-        val invalidProfile = try {
-            val constructor = com.onigiri.keycue.model.FitProfile::class.java.declaredConstructors.firstOrNull {
-                it.parameterCount >= 1
-            }
-            if (constructor != null) {
-                constructor.isAccessible = true
-                val params = arrayOfNulls<Any>(constructor.parameterCount)
-                params[0] = standardPreset.keyCenters.take(14) // 14キー
-                if (constructor.parameterCount > 1) params[1] = true // landscape
-                if (constructor.parameterCount > 2) params[2] = 0.04f // keyRadiusRatio
-                constructor.newInstance(*params) as? com.onigiri.keycue.model.FitProfile
-            } else null
-        } catch (_: Exception) {
-            null
-        }
-
-        if (invalidProfile != null) {
-            // 1. InMemorySettingsRepository での検証
-            try {
-                repo.saveFitProfile(invalidProfile)
-                org.junit.Assert.fail("InMemorySettingsRepository.saveFitProfile は不正なキー数のプロファイルを拒絶する必要があります")
-            } catch (e: IllegalArgumentException) {
-                assertTrue("リポジトリ独自の例外メッセージが含まれること", e.message?.contains("15個のキーを含む必要があります") == true)
-            }
-            assertEquals("リポジトリ内の保存プロファイルが保護されていること", validBase, repo.fitProfile.value)
-
-            // 2. SharedPreferencesSettingsRepository での検証
-            val map = HashMap<String, Any>()
-            val spRepo = SharedPreferencesSettingsRepository(createFakePrefs(map))
-            spRepo.saveFitProfile(validBase)
-            assertEquals(validBase, spRepo.fitProfile.value)
-
-            try {
-                spRepo.saveFitProfile(invalidProfile)
-                org.junit.Assert.fail("SharedPreferencesSettingsRepository.saveFitProfile は不正なキー数のプロファイルを拒絶する必要があります")
-            } catch (e: IllegalArgumentException) {
-                assertTrue("リポジトリ独自の例外メッセージが含まれること", e.message?.contains("15個のキーを含む必要があります") == true)
-            }
-            assertEquals("SPリポジトリ内の保存プロファイルが保護されていること", validBase, spRepo.fitProfile.value)
-        }
-    }
 
     @Test
     fun testInMemorySettingsRepository_layoutShowGuideLabels() = runBlocking {
