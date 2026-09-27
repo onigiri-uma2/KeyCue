@@ -93,7 +93,7 @@ class HomeViewModelLayoutAdjustmentTest {
 
     @Test
     fun testResetLayoutAdjustment_resetsToDefault() = runBlocking {
-        val targetLayout = SkyLayout.PAD_GRID
+        val targetLayout = SkyLayout.PAD_GRID_EXPANDED
         val customAdj = SkyLayoutAdjustment(offsetX = 0.03f, offsetY = -0.03f, scaleX = 1.02f, scaleY = 0.98f)
         viewModel.persistLayoutAdjustment(targetLayout, customAdj)
         assertEquals(customAdj, settingsRepo.getLayoutAdjustment(targetLayout))

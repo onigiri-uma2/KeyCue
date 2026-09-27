@@ -313,7 +313,7 @@ fun SettingsAccordionSection(
 }
 
 /**
- * Sky ボタンレイアウト（5種類）の選択および微調整UI。
+ * Sky ボタンレイアウト（6種類）の選択および微調整UI。
  */
 @Composable
 fun SkyLayoutConfigContent(
@@ -370,9 +370,10 @@ fun SkyLayoutConfigContent(
             val description = when (layout) {
                 SkyLayout.TOUCH_STANDARD -> "タッチ操作・標準（位置合わせ基準）"
                 SkyLayout.TOUCH_EXPANDED -> "タッチ操作・拡大"
-                SkyLayout.PAD_TRIGGER_FIRST -> "ゲームパッド・トリガー優先（下部にトリガー、上部に十字キー・各種ボタン）"
-                SkyLayout.PAD_DPAD_FIRST -> "ゲームパッド・十字キー優先（上部にトリガー、下部に十字キー）"
-                SkyLayout.PAD_GRID -> "ゲームパッド・グリッド（3行5列拡大配置）"
+                SkyLayout.PAD_TRIGGER_FIRST -> "ゲームパッド・分散1（下部にトリガー、上部に十字キー・各種ボタン）"
+                SkyLayout.PAD_DPAD_FIRST -> "ゲームパッド・分散2（上部にトリガー、下部に十字キー）"
+                SkyLayout.PAD_GRID_STANDARD -> "ゲームパッド・格子・標準（3行5列標準配置）"
+                SkyLayout.PAD_GRID_EXPANDED -> "ゲームパッド・格子・拡大（3行5列拡大配置）"
             }
 
             Surface(

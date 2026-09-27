@@ -69,7 +69,7 @@ class SkyLayoutTransformerTest {
     @Test
     fun testPadLayouts_allButtonsInValidRange() {
         val base = createStandardBaseProfile()
-        for (padLayout in listOf(SkyLayout.PAD_TRIGGER_FIRST, SkyLayout.PAD_DPAD_FIRST, SkyLayout.PAD_GRID)) {
+        for (padLayout in SkyLayout.entries.filter { it.isGamepad }) {
             val transformed = SkyLayoutTransformer.transform(
                 baseFitProfile = base,
                 targetLayout = padLayout,
@@ -113,7 +113,8 @@ class SkyLayoutTransformerTest {
         SkyLayoutTransformer.transform(base, SkyLayout.TOUCH_EXPANDED)
         SkyLayoutTransformer.transform(base, SkyLayout.PAD_DPAD_FIRST)
         SkyLayoutTransformer.transform(base, SkyLayout.TOUCH_STANDARD)
-        SkyLayoutTransformer.transform(base, SkyLayout.PAD_GRID)
+        SkyLayoutTransformer.transform(base, SkyLayout.PAD_GRID_STANDARD)
+        SkyLayoutTransformer.transform(base, SkyLayout.PAD_GRID_EXPANDED)
 
         // 再び PAD_TRIGGER_FIRST へ変換
         val secondPadResult = SkyLayoutTransformer.transform(base, SkyLayout.PAD_TRIGGER_FIRST)

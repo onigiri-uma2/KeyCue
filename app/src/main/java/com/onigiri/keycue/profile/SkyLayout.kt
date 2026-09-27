@@ -1,7 +1,7 @@
 package com.onigiri.keycue.profile
 
 /**
- * 『Sky 星を紡ぐ子どもたち』で提供される5種類の演奏ボタンレイアウト定義。
+ * 『Sky 星を紡ぐ子どもたち』で提供される6種類の演奏ボタンレイアウト定義。
  *
  * 内部IDとUI表示名は分離されており、永続化には安定した本enum名を使用します。
  * 旧識別名 (sk1, sk2, pad1, pad2, pad3) からの安全な移行処理を提供します。
@@ -22,8 +22,11 @@ enum class SkyLayout(
     /** パッド（分散2）: 低音側3キーが十字キー↓/←/↑に割り当てられるゲームパッド分散配置。旧: pad2 */
     PAD_DPAD_FIRST("パッド（分散2）", isGamepad = true),
 
-    /** パッド（格子）: PAD_TRIGGER_FIRSTと同じキーマッピングを持つ3×5格子配置。旧: pad3 */
-    PAD_GRID("パッド（格子）", isGamepad = true);
+    /** パッド（格子・標準）: PAD_TRIGGER_FIRSTと同じキーマッピングを持つ3×5標準格子配置。 */
+    PAD_GRID_STANDARD("パッド（格子・標準）", isGamepad = true),
+
+    /** パッド（格子・拡大）: PAD_TRIGGER_FIRSTと同じキーマッピングを持つ3×5拡大格子配置。旧: pad3, PAD_GRID */
+    PAD_GRID_EXPANDED("パッド（格子・拡大）", isGamepad = true);
 
     /** 永続化およびAPI互換用の小文字識別ID */
     val id: String get() = name.lowercase()
@@ -47,13 +50,15 @@ enum class SkyLayout(
                 return it
             }
 
-            // 2. 旧識別名からの安全なマイグレーション
+            // 2. 旧識別名および旧enum名からの安全なマイグレーション
+            // 既存の PAD_GRID / pad3 は拡大版に相当するため、PAD_GRID_EXPANDED へマップする
             return when (trimmed.lowercase()) {
-                "sk1" -> TOUCH_STANDARD
-                "sk2" -> TOUCH_EXPANDED
-                "pad1" -> PAD_TRIGGER_FIRST
-                "pad2" -> PAD_DPAD_FIRST
-                "pad3" -> PAD_GRID
+                "sk1", "touch_standard" -> TOUCH_STANDARD
+                "sk2", "touch_expanded" -> TOUCH_EXPANDED
+                "pad1", "pad_trigger_first", "pad_trigger_first_standard", "pad_trigger_first_expanded" -> PAD_TRIGGER_FIRST
+                "pad2", "pad_dpad_first", "pad_dpad_first_standard", "pad_dpad_first_expanded" -> PAD_DPAD_FIRST
+                "pad3", "pad_grid", "pad_grid_expanded" -> PAD_GRID_EXPANDED
+                "pad_grid_standard" -> PAD_GRID_STANDARD
                 else -> default
             }
         }

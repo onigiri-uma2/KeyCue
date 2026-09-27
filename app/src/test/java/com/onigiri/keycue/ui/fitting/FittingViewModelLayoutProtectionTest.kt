@@ -35,12 +35,7 @@ class FittingViewModelLayoutProtectionTest {
     private lateinit var gridFitter: GridFitter
     private val testScope = CoroutineScope(Dispatchers.Unconfined)
 
-    private val nonStandardLayouts = listOf(
-        SkyLayout.TOUCH_EXPANDED,
-        SkyLayout.PAD_TRIGGER_FIRST,
-        SkyLayout.PAD_DPAD_FIRST,
-        SkyLayout.PAD_GRID
-    )
+    private val nonStandardLayouts = SkyLayout.entries.filter { it != SkyLayout.TOUCH_STANDARD }
 
     @Before
     fun setUp() {
@@ -209,11 +204,11 @@ class FittingViewModelLayoutProtectionTest {
     fun testDetectAndFit_layoutSwitchedDuringDetection_discardsResultAndResetsToIdle() = runBlocking {
         settingsRepo.saveSelectedSkyLayout(SkyLayout.TOUCH_STANDARD)
 
-        // 解析処理中にレイアウトを PAD_GRID に変更するモック Detector
+        // 解析処理中にレイアウトを PAD_GRID_EXPANDED に変更するモック Detector
         val switchingDetector = object : KeyDetector {
             override fun detect(image: android.graphics.Bitmap): List<DetectedPoint> {
                 runBlocking {
-                    settingsRepo.saveSelectedSkyLayout(SkyLayout.PAD_GRID)
+                    settingsRepo.saveSelectedSkyLayout(SkyLayout.PAD_GRID_EXPANDED)
                 }
                 return emptyList()
             }
@@ -232,7 +227,7 @@ class FittingViewModelLayoutProtectionTest {
         assertTrue("解析中に変更された旨が記載されていること", state.errorMessage!!.contains("画像解析中にレイアウトが変更されました"))
         assertNull("プロファイルは未反映（null）であること", state.currentProfile)
         assertNull("リポジトリにプロファイルは保存されていないこと", settingsRepo.fitProfile.value)
-        assertEquals("切り替え後のPAD_GRIDが維持されていること", SkyLayout.PAD_GRID, settingsRepo.selectedSkyLayout.value)
+        assertEquals("切り替え後のPAD_GRID_EXPANDEDが維持されていること", SkyLayout.PAD_GRID_EXPANDED, settingsRepo.selectedSkyLayout.value)
     }
 
     /**

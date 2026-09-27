@@ -334,10 +334,38 @@ class SharedPreferencesSettingsRepository internal constructor(
     private fun loadAllLayoutAdjustments(): Map<com.onigiri.keycue.profile.SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment> {
         return com.onigiri.keycue.profile.SkyLayout.entries.associateWith { layout ->
             val prefix = "$PREFIX_LAYOUT_ADJUSTMENT${layout.name.lowercase()}_"
-            val ox = prefs.getFloat("${prefix}offset_x", com.onigiri.keycue.profile.SkyLayoutAdjustment.DEFAULT_OFFSET_X)
-            val oy = prefs.getFloat("${prefix}offset_y", com.onigiri.keycue.profile.SkyLayoutAdjustment.DEFAULT_OFFSET_Y)
-            val sx = prefs.getFloat("${prefix}scale_x", com.onigiri.keycue.profile.SkyLayoutAdjustment.DEFAULT_SCALE_X)
-            val sy = prefs.getFloat("${prefix}scale_y", com.onigiri.keycue.profile.SkyLayoutAdjustment.DEFAULT_SCALE_Y)
+            val legacyPrefix = when (layout) {
+                com.onigiri.keycue.profile.SkyLayout.PAD_GRID_EXPANDED -> "${PREFIX_LAYOUT_ADJUSTMENT}pad_grid_"
+                else -> null
+            }
+            val ox = if (prefs.contains("${prefix}offset_x")) {
+                prefs.getFloat("${prefix}offset_x", com.onigiri.keycue.profile.SkyLayoutAdjustment.DEFAULT_OFFSET_X)
+            } else if (legacyPrefix != null && prefs.contains("${legacyPrefix}offset_x")) {
+                prefs.getFloat("${legacyPrefix}offset_x", com.onigiri.keycue.profile.SkyLayoutAdjustment.DEFAULT_OFFSET_X)
+            } else {
+                com.onigiri.keycue.profile.SkyLayoutAdjustment.DEFAULT_OFFSET_X
+            }
+            val oy = if (prefs.contains("${prefix}offset_y")) {
+                prefs.getFloat("${prefix}offset_y", com.onigiri.keycue.profile.SkyLayoutAdjustment.DEFAULT_OFFSET_Y)
+            } else if (legacyPrefix != null && prefs.contains("${legacyPrefix}offset_y")) {
+                prefs.getFloat("${legacyPrefix}offset_y", com.onigiri.keycue.profile.SkyLayoutAdjustment.DEFAULT_OFFSET_Y)
+            } else {
+                com.onigiri.keycue.profile.SkyLayoutAdjustment.DEFAULT_OFFSET_Y
+            }
+            val sx = if (prefs.contains("${prefix}scale_x")) {
+                prefs.getFloat("${prefix}scale_x", com.onigiri.keycue.profile.SkyLayoutAdjustment.DEFAULT_SCALE_X)
+            } else if (legacyPrefix != null && prefs.contains("${legacyPrefix}scale_x")) {
+                prefs.getFloat("${legacyPrefix}scale_x", com.onigiri.keycue.profile.SkyLayoutAdjustment.DEFAULT_SCALE_X)
+            } else {
+                com.onigiri.keycue.profile.SkyLayoutAdjustment.DEFAULT_SCALE_X
+            }
+            val sy = if (prefs.contains("${prefix}scale_y")) {
+                prefs.getFloat("${prefix}scale_y", com.onigiri.keycue.profile.SkyLayoutAdjustment.DEFAULT_SCALE_Y)
+            } else if (legacyPrefix != null && prefs.contains("${legacyPrefix}scale_y")) {
+                prefs.getFloat("${legacyPrefix}scale_y", com.onigiri.keycue.profile.SkyLayoutAdjustment.DEFAULT_SCALE_Y)
+            } else {
+                com.onigiri.keycue.profile.SkyLayoutAdjustment.DEFAULT_SCALE_Y
+            }
             com.onigiri.keycue.profile.SkyLayoutAdjustment.safe(ox, oy, sx, sy)
         }
     }
@@ -492,15 +520,51 @@ class SharedPreferencesSettingsRepository internal constructor(
     }
 
     init {
-        // 既存設定の保護とレイアウト別ラベルキーの個別マイグレーション
-        // 各キーごとに prefs.contains を確認し、未保存のキーのみデフォルト値を設定（既存値は絶対に上書きしない）
-        val legacyValue = prefs.getBoolean(KEY_SHOW_GUIDE_LABELS, com.onigiri.keycue.model.VisualConfig.DEFAULT_SHOW_GUIDE_LABELS)
         val editor = prefs.edit()
         var hasChanges = false
 
+        // 1. 旧選択レイアウト文字列のマイグレーション
+        val rawSelected = prefs.getString(KEY_SELECTED_SKY_LAYOUT, null)
+        if (rawSelected != null) {
+            val resolved = com.onigiri.keycue.profile.SkyLayout.fromIdOrDefault(rawSelected, com.onigiri.keycue.profile.SkyLayout.TOUCH_STANDARD)
+            if (rawSelected != resolved.name) {
+                editor.putString(KEY_SELECTED_SKY_LAYOUT, resolved.name)
+                hasChanges = true
+            }
+        }
+
+        // 2. 旧PAD設定（ラベル・微調整）から PAD_GRID_EXPANDED へのマイグレーション
+        val migratedLabelKeys = mutableSetOf<String>()
+        val legacyLayoutMappings = listOf(
+            "pad_grid" to com.onigiri.keycue.profile.SkyLayout.PAD_GRID_EXPANDED
+        )
+        for ((oldId, newLayout) in legacyLayoutMappings) {
+            val oldLabelKey = "$PREFIX_LAYOUT_SHOW_LABELS$oldId"
+            val newLabelKey = "$PREFIX_LAYOUT_SHOW_LABELS${newLayout.name.lowercase()}"
+            if (prefs.contains(oldLabelKey) && !prefs.contains(newLabelKey)) {
+                editor.putBoolean(newLabelKey, prefs.getBoolean(oldLabelKey, false))
+                migratedLabelKeys.add(newLabelKey)
+                hasChanges = true
+            }
+
+            val oldAdjPrefix = "$PREFIX_LAYOUT_ADJUSTMENT${oldId}_"
+            val newAdjPrefix = "$PREFIX_LAYOUT_ADJUSTMENT${newLayout.name.lowercase()}_"
+            for (prop in listOf("offset_x", "offset_y", "scale_x", "scale_y")) {
+                val oldKey = "$oldAdjPrefix$prop"
+                val newKey = "$newAdjPrefix$prop"
+                if (prefs.contains(oldKey) && !prefs.contains(newKey)) {
+                    editor.putFloat(newKey, prefs.getFloat(oldKey, 0f))
+                    hasChanges = true
+                }
+            }
+        }
+
+        // 3. 既存設定の保護とレイアウト別ラベルキーの個別マイグレーション
+        // 各キーごとに prefs.contains を確認し、未保存のキーのみデフォルト値を設定（既存値は絶対に上書きしない）
+        val legacyValue = prefs.getBoolean(KEY_SHOW_GUIDE_LABELS, com.onigiri.keycue.model.VisualConfig.DEFAULT_SHOW_GUIDE_LABELS)
         for (layout in com.onigiri.keycue.profile.SkyLayout.entries) {
             val key = "$PREFIX_LAYOUT_SHOW_LABELS${layout.name.lowercase()}"
-            if (!prefs.contains(key)) {
+            if (!prefs.contains(key) && key !in migratedLabelKeys) {
                 val defaultValue = if (layout.isGamepad) false else legacyValue
                 editor.putBoolean(key, defaultValue)
                 hasChanges = true
@@ -510,7 +574,7 @@ class SharedPreferencesSettingsRepository internal constructor(
             editor.apply()
         }
 
-        // 初期化時の整合: 保存済み selectedSkyLayout とそのレイアウトのラベル設定を照合し、visualConfig.showGuideLabels を整合させる
+        // 4. 初期化時の整合: 保存済み selectedSkyLayout とそのレイアウトのラベル設定を照合し、visualConfig.showGuideLabels を整合させる
         val currentLayout = _selectedSkyLayout.value
         val targetShow = getLayoutShowGuideLabels(currentLayout)
         if (_visualConfig.value.showGuideLabels != targetShow || prefs.getBoolean(KEY_SHOW_GUIDE_LABELS, !targetShow) != targetShow) {
@@ -805,6 +869,13 @@ class SharedPreferencesSettingsRepository internal constructor(
         if (prefs.contains(key)) {
             return prefs.getBoolean(key, !layout.isGamepad)
         }
+        val legacyKey = when (layout) {
+            com.onigiri.keycue.profile.SkyLayout.PAD_GRID_EXPANDED -> "${PREFIX_LAYOUT_SHOW_LABELS}pad_grid"
+            else -> null
+        }
+        if (legacyKey != null && prefs.contains(legacyKey)) {
+            return prefs.getBoolean(legacyKey, false)
+        }
         return if (layout.isGamepad) false else true
     }
 
@@ -931,11 +1002,9 @@ class InMemorySettingsRepository(
     override val layoutAdjustments: StateFlow<Map<com.onigiri.keycue.profile.SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment>> = _layoutAdjustments.asStateFlow()
 
     private val layoutShowLabels = mutableMapOf<com.onigiri.keycue.profile.SkyLayout, Boolean>().apply {
-        put(com.onigiri.keycue.profile.SkyLayout.TOUCH_STANDARD, initialVisualConfig.showGuideLabels)
-        put(com.onigiri.keycue.profile.SkyLayout.TOUCH_EXPANDED, initialVisualConfig.showGuideLabels)
-        put(com.onigiri.keycue.profile.SkyLayout.PAD_TRIGGER_FIRST, false)
-        put(com.onigiri.keycue.profile.SkyLayout.PAD_DPAD_FIRST, false)
-        put(com.onigiri.keycue.profile.SkyLayout.PAD_GRID, false)
+        for (layout in com.onigiri.keycue.profile.SkyLayout.entries) {
+            put(layout, if (layout.isGamepad) false else initialVisualConfig.showGuideLabels)
+        }
     }
 
     init {
