@@ -244,6 +244,17 @@ class OverlayService : Service() {
                     val current = settingsRepository.metronomeConfig.value
                     settingsRepository.saveMetronomeConfig(current.copy(enabled = enabled))
                 }
+            },
+            onLayoutChange = { newLayout ->
+                serviceScope.launch {
+                    settingsRepository.saveSelectedSkyLayout(newLayout)
+                    val showLabels = settingsRepository.getLayoutShowGuideLabels(newLayout)
+                    val currentVisual = settingsRepository.visualConfig.value
+                    if (currentVisual.showGuideLabels != showLabels) {
+                        settingsRepository.saveVisualConfig(currentVisual.copy(showGuideLabels = showLabels))
+                    }
+                    recomputeActiveProfile()
+                }
             }
         )
 
@@ -290,9 +301,25 @@ class OverlayService : Service() {
             songs = settingsRepository.recentSongs.value,
             currentSongUri = session?.uri?.toString()
         )
-        val profile = settingsRepository.fitProfile.value ?: session?.fitProfile
-        if (profile != null) windowController?.updateFitProfile(profile)
+        recomputeActiveProfile()
         updateGuideLabelsForSession(session)
+    }
+
+    private fun recomputeActiveProfile() {
+        val baseProfile = settingsRepository.fitProfile.value
+            ?: sessionRepository.currentSession.value?.fitProfile
+            ?: com.onigiri.keycue.model.FitProfile.createDefaultTestProfile()
+        val layout = settingsRepository.selectedSkyLayout.value
+        val adjustment = settingsRepository.getLayoutAdjustment(layout)
+        val activeProfile = com.onigiri.keycue.profile.SkyLayoutTransformer.transform(
+            baseFitProfile = baseProfile,
+            targetLayout = layout,
+            adjustment = adjustment
+        )
+        windowController?.updateBaseFitProfile(baseProfile)
+        windowController?.updateSkyLayout(layout)
+        windowController?.updateFitProfile(activeProfile)
+        renderCurrentFrame()
     }
 
     private fun applySong(song: SongData?) {
@@ -383,12 +410,18 @@ class OverlayService : Service() {
             }
         }
         serviceScope.launch {
-            settingsRepository.fitProfile.collect { profile ->
-                val profileToUse = profile ?: sessionRepository.currentSession.value?.fitProfile
-                if (profileToUse != null) {
-                    windowController?.updateFitProfile(profileToUse)
-                    renderCurrentFrame()
+            settingsRepository.fitProfile.collect {
+                recomputeActiveProfile()
+            }
+        }
+        serviceScope.launch {
+            settingsRepository.selectedSkyLayout.collect { layout ->
+                val showLabels = settingsRepository.getLayoutShowGuideLabels(layout)
+                val currentVisual = settingsRepository.visualConfig.value
+                if (currentVisual.showGuideLabels != showLabels) {
+                    settingsRepository.saveVisualConfig(currentVisual.copy(showGuideLabels = showLabels))
                 }
+                recomputeActiveProfile()
             }
         }
         serviceScope.launch {
@@ -418,8 +451,7 @@ class OverlayService : Service() {
         sessionCollectJob = serviceScope.launch {
             sessionRepository.currentSession.collect { session ->
                 applySong(session?.song)
-                val profile = settingsRepository.fitProfile.value ?: session?.fitProfile
-                if (profile != null) windowController?.updateFitProfile(profile)
+                recomputeActiveProfile()
                 updateGuideLabelsForSession(session)
                 windowController?.updateRecentSongs(
                     songs = settingsRepository.recentSongs.value,

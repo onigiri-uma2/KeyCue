@@ -30,5 +30,6 @@ data class ControlOverlayConfig(
     val showGuideToggle: Boolean = true,
     val showCountdownControl: Boolean = true,
     val showGuideQuickToggles: Boolean = true,
-    val showRecentSongs: Boolean = false
+    val showRecentSongs: Boolean = false,
+    val showLayoutSelection: Boolean = true
 )

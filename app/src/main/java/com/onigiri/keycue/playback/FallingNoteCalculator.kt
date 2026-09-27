@@ -72,6 +72,28 @@ object FallingNoteCalculator {
     fun getColumn(key: Int): Int = com.onigiri.keycue.profile.GameProfileRegistry.current.getColumn(key)
 
     /**
+     * キーごとの目標Y座標と画面上端余白から、画面外にはみ出さない有効な落下距離（ピクセル）を算出する。
+     *
+     * PAD_DPAD_FIRST等でキーが画面上端付近（Yが小さい位置）に配置されている場合、
+     * 固定の落下距離を使用すると出現開始位置が画面上端外（Y < 0）になり視認できなくなるのを防ぐため、
+     * 必要に応じて落下距離を短縮します。
+     * 進行度 progress = 1.0 においては、落下距離の長短に関わらず必ず目標Y座標（targetY）へ到達します。
+     *
+     * @param targetY 対象キー中心のピクセルY座標
+     * @param defaultFallDistancePx 画面高さを基準とした標準落下距離（ピクセル）
+     * @param topMarginPx 画面上端の安全マージン（ピクセル、デフォルト: 0f）
+     * @return 画面内に収まる有効な落下距離（ピクセル）
+     */
+    fun calculateEffectiveFallDistance(
+        targetY: Float,
+        defaultFallDistancePx: Float,
+        topMarginPx: Float = 0f
+    ): Float {
+        val maxAvailableDistance = (targetY - topMarginPx).coerceAtLeast(0f)
+        return minOf(defaultFallDistancePx, maxAvailableDistance)
+    }
+
+    /**
      * 落下ノートの現在Y座標（ピクセル）を線形補間 (lerp) で算出する。
      *
      * startY = targetY - fallDistancePx

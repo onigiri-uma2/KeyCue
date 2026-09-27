@@ -149,6 +149,9 @@ class ControlOverlayView(
     private lateinit var approachCircleLeadTimeSection: View
     private lateinit var countdownSection: View
     private lateinit var guideQuickToggleSection: View
+    private lateinit var layoutSelectionSection: View
+    private lateinit var layoutSelectButton: Button
+    private var currentSkyLayout: com.onigiri.keycue.profile.SkyLayout = com.onigiri.keycue.profile.SkyLayout.TOUCH_STANDARD
     private lateinit var recentSongsSection: LinearLayout
     private lateinit var recentSongsListContainer: LinearLayout
 
@@ -315,6 +318,10 @@ class ControlOverlayView(
             // ガイドクイック表示切替（2段構成）
             guideQuickToggleSection = buildGuideQuickToggleSection()
             addView(guideQuickToggleSection)
+
+            // Skyボタンレイアウト切り替え
+            layoutSelectionSection = buildLayoutSelectionSection()
+            addView(layoutSelectionSection)
 
             // 最近使った曲
             recentSongsSection = buildRecentSongsSection()
@@ -1037,6 +1044,7 @@ class ControlOverlayView(
         approachCircleLeadTimeSection.visibility = if (config.showCircleLeadTimeControl) View.VISIBLE else View.GONE
         countdownSection.visibility = if (config.showCountdownControl) View.VISIBLE else View.GONE
         guideQuickToggleSection.visibility = if (config.showGuideQuickToggles) View.VISIBLE else View.GONE
+        layoutSelectionSection.visibility = if (config.showLayoutSelection) View.VISIBLE else View.GONE
 
         selectFileBtn.visibility = if (config.showSongSelection) View.VISIBLE else View.GONE
         fittingBtn.visibility = if (config.showFitting) View.VISIBLE else View.GONE
@@ -1370,6 +1378,66 @@ class ControlOverlayView(
         currentMetronomeEnabled = enabled
         currentMetronomeInfo = infoText
         updateMetronomeToggleStyle()
+    }
+
+    private fun buildLayoutSelectionSection(): View {
+        return LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomMargin = dpToPx(6)
+            }
+
+            layoutSelectButton = Button(context).apply {
+                text = "Layout: ${currentSkyLayout.displayName}"
+                setTextColor(Color.WHITE)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
+                setPadding(dpToPx(6), 0, dpToPx(6), 0)
+                background = createRoundedDrawable(
+                    cornerRadiusDp = 6f,
+                    fillColor = Color.parseColor("#37474F"),
+                    strokeColor = Color.parseColor("#78909C"),
+                    strokeWidthDp = 1.0f
+                )
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    dpToPx(28)
+                )
+                setOnClickListener {
+                    showLayoutPopupMenu(this)
+                }
+            }
+            addView(layoutSelectButton)
+        }
+    }
+
+    private fun showLayoutPopupMenu(anchor: View) {
+        val popup = android.widget.PopupMenu(context, anchor)
+        com.onigiri.keycue.profile.SkyLayout.entries.forEachIndexed { index, layout ->
+            val title = if (layout == currentSkyLayout) "✓ ${layout.displayName}" else layout.displayName
+            popup.menu.add(0, index, index, title)
+        }
+        popup.setOnMenuItemClickListener { item ->
+            val selected = com.onigiri.keycue.profile.SkyLayout.entries.getOrNull(item.itemId)
+            if (selected != null && selected != currentSkyLayout) {
+                callbacks.onLayoutChange(selected)
+            }
+            true
+        }
+        popup.show()
+    }
+
+    /**
+     * 現在のSkyボタンレイアウト表示を更新する。
+     */
+    fun updateLayoutState(layout: com.onigiri.keycue.profile.SkyLayout) {
+        currentSkyLayout = layout
+        if (::layoutSelectButton.isInitialized) {
+            layoutSelectButton.text = "Layout: ${layout.displayName}"
+        }
     }
 
     private fun createMiniButton(text: String, bgColor: Int, onClick: (() -> Unit)? = null): Button {

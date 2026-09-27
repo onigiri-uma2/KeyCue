@@ -53,7 +53,8 @@ class OverlayWindowController(
         onShowFallingNotesChange: (Boolean) -> Unit = {},
         onShowApproachCirclesChange: (Boolean) -> Unit = {},
         onSelectRecentSong: (RecentSongEntry) -> Unit = {},
-        onMetronomeEnabledChange: (Boolean) -> Unit = {}
+        onMetronomeEnabledChange: (Boolean) -> Unit = {},
+        onLayoutChange: (com.onigiri.keycue.profile.SkyLayout) -> Unit = {}
     ) : this(
         context = context,
         callbacks = ControlOverlayCallbacks(
@@ -78,7 +79,8 @@ class OverlayWindowController(
             onShowFallingNotesChange = onShowFallingNotesChange,
             onShowApproachCirclesChange = onShowApproachCirclesChange,
             onSelectRecentSong = onSelectRecentSong,
-            onMetronomeEnabledChange = onMetronomeEnabledChange
+            onMetronomeEnabledChange = onMetronomeEnabledChange,
+            onLayoutChange = onLayoutChange
         )
     )
 
@@ -90,6 +92,8 @@ class OverlayWindowController(
     private var fittingOverlayView: FittingOverlayView? = null
 
     private var currentFitProfile: FitProfile = FitProfile.createDefaultTestProfile()
+    private var baseFitProfile: FitProfile = FitProfile.createDefaultTestProfile()
+    private var currentSkyLayout: com.onigiri.keycue.profile.SkyLayout = com.onigiri.keycue.profile.SkyLayout.TOUCH_STANDARD
     private var currentVisualConfig: com.onigiri.keycue.model.VisualConfig = com.onigiri.keycue.model.VisualConfig()
     private var currentGuideLabels: List<String>? = null
     private var currentControlOverlayConfig: com.onigiri.keycue.model.ControlOverlayConfig = com.onigiri.keycue.model.ControlOverlayConfig()
@@ -170,6 +174,7 @@ class OverlayWindowController(
                 showApproachCircles = currentVisualConfig.showApproachCircles
             )
             updateMetronomeState(currentMetronomeEnabled)
+            updateLayoutState(currentSkyLayout)
         }
 
         try {
@@ -379,11 +384,26 @@ class OverlayWindowController(
     }
 
     /**
-     * FitProfileを更新し、表示中のGuide Overlayに反映する。
+     * FitProfile（アクティブな表示用プロファイル）を更新し、表示中のGuide Overlayに反映する。
      */
     fun updateFitProfile(profile: FitProfile) {
         currentFitProfile = profile
         guideOverlayView?.updateFitProfile(profile)
+    }
+
+    /**
+     * 基準となるbaseFitProfileを更新する。
+     */
+    fun updateBaseFitProfile(profile: FitProfile) {
+        baseFitProfile = profile
+    }
+
+    /**
+     * 現在のSkyLayoutを更新し、ControlOverlayViewに反映する。
+     */
+    fun updateSkyLayout(layout: com.onigiri.keycue.profile.SkyLayout) {
+        currentSkyLayout = layout
+        controlOverlayView?.updateLayoutState(layout)
     }
 
     // --- Manual Fitting Overlay 管理 ---
@@ -391,9 +411,20 @@ class OverlayWindowController(
     /**
      * ゲーム画面上でのキー手動微調整モードを開始する。
      * 全画面でタッチを遮断し、背後のゲームへのタッチ伝播を完全にブロックする。
+     *
+     * 【重要】位置合わせは常に「タッチ（標準）」を基準とするため、FittingOverlayView には
+     * baseFitProfile を渡し、保存時も baseFitProfile として永続化する。
      */
     fun startManualFitting() {
         if (fittingOverlayView != null) return
+
+        if (currentSkyLayout != com.onigiri.keycue.profile.SkyLayout.TOUCH_STANDARD) {
+            android.widget.Toast.makeText(
+                context,
+                "基準位置合わせです。Sky側の楽器UIを「タッチ（標準）」に切り替えて調整してください。",
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+        }
 
         // コントロールビューおよび通常ガイドビューを一時非表示
         controlOverlayView?.visibility = View.GONE
@@ -417,10 +448,10 @@ class OverlayWindowController(
 
         val view = FittingOverlayView(
             context = context,
-            initialProfile = currentFitProfile,
+            initialProfile = baseFitProfile,
             guideRadiusRatio = currentVisualConfig.guideRadiusRatio,
             onSave = { updatedProfile ->
-                updateFitProfile(updatedProfile)
+                baseFitProfile = updatedProfile
                 callbacks.onSaveFitProfile(updatedProfile)
                 finishManualFitting()
             },

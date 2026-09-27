@@ -149,6 +149,18 @@ interface SettingsRepository {
     suspend fun saveMetronomeConfig(config: MetronomeConfig)
     suspend fun updateMetronomeConfig(transform: (MetronomeConfig) -> MetronomeConfig) =
         saveMetronomeConfig(transform(metronomeConfig.value))
+
+    /** 選択中のSkyボタンレイアウト (SkyLayout) */
+    val selectedSkyLayout: StateFlow<com.onigiri.keycue.profile.SkyLayout>
+    suspend fun saveSelectedSkyLayout(layout: com.onigiri.keycue.profile.SkyLayout)
+
+    /** レイアウト別微調整パラメータ (SkyLayoutAdjustment) の取得・保存 */
+    fun getLayoutAdjustment(layout: com.onigiri.keycue.profile.SkyLayout): com.onigiri.keycue.profile.SkyLayoutAdjustment
+    suspend fun saveLayoutAdjustment(layout: com.onigiri.keycue.profile.SkyLayout, adjustment: com.onigiri.keycue.profile.SkyLayoutAdjustment)
+
+    /** レイアウト別ガイドラベル表示設定（ON/OFF）の取得・保存 */
+    fun getLayoutShowGuideLabels(layout: com.onigiri.keycue.profile.SkyLayout): Boolean
+    suspend fun saveLayoutShowGuideLabels(layout: com.onigiri.keycue.profile.SkyLayout, show: Boolean)
 }
 
 /**
@@ -206,7 +218,12 @@ class SharedPreferencesSettingsRepository internal constructor(
         private const val KEY_CONTROL_SHOW_COUNTDOWN_CONTROL = "control_show_countdown_control"
         private const val KEY_CONTROL_SHOW_GUIDE_QUICK_TOGGLES = "control_show_guide_quick_toggles"
         private const val KEY_CONTROL_SHOW_RECENT_SONGS = "control_show_recent_songs"
+        private const val KEY_CONTROL_SHOW_LAYOUT_SELECTION = "control_show_layout_selection"
         private const val KEY_RECENT_SONGS = "recent_songs"
+
+        private const val KEY_SELECTED_SKY_LAYOUT = "selected_sky_layout"
+        private const val PREFIX_LAYOUT_ADJUSTMENT = "sky_layout_adj_"
+        private const val PREFIX_LAYOUT_SHOW_LABELS = "sky_layout_labels_"
 
         private const val KEY_METRONOME_ENABLED = "metronome_enabled"
         private const val KEY_METRONOME_TIMING_MODE = "metronome_timing_mode"
@@ -280,10 +297,19 @@ class SharedPreferencesSettingsRepository internal constructor(
             showGuideToggle = prefs.getBoolean(KEY_CONTROL_SHOW_GUIDE_TOGGLE, true),
             showCountdownControl = prefs.getBoolean(KEY_CONTROL_SHOW_COUNTDOWN_CONTROL, true),
             showGuideQuickToggles = prefs.getBoolean(KEY_CONTROL_SHOW_GUIDE_QUICK_TOGGLES, true),
-            showRecentSongs = prefs.getBoolean(KEY_CONTROL_SHOW_RECENT_SONGS, false)
+            showRecentSongs = prefs.getBoolean(KEY_CONTROL_SHOW_RECENT_SONGS, false),
+            showLayoutSelection = prefs.getBoolean(KEY_CONTROL_SHOW_LAYOUT_SELECTION, true)
         )
     )
     override val controlOverlayConfig: StateFlow<ControlOverlayConfig> = _controlOverlayConfig.asStateFlow()
+
+    private val _selectedSkyLayout = MutableStateFlow(
+        com.onigiri.keycue.profile.SkyLayout.fromIdOrDefault(
+            prefs.getString(KEY_SELECTED_SKY_LAYOUT, null),
+            com.onigiri.keycue.profile.SkyLayout.TOUCH_STANDARD
+        )
+    )
+    override val selectedSkyLayout: StateFlow<com.onigiri.keycue.profile.SkyLayout> = _selectedSkyLayout.asStateFlow()
 
     private val _lastSongUri = MutableStateFlow(prefs.getString(KEY_LAST_SONG_URI, null))
     override val lastSongUri: StateFlow<String?> = _lastSongUri.asStateFlow()
@@ -580,7 +606,61 @@ class SharedPreferencesSettingsRepository internal constructor(
             .putBoolean(KEY_CONTROL_SHOW_COUNTDOWN_CONTROL, config.showCountdownControl)
             .putBoolean(KEY_CONTROL_SHOW_GUIDE_QUICK_TOGGLES, config.showGuideQuickToggles)
             .putBoolean(KEY_CONTROL_SHOW_RECENT_SONGS, config.showRecentSongs)
+            .putBoolean(KEY_CONTROL_SHOW_LAYOUT_SELECTION, config.showLayoutSelection)
             .apply()
+    }
+
+    override suspend fun saveSelectedSkyLayout(layout: com.onigiri.keycue.profile.SkyLayout) {
+        _selectedSkyLayout.value = layout
+        prefs.edit().putString(KEY_SELECTED_SKY_LAYOUT, layout.name).apply()
+    }
+
+    override fun getLayoutAdjustment(layout: com.onigiri.keycue.profile.SkyLayout): com.onigiri.keycue.profile.SkyLayoutAdjustment {
+        val prefix = "$PREFIX_LAYOUT_ADJUSTMENT${layout.name.lowercase()}_"
+        val ox = prefs.getFloat("${prefix}offset_x", com.onigiri.keycue.profile.SkyLayoutAdjustment.DEFAULT_OFFSET_X)
+        val oy = prefs.getFloat("${prefix}offset_y", com.onigiri.keycue.profile.SkyLayoutAdjustment.DEFAULT_OFFSET_Y)
+        val sx = prefs.getFloat("${prefix}scale_x", com.onigiri.keycue.profile.SkyLayoutAdjustment.DEFAULT_SCALE_X)
+        val sy = prefs.getFloat("${prefix}scale_y", com.onigiri.keycue.profile.SkyLayoutAdjustment.DEFAULT_SCALE_Y)
+        return com.onigiri.keycue.profile.SkyLayoutAdjustment.safe(ox, oy, sx, sy)
+    }
+
+    override suspend fun saveLayoutAdjustment(
+        layout: com.onigiri.keycue.profile.SkyLayout,
+        adjustment: com.onigiri.keycue.profile.SkyLayoutAdjustment
+    ) {
+        val safe = com.onigiri.keycue.profile.SkyLayoutAdjustment.safe(
+            adjustment.offsetX,
+            adjustment.offsetY,
+            adjustment.scaleX,
+            adjustment.scaleY
+        )
+        val prefix = "$PREFIX_LAYOUT_ADJUSTMENT${layout.name.lowercase()}_"
+        prefs.edit()
+            .putFloat("${prefix}offset_x", safe.offsetX)
+            .putFloat("${prefix}offset_y", safe.offsetY)
+            .putFloat("${prefix}scale_x", safe.scaleX)
+            .putFloat("${prefix}scale_y", safe.scaleY)
+            .apply()
+    }
+
+    override fun getLayoutShowGuideLabels(layout: com.onigiri.keycue.profile.SkyLayout): Boolean {
+        val key = "$PREFIX_LAYOUT_SHOW_LABELS${layout.name.lowercase()}"
+        if (prefs.contains(key)) {
+            return prefs.getBoolean(key, true)
+        }
+        // 未設定時の初期解決（第14章）
+        // TOUCH_STANDARD, TOUCH_EXPANDED: 既存の visualConfig.showGuideLabels を引き継ぐ
+        // PAD_TRIGGER_FIRST, PAD_DPAD_FIRST, PAD_GRID: 初期値OFF (false)
+        return if (layout.isGamepad) {
+            false
+        } else {
+            _visualConfig.value.showGuideLabels
+        }
+    }
+
+    override suspend fun saveLayoutShowGuideLabels(layout: com.onigiri.keycue.profile.SkyLayout, show: Boolean) {
+        val key = "$PREFIX_LAYOUT_SHOW_LABELS${layout.name.lowercase()}"
+        prefs.edit().putBoolean(key, show).apply()
     }
 
     override suspend fun saveMetronomeConfig(config: MetronomeConfig) {
@@ -623,7 +703,8 @@ class InMemorySettingsRepository(
     initialVisualConfig: com.onigiri.keycue.model.VisualConfig = com.onigiri.keycue.model.VisualConfig(),
     initialMidiMappingSettings: com.onigiri.keycue.model.MidiMappingSettings = com.onigiri.keycue.model.MidiMappingSettings(),
     initialControlOverlayConfig: ControlOverlayConfig = ControlOverlayConfig(),
-    initialMetronomeConfig: MetronomeConfig = MetronomeConfig()
+    initialMetronomeConfig: MetronomeConfig = MetronomeConfig(),
+    initialSkyLayout: com.onigiri.keycue.profile.SkyLayout = com.onigiri.keycue.profile.SkyLayout.TOUCH_STANDARD
 ) : SettingsRepository {
 
     companion object {
@@ -678,6 +759,40 @@ class InMemorySettingsRepository(
 
     private val _metronomeConfig = MutableStateFlow(initialMetronomeConfig.normalized())
     override val metronomeConfig: StateFlow<MetronomeConfig> = _metronomeConfig.asStateFlow()
+
+    private val _selectedSkyLayout = MutableStateFlow(initialSkyLayout)
+    override val selectedSkyLayout: StateFlow<com.onigiri.keycue.profile.SkyLayout> = _selectedSkyLayout.asStateFlow()
+
+    private val layoutAdjustments = mutableMapOf<com.onigiri.keycue.profile.SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment>()
+    private val layoutShowLabels = mutableMapOf<com.onigiri.keycue.profile.SkyLayout, Boolean>()
+
+    override suspend fun saveSelectedSkyLayout(layout: com.onigiri.keycue.profile.SkyLayout) {
+        _selectedSkyLayout.value = layout
+    }
+
+    override fun getLayoutAdjustment(layout: com.onigiri.keycue.profile.SkyLayout): com.onigiri.keycue.profile.SkyLayoutAdjustment {
+        return layoutAdjustments[layout] ?: com.onigiri.keycue.profile.SkyLayoutAdjustment.DEFAULT
+    }
+
+    override suspend fun saveLayoutAdjustment(
+        layout: com.onigiri.keycue.profile.SkyLayout,
+        adjustment: com.onigiri.keycue.profile.SkyLayoutAdjustment
+    ) {
+        layoutAdjustments[layout] = com.onigiri.keycue.profile.SkyLayoutAdjustment.safe(
+            adjustment.offsetX,
+            adjustment.offsetY,
+            adjustment.scaleX,
+            adjustment.scaleY
+        )
+    }
+
+    override fun getLayoutShowGuideLabels(layout: com.onigiri.keycue.profile.SkyLayout): Boolean {
+        return layoutShowLabels[layout] ?: if (layout.isGamepad) false else _visualConfig.value.showGuideLabels
+    }
+
+    override suspend fun saveLayoutShowGuideLabels(layout: com.onigiri.keycue.profile.SkyLayout, show: Boolean) {
+        layoutShowLabels[layout] = show
+    }
 
     override suspend fun saveLastSongUri(uri: String?) {
         _lastSongUri.value = uri

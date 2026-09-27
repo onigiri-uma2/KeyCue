@@ -94,7 +94,12 @@ class FallingNotesRenderer(
             if (!FallingNoteCalculator.shouldDraw(progress)) continue
 
             val currentX = target.x
-            val currentY = FallingNoteCalculator.calculateY(target.y, fallDistancePx, progress)
+            val effectiveFallDistancePx = FallingNoteCalculator.calculateEffectiveFallDistance(
+                targetY = target.y,
+                defaultFallDistancePx = fallDistancePx,
+                topMarginPx = noteRadius
+            )
+            val currentY = FallingNoteCalculator.calculateY(target.y, effectiveFallDistancePx, progress)
             val row = FallingNoteCalculator.getRow(note.key)
 
             val fillPaint = when (row) {

@@ -256,6 +256,8 @@ fun HomeScreen(
         onMetronomeAccentEnabledChange = { viewModel.setMetronomeAccentEnabled(it) },
         onMetronomeVolumeChange = { viewModel.setMetronomeVolumePercent(it) },
         onMetronomeBeatOffsetChange = { viewModel.setMetronomeBeatOffsetMs(it) },
+        onLayoutChange = { viewModel.setSelectedSkyLayout(it) },
+        onShowLayoutSelectionChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showLayoutSelection = it) } },
         onDismissError = { viewModel.clearError() }
     )
 }
@@ -318,6 +320,8 @@ fun HomeScreenContent(
     onMetronomeAccentEnabledChange: (Boolean) -> Unit = {},
     onMetronomeVolumeChange: (Int) -> Unit = {},
     onMetronomeBeatOffsetChange: (Long) -> Unit = {},
+    onLayoutChange: (com.onigiri.keycue.profile.SkyLayout) -> Unit = {},
+    onShowLayoutSelectionChange: (Boolean) -> Unit = {},
     onDismissError: () -> Unit = {}
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
@@ -426,6 +430,8 @@ fun HomeScreenContent(
                         onMetronomeAccentEnabledChange = onMetronomeAccentEnabledChange,
                         onMetronomeVolumeChange = onMetronomeVolumeChange,
                         onMetronomeBeatOffsetChange = onMetronomeBeatOffsetChange,
+                        onLayoutChange = onLayoutChange,
+                        onShowLayoutSelectionChange = onShowLayoutSelectionChange,
                         onDismissError = onDismissError
                     )
                 } else {
@@ -484,6 +490,8 @@ fun HomeScreenContent(
                         onMetronomeAccentEnabledChange = onMetronomeAccentEnabledChange,
                         onMetronomeVolumeChange = onMetronomeVolumeChange,
                         onMetronomeBeatOffsetChange = onMetronomeBeatOffsetChange,
+                        onLayoutChange = onLayoutChange,
+                        onShowLayoutSelectionChange = onShowLayoutSelectionChange,
                         onDismissError = onDismissError
                     )
                 }
@@ -551,6 +559,8 @@ private fun HomeScreenNarrowContent(
     onMetronomeAccentEnabledChange: (Boolean) -> Unit = {},
     onMetronomeVolumeChange: (Int) -> Unit = {},
     onMetronomeBeatOffsetChange: (Long) -> Unit = {},
+    onLayoutChange: (com.onigiri.keycue.profile.SkyLayout) -> Unit = {},
+    onShowLayoutSelectionChange: (Boolean) -> Unit = {},
     onDismissError: () -> Unit
 ) {
     Column(
@@ -625,7 +635,9 @@ private fun HomeScreenNarrowContent(
             onMetronomeSubdivisionChange = onMetronomeSubdivisionChange,
             onMetronomeAccentEnabledChange = onMetronomeAccentEnabledChange,
             onMetronomeVolumeChange = onMetronomeVolumeChange,
-            onMetronomeBeatOffsetChange = onMetronomeBeatOffsetChange
+            onMetronomeBeatOffsetChange = onMetronomeBeatOffsetChange,
+            onLayoutChange = onLayoutChange,
+            onShowLayoutSelectionChange = onShowLayoutSelectionChange
         )
 
         // 演奏支援開始ボタン
@@ -720,6 +732,8 @@ private fun HomeScreenWideContent(
     onMetronomeAccentEnabledChange: (Boolean) -> Unit = {},
     onMetronomeVolumeChange: (Int) -> Unit = {},
     onMetronomeBeatOffsetChange: (Long) -> Unit = {},
+    onLayoutChange: (com.onigiri.keycue.profile.SkyLayout) -> Unit = {},
+    onShowLayoutSelectionChange: (Boolean) -> Unit = {},
     onDismissError: () -> Unit
 ) {
     Row(
@@ -849,7 +863,9 @@ private fun HomeScreenWideContent(
                 onMetronomeSubdivisionChange = onMetronomeSubdivisionChange,
                 onMetronomeAccentEnabledChange = onMetronomeAccentEnabledChange,
                 onMetronomeVolumeChange = onMetronomeVolumeChange,
-                onMetronomeBeatOffsetChange = onMetronomeBeatOffsetChange
+                onMetronomeBeatOffsetChange = onMetronomeBeatOffsetChange,
+                onLayoutChange = onLayoutChange,
+                onShowLayoutSelectionChange = onShowLayoutSelectionChange
             )
         }
     }

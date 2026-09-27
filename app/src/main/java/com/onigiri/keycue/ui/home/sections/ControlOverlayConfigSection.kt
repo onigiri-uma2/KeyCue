@@ -23,7 +23,8 @@ fun ControlOverlayConfigContent(
     onShowRecentSongsChange: (Boolean) -> Unit,
     onShowSongSelectionChange: (Boolean) -> Unit,
     onShowFittingChange: (Boolean) -> Unit,
-    onShowGuideToggleChange: (Boolean) -> Unit
+    onShowGuideToggleChange: (Boolean) -> Unit,
+    onShowLayoutSelectionChange: (Boolean) -> Unit = {}
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         SettingSwitchRow(
@@ -97,6 +98,12 @@ fun ControlOverlayConfigContent(
             description = "「Guide ON / OFF」ボタンを表示します",
             checked = config.showGuideToggle,
             onCheckedChange = onShowGuideToggleChange
+        )
+        SettingSwitchRow(
+            label = "レイアウト切り替え",
+            description = "「レイアウト（標準/拡大/パッド等）」選択ボタンを表示します",
+            checked = config.showLayoutSelection,
+            onCheckedChange = onShowLayoutSelectionChange
         )
     }
 }

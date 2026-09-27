@@ -59,5 +59,7 @@ data class ControlOverlayCallbacks(
     /** 最近使った楽曲を選択・切り替える */
     val onSelectRecentSong: (RecentSongEntry) -> Unit = {},
     /** メトロノーム音声再生ON/OFFを切り替える */
-    val onMetronomeEnabledChange: (Boolean) -> Unit = {}
+    val onMetronomeEnabledChange: (Boolean) -> Unit = {},
+    /** ボタンレイアウト（SkyLayout）を切り替える */
+    val onLayoutChange: (com.onigiri.keycue.profile.SkyLayout) -> Unit = {}
 )

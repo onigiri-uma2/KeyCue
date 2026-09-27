@@ -66,10 +66,11 @@ class HomeViewModel(
 
             combine(
                 settingsFlow,
+                settingsRepository.selectedSkyLayout,
                 settingsRepository.metronomeConfig,
                 sessionRepository.currentSession
-            ) { settings, metroConfig, session ->
-                UnifiedRepositoryState(settings, metroConfig, session)
+            ) { settings, skyLayout, metroConfig, session ->
+                UnifiedRepositoryState(settings, skyLayout, metroConfig, session)
             }.collectLatest { state ->
                 val song = state.session?.song
                 // タイムライン構築をバックグラウンドスレッドで実行（collectLatestにより古い計算は自動キャンセル）
@@ -103,6 +104,7 @@ class HomeViewModel(
                         midiMappingSettings = state.settings.mappingSettings,
                         controlOverlayConfig = state.settings.controlOverlayConfig,
                         metronomeConfig = state.metronomeConfig,
+                        selectedSkyLayout = state.selectedSkyLayout,
                         resolvedTimeline = timeline
                     )
                 }
@@ -120,6 +122,7 @@ class HomeViewModel(
 
     private data class UnifiedRepositoryState(
         val settings: SettingsState,
+        val selectedSkyLayout: com.onigiri.keycue.profile.SkyLayout,
         val metronomeConfig: com.onigiri.keycue.model.MetronomeConfig,
         val session: com.onigiri.keycue.model.PlaybackSession?
     )
@@ -478,6 +481,23 @@ class HomeViewModel(
                 com.onigiri.keycue.model.VisualConfig.MAX_CHORD_HALO_FILL_ALPHA_PERCENT
             )
         )
+    }
+
+    // --- SkyLayout 更新メソッド ---
+
+    /**
+     * Sky ボタンレイアウトを変更する。
+     * 同時にガイドラベル表示設定（PAD系は初期値OFF、TOUCH系は初期値ON）も更新する。
+     */
+    fun setSelectedSkyLayout(layout: com.onigiri.keycue.profile.SkyLayout) {
+        scope.launch {
+            settingsRepository.saveSelectedSkyLayout(layout)
+            val showLabels = settingsRepository.getLayoutShowGuideLabels(layout)
+            val currentVisual = settingsRepository.visualConfig.value
+            if (currentVisual.showGuideLabels != showLabels) {
+                settingsRepository.saveVisualConfig(currentVisual.copy(showGuideLabels = showLabels))
+            }
+        }
     }
 
     // --- ControlOverlayConfig 更新メソッド ---

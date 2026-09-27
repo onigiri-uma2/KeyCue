@@ -1,3 +1,9 @@
 <resources>
     <string name="app_name">KeyCue</string>
+    <string name="layout_touch_standard">タッチ（標準）</string>
+    <string name="layout_touch_expanded">タッチ（拡大）</string>
+    <string name="layout_pad_trigger_first">パッド（トリガー優先）</string>
+    <string name="layout_pad_dpad_first">パッド（十字キー優先）</string>
+    <string name="layout_pad_grid">パッド（グリッド）</string>
+    <string name="layout_fitting_guide_toast">基準位置合わせです。Sky側の楽器UIを「タッチ（標準）」に切り替えて調整してください。</string>
 </resources>

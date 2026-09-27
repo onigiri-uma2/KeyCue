@@ -1,14 +1,34 @@
 package com.onigiri.keycue.ui.home.sections
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import com.onigiri.keycue.model.MidiMappingMode
 import com.onigiri.keycue.model.PitchClass
 import com.onigiri.keycue.model.ScaleType
 import com.onigiri.keycue.model.SongFormat
+import com.onigiri.keycue.profile.SkyLayout
 import com.onigiri.keycue.ui.home.ExpandableCard
 import com.onigiri.keycue.ui.home.HomeUiState
 import java.util.Locale
@@ -67,7 +87,9 @@ fun SettingsAccordionSection(
     onMetronomeSubdivisionChange: (com.onigiri.keycue.model.BeatSubdivision) -> Unit = {},
     onMetronomeAccentEnabledChange: (Boolean) -> Unit = {},
     onMetronomeVolumeChange: (Int) -> Unit = {},
-    onMetronomeBeatOffsetChange: (Long) -> Unit = {}
+    onMetronomeBeatOffsetChange: (Long) -> Unit = {},
+    onLayoutChange: (SkyLayout) -> Unit = {},
+    onShowLayoutSelectionChange: (Boolean) -> Unit = {}
 ) {
     var midiMappingExpanded by rememberSaveable { mutableStateOf(false) }
     var timingExpanded by rememberSaveable { mutableStateOf(true) }
@@ -204,9 +226,10 @@ fun SettingsAccordionSection(
         uiState.controlOverlayConfig.showRecentSongs,
         uiState.controlOverlayConfig.showSongSelection,
         uiState.controlOverlayConfig.showFitting,
-        uiState.controlOverlayConfig.showGuideToggle
+        uiState.controlOverlayConfig.showGuideToggle,
+        uiState.controlOverlayConfig.showLayoutSelection
     ).count { it }
-    val controlSummary = "${activeControlCount}/12 項目表示"
+    val controlSummary = "${activeControlCount}/13 項目表示"
     ExpandableCard(
         title = "コントロールオーバーレイ",
         summary = controlSummary,
@@ -226,11 +249,27 @@ fun SettingsAccordionSection(
             onShowRecentSongsChange = onShowRecentSongsChange,
             onShowSongSelectionChange = onShowSongSelectionChange,
             onShowFittingChange = onShowFittingChange,
-            onShowGuideToggleChange = onShowGuideToggleChange
+            onShowGuideToggleChange = onShowGuideToggleChange,
+            onShowLayoutSelectionChange = onShowLayoutSelectionChange
         )
     }
 
-    // 4. ボタン位置設定（スクリーンショット自動検出）
+    // 4. Sky ボタンレイアウト設定
+    var layoutExpanded by rememberSaveable { mutableStateOf(false) }
+    val layoutSummary = uiState.selectedSkyLayout.displayName
+    ExpandableCard(
+        title = "Sky ボタンレイアウト",
+        summary = layoutSummary,
+        expanded = layoutExpanded,
+        onExpandedChange = { layoutExpanded = it }
+    ) {
+        SkyLayoutConfigContent(
+            selectedLayout = uiState.selectedSkyLayout,
+            onLayoutChange = onLayoutChange
+        )
+    }
+
+    // 5. ボタン位置設定（スクリーンショット自動検出）
     var fittingExpanded by rememberSaveable { mutableStateOf(false) }
     val fittingSummary = if (uiState.fitConfigured) "設定済み" else "未設定"
     ExpandableCard(
@@ -245,7 +284,7 @@ fun SettingsAccordionSection(
         )
     }
 
-    // 4. オーバーレイ権限
+    // 6. オーバーレイ権限
     val permissionSummary = if (uiState.overlayPermissionGranted) "許可済み" else "未許可"
     ExpandableCard(
         title = "オーバーレイ権限",
@@ -257,5 +296,78 @@ fun SettingsAccordionSection(
             isGranted = uiState.overlayPermissionGranted,
             onRequestPermissionClick = onRequestPermissionClick
         )
+    }
+}
+
+/**
+ * Sky ボタンレイアウト（5種類）の選択UI。
+ */
+@Composable
+fun SkyLayoutConfigContent(
+    selectedLayout: SkyLayout,
+    onLayoutChange: (SkyLayout) -> Unit
+) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Text(
+            text = "タッチ（標準）で位置合わせした結果を基準に、各レイアウトへ自動配置します。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        SkyLayout.entries.forEach { layout ->
+            val isSelected = layout == selectedLayout
+            val description = when (layout) {
+                SkyLayout.TOUCH_STANDARD -> "タッチ操作・標準（位置合わせ基準）"
+                SkyLayout.TOUCH_EXPANDED -> "タッチ操作・拡大"
+                SkyLayout.PAD_TRIGGER_FIRST -> "ゲームパッド・トリガー優先（上部にトリガー、下部に十字キー）"
+                SkyLayout.PAD_DPAD_FIRST -> "ゲームパッド・十字キー優先（上部に十字キー、下部にトリガー）"
+                SkyLayout.PAD_GRID -> "ゲームパッド・グリッド（3行5列拡大配置）"
+            }
+
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { onLayoutChange(layout) },
+                color = if (isSelected) {
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                } else {
+                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                },
+                shape = RoundedCornerShape(8.dp),
+                border = if (isSelected) {
+                    BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
+                } else null
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RadioButton(
+                        selected = isSelected,
+                        onClick = { onLayoutChange(layout) }
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = layout.displayName,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = description,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
     }
 }
