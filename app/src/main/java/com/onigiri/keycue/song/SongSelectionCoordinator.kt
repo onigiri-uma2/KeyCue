@@ -44,7 +44,8 @@ class SongSelectionCoordinator(
     suspend fun select(
         uri: Uri,
         midiMappingSettings: com.onigiri.keycue.model.MidiMappingSettings? = null,
-        initializeManualFromAuto: Boolean = false
+        initializeManualFromAuto: Boolean = false,
+        reason: SongLoadReason = SongLoadReason.USER_SELECT
     ): Result<SongData> {
         // 1. 永続URIパーミッション取得の試行 (Provider非対応でもクラッシュしない)
         try {
@@ -64,12 +65,20 @@ class SongSelectionCoordinator(
             is SongLoadResult.Success -> {
                 val songData = result.songData
 
-                // 4. 現在の設定 (PlaybackConfig, FitProfile) を維持して新Sessionを構築
+                // 4. 新しい曲の選択時（USER_SELECT, RECENT_SELECT）はメトロノームのタイミングモードをAUTOへ戻す
+                // 重要: AUTO復帰完了後に新曲の PlaybackSession を公開する
+                if (reason == SongLoadReason.USER_SELECT || reason == SongLoadReason.RECENT_SELECT) {
+                    settingsRepository.updateMetronomeConfig { currentMetro ->
+                        currentMetro.copy(timingMode = com.onigiri.keycue.model.MetronomeTimingMode.AUTO)
+                    }
+                }
+
+                // 5. 現在の設定 (PlaybackConfig, FitProfile) を維持して新Sessionを構築
                 val config = settingsRepository.playbackConfig.value
                 val fitProfile = settingsRepository.fitProfile.value
                     ?: FitProfile.createDefaultTestProfile()
 
-                // 5. PlaybackSessionRepository へ一度に反映
+                // 6. PlaybackSessionRepository へ一度に反映
                 sessionRepository.setSession(
                     songData = songData,
                     config = config,
@@ -135,6 +144,6 @@ class SongSelectionCoordinator(
             return Result.failure(IllegalStateException("現在の楽曲はMIDI形式ではありません"))
         }
 
-        return select(uri, midiMappingSettings, initializeManualFromAuto = false)
+        return select(uri, midiMappingSettings, initializeManualFromAuto = false, reason = SongLoadReason.MIDI_REMAP)
     }
 }

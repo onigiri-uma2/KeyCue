@@ -55,6 +55,19 @@ class ControlOverlayView(
     private val callbacks: ControlOverlayCallbacks
 ) : FrameLayout(context) {
 
+    private val hostContext: Context = context
+
+    init {
+        try {
+            val field = View::class.java.getDeclaredField("mContext")
+            field.isAccessible = true
+            if (field.get(this) == null) {
+                field.set(this, hostContext)
+            }
+        } catch (_: Throwable) {
+        }
+    }
+
     /** 後方互換用セカンダリコンストラクタ */
     constructor(
         context: Context,
@@ -106,7 +119,11 @@ class ControlOverlayView(
         )
     )
 
-    private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
+    private val touchSlop = try {
+        ViewConfiguration.get(context)?.scaledTouchSlop ?: 8
+    } catch (_: Throwable) {
+        8
+    }
     private var initialTouchX = 0f
     private var initialTouchY = 0f
     private var initialLayoutX = 0
@@ -149,6 +166,7 @@ class ControlOverlayView(
     private lateinit var approachCircleLeadTimeSection: View
     private lateinit var countdownSection: View
     private lateinit var guideQuickToggleSection: View
+    private lateinit var metronomeSection: View
     private lateinit var layoutSelectionSection: View
     private lateinit var layoutSelectButton: Button
     private var currentSkyLayout: com.onigiri.keycue.profile.SkyLayout = com.onigiri.keycue.profile.SkyLayout.TOUCH_STANDARD
@@ -315,9 +333,13 @@ class ControlOverlayView(
             countdownSection = buildCountdownSection()
             addView(countdownSection)
 
-            // ガイドクイック表示切替（2段構成）
+            // ガイドクイック表示切替
             guideQuickToggleSection = buildGuideQuickToggleSection()
             addView(guideQuickToggleSection)
+
+            // メトロノーム操作
+            metronomeSection = buildMetronomeSection()
+            addView(metronomeSection)
 
             // Skyボタンレイアウト切り替え
             layoutSelectionSection = buildLayoutSelectionSection()
@@ -1044,6 +1066,9 @@ class ControlOverlayView(
         approachCircleLeadTimeSection.visibility = if (config.showCircleLeadTimeControl) View.VISIBLE else View.GONE
         countdownSection.visibility = if (config.showCountdownControl) View.VISIBLE else View.GONE
         guideQuickToggleSection.visibility = if (config.showGuideQuickToggles) View.VISIBLE else View.GONE
+        if (::metronomeSection.isInitialized) {
+            metronomeSection.visibility = if (config.showMetronomeControl) View.VISIBLE else View.GONE
+        }
         layoutSelectionSection.visibility = if (config.showLayoutSelection) View.VISIBLE else View.GONE
 
         selectFileBtn.visibility = if (config.showSongSelection) View.VISIBLE else View.GONE
@@ -1245,7 +1270,7 @@ class ControlOverlayView(
             }
 
             val label = TextView(context).apply {
-                text = "Guide / Metro"
+                text = "Guide"
                 setTextColor(Color.parseColor("#CFD8DC"))
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
                 layoutParams = LinearLayout.LayoutParams(
@@ -1257,16 +1282,14 @@ class ControlOverlayView(
             }
             addView(label)
 
-            // 1行目: Notes ON/OFF, Circle ON/OFF
+            // Notes ON/OFF, Circle ON/OFF
             val buttonRow = LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply {
-                    bottomMargin = dpToPx(4)
-                }
+                )
 
                 notesToggleBtn = createQuickToggleButton("Notes ON") {
                     callbacks.onShowFallingNotesChange(!currentShowFallingNotes)
@@ -1281,7 +1304,34 @@ class ControlOverlayView(
             }
             addView(buttonRow)
 
-            // 2行目: Metronome ON/OFF
+            updateGuideQuickToggleStyle()
+        }
+    }
+
+    private fun buildMetronomeSection(): View {
+        return LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomMargin = dpToPx(6)
+            }
+
+            val label = TextView(context).apply {
+                text = "Metronome"
+                setTextColor(Color.parseColor("#CFD8DC"))
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    bottomMargin = dpToPx(4)
+                }
+            }
+            addView(label)
+
+            // Metronome ON/OFF
             val metroRow = LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
@@ -1297,10 +1347,19 @@ class ControlOverlayView(
             }
             addView(metroRow)
 
-            updateGuideQuickToggleStyle()
             updateMetronomeToggleStyle()
         }
     }
+
+    internal val isMetronomeSectionVisible: Boolean
+        get() = if (::metronomeSection.isInitialized) {
+            currentConfig.showMetronomeControl && metronomeSection.visibility != View.GONE
+        } else false
+
+    internal val isGuideQuickToggleSectionVisible: Boolean
+        get() = if (::guideQuickToggleSection.isInitialized) {
+            currentConfig.showGuideQuickToggles && guideQuickToggleSection.visibility != View.GONE
+        } else false
 
     private fun createQuickToggleButton(text: String, onClick: () -> Unit): Button {
         return Button(context).apply {
@@ -1858,8 +1917,12 @@ class ControlOverlayView(
     }
 
     private fun dpToPx(dp: Int): Int {
-        val scale = context.resources.displayMetrics.density
-        return (dp * scale + 0.5f).toInt()
+        val density = try {
+            (hostContext.resources ?: context?.resources)?.displayMetrics?.density ?: 1f
+        } catch (_: Throwable) {
+            1f
+        }
+        return (dp * density + 0.5f).toInt()
     }
 
     companion object {

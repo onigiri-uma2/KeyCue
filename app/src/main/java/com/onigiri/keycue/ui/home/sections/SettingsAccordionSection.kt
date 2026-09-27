@@ -97,14 +97,11 @@ fun SettingsAccordionSection(
     onShowLayoutSelectionChange: (Boolean) -> Unit = {},
     onAdjustmentInMemoryChange: (SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment) -> Boolean = { _, _ -> true },
     onAdjustmentPersist: (SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment) -> Boolean = { _, _ -> true },
-    onAdjustmentReset: (SkyLayout) -> Unit = {}
+    onAdjustmentReset: (SkyLayout) -> Unit = {},
+    accordionUiState: com.onigiri.keycue.ui.home.SettingsAccordionUiState = uiState.accordionUiState,
+    onToggleAccordion: (com.onigiri.keycue.ui.home.SettingsAccordionKey, Boolean) -> Unit = { _, _ -> },
+    onShowMetronomeControlChange: (Boolean) -> Unit = {}
 ) {
-    var midiMappingExpanded by rememberSaveable { mutableStateOf(false) }
-    var timingExpanded by rememberSaveable { mutableStateOf(true) }
-    var metronomeExpanded by rememberSaveable { mutableStateOf(false) }
-    var visualExpanded by rememberSaveable { mutableStateOf(false) }
-    var permissionExpanded by rememberSaveable { mutableStateOf(!uiState.overlayPermissionGranted) }
-
     // 0. MIDIマッピング設定 (MIDIファイル読み込み時のみ表示)
     if (uiState.songFormat == SongFormat.MIDI) {
         val mapping = uiState.resolvedMidiMapping
@@ -121,8 +118,8 @@ fun SettingsAccordionSection(
         ExpandableCard(
             title = "MIDIマッピング",
             summary = mappingSummary,
-            expanded = midiMappingExpanded,
-            onExpandedChange = { midiMappingExpanded = it }
+            expanded = accordionUiState.isExpanded(com.onigiri.keycue.ui.home.SettingsAccordionKey.MIDI_MAPPING),
+            onExpandedChange = { onToggleAccordion(com.onigiri.keycue.ui.home.SettingsAccordionKey.MIDI_MAPPING, it) }
         ) {
             MidiMappingConfigContent(
                 midiMappingSettings = uiState.midiMappingSettings,
@@ -141,8 +138,8 @@ fun SettingsAccordionSection(
     ExpandableCard(
         title = "再生・タイミング設定",
         summary = timingSummary,
-        expanded = timingExpanded,
-        onExpandedChange = { timingExpanded = it }
+        expanded = accordionUiState.isExpanded(com.onigiri.keycue.ui.home.SettingsAccordionKey.PLAYBACK_TIMING),
+        onExpandedChange = { onToggleAccordion(com.onigiri.keycue.ui.home.SettingsAccordionKey.PLAYBACK_TIMING, it) }
     ) {
         PlaybackConfigContent(
             speed = uiState.speed,
@@ -174,8 +171,8 @@ fun SettingsAccordionSection(
     ExpandableCard(
         title = "メトロノーム",
         summary = metronomeSummary,
-        expanded = metronomeExpanded,
-        onExpandedChange = { metronomeExpanded = it }
+        expanded = accordionUiState.isExpanded(com.onigiri.keycue.ui.home.SettingsAccordionKey.METRONOME),
+        onExpandedChange = { onToggleAccordion(com.onigiri.keycue.ui.home.SettingsAccordionKey.METRONOME, it) }
     ) {
         MetronomeConfigContent(
             config = uiState.metronomeConfig,
@@ -197,8 +194,8 @@ fun SettingsAccordionSection(
     ExpandableCard(
         title = "ガイド・ノート表示",
         summary = visualSummary,
-        expanded = visualExpanded,
-        onExpandedChange = { visualExpanded = it }
+        expanded = accordionUiState.isExpanded(com.onigiri.keycue.ui.home.SettingsAccordionKey.VISUAL),
+        onExpandedChange = { onToggleAccordion(com.onigiri.keycue.ui.home.SettingsAccordionKey.VISUAL, it) }
     ) {
         VisualConfigContent(
             visualConfig = uiState.visualConfig,
@@ -220,8 +217,7 @@ fun SettingsAccordionSection(
         )
     }
 
-    // 3. コントロールオーバーレイ表示設定
-    var controlOverlayExpanded by rememberSaveable { mutableStateOf(false) }
+    // 4. コントロールオーバーレイ表示設定
     val activeControlCount = listOf(
         uiState.controlOverlayConfig.showSongInfo,
         uiState.controlOverlayConfig.showSeekBar,
@@ -231,18 +227,19 @@ fun SettingsAccordionSection(
         uiState.controlOverlayConfig.showCircleLeadTimeControl,
         uiState.controlOverlayConfig.showCountdownControl,
         uiState.controlOverlayConfig.showGuideQuickToggles,
+        uiState.controlOverlayConfig.showMetronomeControl,
         uiState.controlOverlayConfig.showRecentSongs,
         uiState.controlOverlayConfig.showSongSelection,
         uiState.controlOverlayConfig.showFitting,
         uiState.controlOverlayConfig.showGuideToggle,
         uiState.controlOverlayConfig.showLayoutSelection
     ).count { it }
-    val controlSummary = "${activeControlCount}/13 項目表示"
+    val controlSummary = "${activeControlCount}/14 項目表示"
     ExpandableCard(
         title = "コントロールオーバーレイ",
         summary = controlSummary,
-        expanded = controlOverlayExpanded,
-        onExpandedChange = { controlOverlayExpanded = it }
+        expanded = accordionUiState.isExpanded(com.onigiri.keycue.ui.home.SettingsAccordionKey.CONTROL_OVERLAY),
+        onExpandedChange = { onToggleAccordion(com.onigiri.keycue.ui.home.SettingsAccordionKey.CONTROL_OVERLAY, it) }
     ) {
         ControlOverlayConfigContent(
             config = uiState.controlOverlayConfig,
@@ -254,6 +251,7 @@ fun SettingsAccordionSection(
             onShowCircleLeadTimeControlChange = onShowCircleLeadTimeControlChange,
             onShowCountdownControlChange = onShowCountdownControlChange,
             onShowGuideQuickTogglesChange = onShowGuideQuickTogglesChange,
+            onShowMetronomeControlChange = onShowMetronomeControlChange,
             onShowRecentSongsChange = onShowRecentSongsChange,
             onShowSongSelectionChange = onShowSongSelectionChange,
             onShowFittingChange = onShowFittingChange,
@@ -262,14 +260,13 @@ fun SettingsAccordionSection(
         )
     }
 
-    // 4. Sky ボタンレイアウト設定
-    var layoutExpanded by rememberSaveable { mutableStateOf(false) }
+    // 5. Sky ボタンレイアウト設定
     val layoutSummary = uiState.selectedSkyLayout.displayName
     ExpandableCard(
         title = "Sky ボタンレイアウト",
         summary = layoutSummary,
-        expanded = layoutExpanded,
-        onExpandedChange = { layoutExpanded = it }
+        expanded = accordionUiState.isExpanded(com.onigiri.keycue.ui.home.SettingsAccordionKey.SKY_LAYOUT),
+        onExpandedChange = { onToggleAccordion(com.onigiri.keycue.ui.home.SettingsAccordionKey.SKY_LAYOUT, it) }
     ) {
         SkyLayoutConfigContent(
             selectedLayout = uiState.selectedSkyLayout,
@@ -282,14 +279,13 @@ fun SettingsAccordionSection(
         )
     }
 
-    // 5. ボタン位置設定（スクリーンショット自動検出）
-    var fittingExpanded by rememberSaveable { mutableStateOf(false) }
+    // 6. ボタン位置設定（スクリーンショット自動検出）
     val fittingSummary = if (uiState.fitConfigured) "設定済み" else "未設定"
     ExpandableCard(
         title = "ボタン位置設定",
         summary = fittingSummary,
-        expanded = fittingExpanded,
-        onExpandedChange = { fittingExpanded = it }
+        expanded = accordionUiState.isExpanded(com.onigiri.keycue.ui.home.SettingsAccordionKey.FITTING),
+        onExpandedChange = { onToggleAccordion(com.onigiri.keycue.ui.home.SettingsAccordionKey.FITTING, it) }
     ) {
         FittingConfigContent(
             isConfigured = uiState.fitConfigured,
@@ -297,13 +293,13 @@ fun SettingsAccordionSection(
         )
     }
 
-    // 6. オーバーレイ権限
+    // 7. オーバーレイ権限
     val permissionSummary = if (uiState.overlayPermissionGranted) "許可済み" else "未許可"
     ExpandableCard(
         title = "オーバーレイ権限",
         summary = permissionSummary,
-        expanded = permissionExpanded,
-        onExpandedChange = { permissionExpanded = it }
+        expanded = accordionUiState.isExpanded(com.onigiri.keycue.ui.home.SettingsAccordionKey.OVERLAY_PERMISSION),
+        onExpandedChange = { onToggleAccordion(com.onigiri.keycue.ui.home.SettingsAccordionKey.OVERLAY_PERMISSION, it) }
     ) {
         OverlayPermissionStatusContent(
             isGranted = uiState.overlayPermissionGranted,

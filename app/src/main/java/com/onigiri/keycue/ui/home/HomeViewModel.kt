@@ -112,6 +112,13 @@ class HomeViewModel(
                 }
             }
         }
+
+        // アコーディオン開閉状態（プロセス内セッション）をUiStateへ同期
+        scope.launch {
+            SettingsSessionManager.accordionState.collect { accordionState ->
+                _uiState.update { it.copy(accordionUiState = accordionState) }
+            }
+        }
     }
 
     private data class SettingsState(
@@ -212,7 +219,11 @@ class HomeViewModel(
         val coordinator = songSelectionCoordinator ?: return
         scope.launch(kotlinx.coroutines.Dispatchers.IO) {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-            val result = coordinator.select(uri, initializeManualFromAuto = false)
+            val result = coordinator.select(
+                uri = uri,
+                initializeManualFromAuto = false,
+                reason = com.onigiri.keycue.song.SongLoadReason.RESTORE
+            )
             if (result.isSuccess) {
                 _uiState.update { it.copy(isLoading = false, errorMessage = null) }
             } else {
@@ -570,6 +581,25 @@ class HomeViewModel(
     fun setMetronomeAccentEnabled(enabled: Boolean) = updateMetronomeConfig { it.copy(accentEnabled = enabled) }
     fun setMetronomeVolumePercent(volume: Int) = updateMetronomeConfig { it.copy(volumePercent = volume.coerceIn(com.onigiri.keycue.model.MetronomeConfig.MIN_VOLUME_PERCENT, com.onigiri.keycue.model.MetronomeConfig.MAX_VOLUME_PERCENT)) }
     fun setMetronomeBeatOffsetMs(offsetMs: Long) = updateMetronomeConfig { it.copy(beatOffsetMs = offsetMs.coerceIn(com.onigiri.keycue.model.MetronomeConfig.MIN_BEAT_OFFSET_MS, com.onigiri.keycue.model.MetronomeConfig.MAX_BEAT_OFFSET_MS)) }
+
+    // --- SettingsAccordion 状態更新メソッド ---
+
+    /**
+     * アコーディオンの開閉状態を更新する。
+     * [SettingsSessionManager] が単一の保存元となり、画面回転やオーバーレイ遷移後も状態を維持します。
+     */
+    fun setAccordionExpanded(key: SettingsAccordionKey, expanded: Boolean) {
+        SettingsSessionManager.setExpanded(key, expanded)
+    }
+
+    fun setAccordionExpanded(key: String, expanded: Boolean) {
+        SettingsSessionManager.setExpanded(key, expanded)
+    }
+
+    /**
+     * Control Overlay でのメトロノーム表示設定を更新する。
+     */
+    fun setShowMetronomeControl(show: Boolean) = updateControlOverlayConfig { it.copy(showMetronomeControl = show) }
 
     companion object {
         fun provideFactory(context: Context): ViewModelProvider.Factory =

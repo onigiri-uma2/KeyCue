@@ -244,8 +244,7 @@ class OverlayService : Service() {
             },
             onMetronomeEnabledChange = { enabled ->
                 serviceScope.launch {
-                    val current = settingsRepository.metronomeConfig.value
-                    settingsRepository.saveMetronomeConfig(current.copy(enabled = enabled))
+                    settingsRepository.updateMetronomeConfig { it.copy(enabled = enabled) }
                 }
             },
             onLayoutChange = { newLayout ->
@@ -540,7 +539,11 @@ class OverlayService : Service() {
                             sessionRepository = sessionRepository,
                             settingsRepository = settingsRepository
                         )
-                        val result = coordinator.select(uri, initializeManualFromAuto = true)
+                        val result = coordinator.select(
+                            uri = uri,
+                            initializeManualFromAuto = true,
+                            reason = com.onigiri.keycue.song.SongLoadReason.USER_SELECT
+                        )
                         android.util.Log.d("OverlayService", "coordinator.select result: isSuccess=${result.isSuccess}")
                         windowController?.restoreAfterFilePicker()
                         if (result.isSuccess) {
@@ -604,7 +607,11 @@ class OverlayService : Service() {
                     sessionRepository = sessionRepository,
                     settingsRepository = settingsRepository
                 )
-                val result = coordinator.select(uri, initializeManualFromAuto = false)
+                val result = coordinator.select(
+                    uri = uri,
+                    initializeManualFromAuto = false,
+                    reason = com.onigiri.keycue.song.SongLoadReason.RECENT_SELECT
+                )
                 if (result.isSuccess) {
                     // 成功時は observePlaybackSession -> applySong 経由で
                     // 自然に stop() / setSong() され、Stopped 先頭待機となる（自動再生なし）

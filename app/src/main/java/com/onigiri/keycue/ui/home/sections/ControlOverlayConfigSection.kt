@@ -20,6 +20,7 @@ fun ControlOverlayConfigContent(
     onShowCircleLeadTimeControlChange: (Boolean) -> Unit,
     onShowCountdownControlChange: (Boolean) -> Unit,
     onShowGuideQuickTogglesChange: (Boolean) -> Unit,
+    onShowMetronomeControlChange: (Boolean) -> Unit = {},
     onShowRecentSongsChange: (Boolean) -> Unit,
     onShowSongSelectionChange: (Boolean) -> Unit,
     onShowFittingChange: (Boolean) -> Unit,
@@ -74,6 +75,12 @@ fun ControlOverlayConfigContent(
             description = "Notes/Circle 個別クイック切替行を表示します",
             checked = config.showGuideQuickToggles,
             onCheckedChange = onShowGuideQuickTogglesChange
+        )
+        SettingSwitchRow(
+            label = "メトロノーム操作",
+            description = "メトロノームON/OFF切替行を表示します",
+            checked = config.showMetronomeControl,
+            onCheckedChange = onShowMetronomeControlChange
         )
         SettingSwitchRow(
             label = "最近使った曲",

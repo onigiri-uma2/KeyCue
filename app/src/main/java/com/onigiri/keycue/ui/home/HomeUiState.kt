@@ -50,6 +50,7 @@ data class HomeUiState(
     val metronomeConfig: com.onigiri.keycue.model.MetronomeConfig = com.onigiri.keycue.model.MetronomeConfig(),
     val selectedSkyLayout: com.onigiri.keycue.profile.SkyLayout = com.onigiri.keycue.profile.SkyLayout.TOUCH_STANDARD,
     val layoutAdjustments: Map<com.onigiri.keycue.profile.SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment> = emptyMap(),
+    val accordionUiState: SettingsAccordionUiState = SettingsAccordionUiState(),
     val resolvedTimeline: com.onigiri.keycue.audio.BeatTimeline = com.onigiri.keycue.audio.MetronomeTimingResolver.resolveTimeline(
         config = com.onigiri.keycue.model.MetronomeConfig(),
         timingMetadata = null,

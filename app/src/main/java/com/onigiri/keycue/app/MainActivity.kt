@@ -35,6 +35,9 @@ class MainActivity : ComponentActivity() {
 
         if (openedFromOverlay) {
             resetToHomeTrigger++
+        } else if (savedInstanceState == null) {
+            // 通常の新規起動時はアコーディオン開閉状態を全閉にリセットする
+            com.onigiri.keycue.ui.home.SettingsSessionManager.resetToAllClosed()
         }
 
         enableEdgeToEdge()
@@ -58,6 +61,9 @@ class MainActivity : ComponentActivity() {
         if (fromOverlay) {
             resetToHomeTrigger++
             OverlayService.setOverlayVisibleForSettings(false)
+        } else {
+            // 通常の新規起動として再表示された場合は全閉にリセットする
+            com.onigiri.keycue.ui.home.SettingsSessionManager.resetToAllClosed()
         }
     }
 

@@ -235,6 +235,7 @@ class SharedPreferencesSettingsRepository internal constructor(
         private const val KEY_CONTROL_SHOW_GUIDE_TOGGLE = "control_show_guide_toggle"
         private const val KEY_CONTROL_SHOW_COUNTDOWN_CONTROL = "control_show_countdown_control"
         private const val KEY_CONTROL_SHOW_GUIDE_QUICK_TOGGLES = "control_show_guide_quick_toggles"
+        private const val KEY_CONTROL_SHOW_METRONOME_CONTROL = "control_show_metronome_control"
         private const val KEY_CONTROL_SHOW_RECENT_SONGS = "control_show_recent_songs"
         private const val KEY_CONTROL_SHOW_LAYOUT_SELECTION = "control_show_layout_selection"
         private const val KEY_RECENT_SONGS = "recent_songs"
@@ -315,8 +316,13 @@ class SharedPreferencesSettingsRepository internal constructor(
             showGuideToggle = prefs.getBoolean(KEY_CONTROL_SHOW_GUIDE_TOGGLE, true),
             showCountdownControl = prefs.getBoolean(KEY_CONTROL_SHOW_COUNTDOWN_CONTROL, true),
             showGuideQuickToggles = prefs.getBoolean(KEY_CONTROL_SHOW_GUIDE_QUICK_TOGGLES, true),
+            showMetronomeControl = if (prefs.contains(KEY_CONTROL_SHOW_METRONOME_CONTROL)) {
+                prefs.getBoolean(KEY_CONTROL_SHOW_METRONOME_CONTROL, true)
+            } else {
+                prefs.getBoolean(KEY_CONTROL_SHOW_GUIDE_QUICK_TOGGLES, true)
+            },
             showRecentSongs = prefs.getBoolean(KEY_CONTROL_SHOW_RECENT_SONGS, false),
-            showLayoutSelection = prefs.getBoolean(KEY_CONTROL_SHOW_LAYOUT_SELECTION, true)
+            showLayoutSelection = prefs.getBoolean(KEY_CONTROL_SHOW_LAYOUT_SELECTION, false)
         )
     )
     override val controlOverlayConfig: StateFlow<ControlOverlayConfig> = _controlOverlayConfig.asStateFlow()
@@ -781,6 +787,7 @@ class SharedPreferencesSettingsRepository internal constructor(
             .putBoolean(KEY_CONTROL_SHOW_GUIDE_TOGGLE, config.showGuideToggle)
             .putBoolean(KEY_CONTROL_SHOW_COUNTDOWN_CONTROL, config.showCountdownControl)
             .putBoolean(KEY_CONTROL_SHOW_GUIDE_QUICK_TOGGLES, config.showGuideQuickToggles)
+            .putBoolean(KEY_CONTROL_SHOW_METRONOME_CONTROL, config.showMetronomeControl)
             .putBoolean(KEY_CONTROL_SHOW_RECENT_SONGS, config.showRecentSongs)
             .putBoolean(KEY_CONTROL_SHOW_LAYOUT_SELECTION, config.showLayoutSelection)
             .apply()
@@ -894,19 +901,40 @@ class SharedPreferencesSettingsRepository internal constructor(
         }
     }
 
+    private val metronomeMutex = kotlinx.coroutines.sync.Mutex()
+
+    override suspend fun updateMetronomeConfig(transform: (MetronomeConfig) -> MetronomeConfig) {
+        metronomeMutex.withLock {
+            val updated = transform(_metronomeConfig.value).normalized()
+            _metronomeConfig.value = updated
+            prefs.edit()
+                .putBoolean(KEY_METRONOME_ENABLED, updated.enabled)
+                .putString(KEY_METRONOME_TIMING_MODE, updated.timingMode.name)
+                .putInt(KEY_METRONOME_BPM, updated.bpm)
+                .putInt(KEY_METRONOME_BEATS_PER_BAR, updated.beatsPerBar)
+                .putString(KEY_METRONOME_SUBDIVISION, updated.subdivision.name)
+                .putBoolean(KEY_METRONOME_ACCENT_ENABLED, updated.accentEnabled)
+                .putInt(KEY_METRONOME_VOLUME_PERCENT, updated.volumePercent)
+                .putLong(KEY_METRONOME_BEAT_OFFSET_MS, updated.beatOffsetMs)
+                .apply()
+        }
+    }
+
     override suspend fun saveMetronomeConfig(config: MetronomeConfig) {
-        val normalized = config.normalized()
-        _metronomeConfig.value = normalized
-        prefs.edit()
-            .putBoolean(KEY_METRONOME_ENABLED, normalized.enabled)
-            .putString(KEY_METRONOME_TIMING_MODE, normalized.timingMode.name)
-            .putInt(KEY_METRONOME_BPM, normalized.bpm)
-            .putInt(KEY_METRONOME_BEATS_PER_BAR, normalized.beatsPerBar)
-            .putString(KEY_METRONOME_SUBDIVISION, normalized.subdivision.name)
-            .putBoolean(KEY_METRONOME_ACCENT_ENABLED, normalized.accentEnabled)
-            .putInt(KEY_METRONOME_VOLUME_PERCENT, normalized.volumePercent)
-            .putLong(KEY_METRONOME_BEAT_OFFSET_MS, normalized.beatOffsetMs)
-            .apply()
+        metronomeMutex.withLock {
+            val normalized = config.normalized()
+            _metronomeConfig.value = normalized
+            prefs.edit()
+                .putBoolean(KEY_METRONOME_ENABLED, normalized.enabled)
+                .putString(KEY_METRONOME_TIMING_MODE, normalized.timingMode.name)
+                .putInt(KEY_METRONOME_BPM, normalized.bpm)
+                .putInt(KEY_METRONOME_BEATS_PER_BAR, normalized.beatsPerBar)
+                .putString(KEY_METRONOME_SUBDIVISION, normalized.subdivision.name)
+                .putBoolean(KEY_METRONOME_ACCENT_ENABLED, normalized.accentEnabled)
+                .putInt(KEY_METRONOME_VOLUME_PERCENT, normalized.volumePercent)
+                .putLong(KEY_METRONOME_BEAT_OFFSET_MS, normalized.beatOffsetMs)
+                .apply()
+        }
     }
 
     private fun applyPlaybackConfig(config: PlaybackConfig) {
@@ -1198,8 +1226,18 @@ class InMemorySettingsRepository(
         _controlOverlayConfig.value = config
     }
 
+    private val inMemoryMetronomeMutex = kotlinx.coroutines.sync.Mutex()
+
+    override suspend fun updateMetronomeConfig(transform: (MetronomeConfig) -> MetronomeConfig) {
+        inMemoryMetronomeMutex.withLock {
+            _metronomeConfig.value = transform(_metronomeConfig.value).normalized()
+        }
+    }
+
     override suspend fun saveMetronomeConfig(config: MetronomeConfig) {
-        _metronomeConfig.value = config.normalized()
+        inMemoryMetronomeMutex.withLock {
+            _metronomeConfig.value = config.normalized()
+        }
     }
 
     private fun applyPlaybackConfig(config: PlaybackConfig) {

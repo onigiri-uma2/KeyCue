@@ -244,6 +244,7 @@ fun HomeScreen(
         onShowCircleLeadTimeControlChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showCircleLeadTimeControl = it) } },
         onShowCountdownControlChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showCountdownControl = it) } },
         onShowGuideQuickTogglesChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showGuideQuickToggles = it) } },
+        onShowMetronomeControlChange = { viewModel.setShowMetronomeControl(it) },
         onShowRecentSongsChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showRecentSongs = it) } },
         onShowSongSelectionChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showSongSelection = it) } },
         onShowFittingChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showFitting = it) } },
@@ -261,6 +262,7 @@ fun HomeScreen(
         onAdjustmentInMemoryChange = { layout, adj -> viewModel.updateLayoutAdjustmentInMemory(layout, adj) },
         onAdjustmentPersist = { layout, adj -> viewModel.persistLayoutAdjustment(layout, adj) },
         onAdjustmentReset = { layout -> viewModel.resetLayoutAdjustment(layout) },
+        onToggleAccordion = { key, expanded -> viewModel.setAccordionExpanded(key, expanded) },
         onDismissError = { viewModel.clearError() }
     )
 }
@@ -311,6 +313,7 @@ fun HomeScreenContent(
     onShowCircleLeadTimeControlChange: (Boolean) -> Unit = {},
     onShowCountdownControlChange: (Boolean) -> Unit = {},
     onShowGuideQuickTogglesChange: (Boolean) -> Unit = {},
+    onShowMetronomeControlChange: (Boolean) -> Unit = {},
     onShowRecentSongsChange: (Boolean) -> Unit = {},
     onShowSongSelectionChange: (Boolean) -> Unit = {},
     onShowFittingChange: (Boolean) -> Unit = {},
@@ -328,6 +331,7 @@ fun HomeScreenContent(
     onAdjustmentInMemoryChange: (com.onigiri.keycue.profile.SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment) -> Boolean = { _, _ -> true },
     onAdjustmentPersist: (com.onigiri.keycue.profile.SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment) -> Boolean = { _, _ -> true },
     onAdjustmentReset: (com.onigiri.keycue.profile.SkyLayout) -> Unit = {},
+    onToggleAccordion: (com.onigiri.keycue.ui.home.SettingsAccordionKey, Boolean) -> Unit = { _, _ -> },
     onDismissError: () -> Unit = {}
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
@@ -424,6 +428,7 @@ fun HomeScreenContent(
                         onShowCircleLeadTimeControlChange = onShowCircleLeadTimeControlChange,
                         onShowCountdownControlChange = onShowCountdownControlChange,
                         onShowGuideQuickTogglesChange = onShowGuideQuickTogglesChange,
+                        onShowMetronomeControlChange = onShowMetronomeControlChange,
                         onShowRecentSongsChange = onShowRecentSongsChange,
                         onShowSongSelectionChange = onShowSongSelectionChange,
                         onShowFittingChange = onShowFittingChange,
@@ -435,11 +440,13 @@ fun HomeScreenContent(
                         onMetronomeSubdivisionChange = onMetronomeSubdivisionChange,
                         onMetronomeAccentEnabledChange = onMetronomeAccentEnabledChange,
                         onMetronomeVolumeChange = onMetronomeVolumeChange,
+                        onMetronomeBeatOffsetChange = onMetronomeBeatOffsetChange,
                         onLayoutChange = onLayoutChange,
                         onShowLayoutSelectionChange = onShowLayoutSelectionChange,
                         onAdjustmentInMemoryChange = onAdjustmentInMemoryChange,
                         onAdjustmentPersist = onAdjustmentPersist,
                         onAdjustmentReset = onAdjustmentReset,
+                        onToggleAccordion = onToggleAccordion,
                         onDismissError = onDismissError
                     )
                 } else {
@@ -486,6 +493,7 @@ fun HomeScreenContent(
                         onShowCircleLeadTimeControlChange = onShowCircleLeadTimeControlChange,
                         onShowCountdownControlChange = onShowCountdownControlChange,
                         onShowGuideQuickTogglesChange = onShowGuideQuickTogglesChange,
+                        onShowMetronomeControlChange = onShowMetronomeControlChange,
                         onShowRecentSongsChange = onShowRecentSongsChange,
                         onShowSongSelectionChange = onShowSongSelectionChange,
                         onShowFittingChange = onShowFittingChange,
@@ -497,11 +505,13 @@ fun HomeScreenContent(
                         onMetronomeSubdivisionChange = onMetronomeSubdivisionChange,
                         onMetronomeAccentEnabledChange = onMetronomeAccentEnabledChange,
                         onMetronomeVolumeChange = onMetronomeVolumeChange,
+                        onMetronomeBeatOffsetChange = onMetronomeBeatOffsetChange,
                         onLayoutChange = onLayoutChange,
                         onShowLayoutSelectionChange = onShowLayoutSelectionChange,
                         onAdjustmentInMemoryChange = onAdjustmentInMemoryChange,
                         onAdjustmentPersist = onAdjustmentPersist,
                         onAdjustmentReset = onAdjustmentReset,
+                        onToggleAccordion = onToggleAccordion,
                         onDismissError = onDismissError
                     )
                 }
@@ -557,6 +567,7 @@ private fun HomeScreenNarrowContent(
     onShowCircleLeadTimeControlChange: (Boolean) -> Unit = {},
     onShowCountdownControlChange: (Boolean) -> Unit = {},
     onShowGuideQuickTogglesChange: (Boolean) -> Unit = {},
+    onShowMetronomeControlChange: (Boolean) -> Unit = {},
     onShowRecentSongsChange: (Boolean) -> Unit = {},
     onShowSongSelectionChange: (Boolean) -> Unit = {},
     onShowFittingChange: (Boolean) -> Unit = {},
@@ -574,6 +585,7 @@ private fun HomeScreenNarrowContent(
     onAdjustmentInMemoryChange: (com.onigiri.keycue.profile.SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment) -> Boolean = { _, _ -> true },
     onAdjustmentPersist: (com.onigiri.keycue.profile.SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment) -> Boolean = { _, _ -> true },
     onAdjustmentReset: (com.onigiri.keycue.profile.SkyLayout) -> Unit = {},
+    onToggleAccordion: (com.onigiri.keycue.ui.home.SettingsAccordionKey, Boolean) -> Unit = { _, _ -> },
     onDismissError: () -> Unit
 ) {
     Column(
@@ -653,7 +665,10 @@ private fun HomeScreenNarrowContent(
             onShowLayoutSelectionChange = onShowLayoutSelectionChange,
             onAdjustmentInMemoryChange = onAdjustmentInMemoryChange,
             onAdjustmentPersist = onAdjustmentPersist,
-            onAdjustmentReset = onAdjustmentReset
+            onAdjustmentReset = onAdjustmentReset,
+            accordionUiState = uiState.accordionUiState,
+            onToggleAccordion = onToggleAccordion,
+            onShowMetronomeControlChange = onShowMetronomeControlChange
         )
 
         // 演奏支援開始ボタン
@@ -736,6 +751,7 @@ private fun HomeScreenWideContent(
     onShowCircleLeadTimeControlChange: (Boolean) -> Unit = {},
     onShowCountdownControlChange: (Boolean) -> Unit = {},
     onShowGuideQuickTogglesChange: (Boolean) -> Unit = {},
+    onShowMetronomeControlChange: (Boolean) -> Unit = {},
     onShowRecentSongsChange: (Boolean) -> Unit = {},
     onShowSongSelectionChange: (Boolean) -> Unit = {},
     onShowFittingChange: (Boolean) -> Unit = {},
@@ -753,6 +769,7 @@ private fun HomeScreenWideContent(
     onAdjustmentInMemoryChange: (com.onigiri.keycue.profile.SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment) -> Boolean = { _, _ -> true },
     onAdjustmentPersist: (com.onigiri.keycue.profile.SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment) -> Boolean = { _, _ -> true },
     onAdjustmentReset: (com.onigiri.keycue.profile.SkyLayout) -> Unit = {},
+    onToggleAccordion: (com.onigiri.keycue.ui.home.SettingsAccordionKey, Boolean) -> Unit = { _, _ -> },
     onDismissError: () -> Unit
 ) {
     Row(
@@ -887,7 +904,10 @@ private fun HomeScreenWideContent(
                 onShowLayoutSelectionChange = onShowLayoutSelectionChange,
                 onAdjustmentInMemoryChange = onAdjustmentInMemoryChange,
                 onAdjustmentPersist = onAdjustmentPersist,
-                onAdjustmentReset = onAdjustmentReset
+                onAdjustmentReset = onAdjustmentReset,
+                accordionUiState = uiState.accordionUiState,
+                onToggleAccordion = onToggleAccordion,
+                onShowMetronomeControlChange = onShowMetronomeControlChange
             )
         }
     }
