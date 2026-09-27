@@ -49,9 +49,35 @@ object SkyLayoutTransformer {
             "baseFitProfile must contain exactly 15 key centers, but got ${baseFitProfile.keyCenters.size}"
         }
 
-        // TOUCH_STANDARD かつ 微調整なし の場合は、基準プロファイルの生座標をそのまま返す
-        if (targetLayout == SkyLayout.TOUCH_STANDARD && adjustment.isDefault) {
-            return baseFitProfile.keyCenters.map { Pair(it.x, it.y) }
+        // TOUCH_STANDARD および PAD_GRID_STANDARD は標準15キー配置であるため、
+        // 4隅からバイリニア再構成するのではなく、baseFitProfile の15キー座標を直接利用する。
+        // これにより、中央キー等の個別位置情報が損なわれず100%保持される。
+        // その後、各レイアウト固有のユーザー微調整 (adjustment) を適用する。
+        if (targetLayout == SkyLayout.TOUCH_STANDARD || targetLayout == SkyLayout.PAD_GRID_STANDARD) {
+            if (adjustment.isDefault) {
+                return baseFitProfile.keyCenters.map { Pair(it.x, it.y) }
+            }
+            var sumX = 0.0f
+            var sumY = 0.0f
+            for (pt in baseFitProfile.keyCenters) {
+                sumX += pt.x
+                sumY += pt.y
+            }
+            val centerX = sumX / 15.0f
+            val centerY = sumY / 15.0f
+
+            val safeAdj = SkyLayoutAdjustment.safe(
+                offsetX = adjustment.offsetX,
+                offsetY = adjustment.offsetY,
+                scaleX = adjustment.scaleX,
+                scaleY = adjustment.scaleY
+            )
+
+            return baseFitProfile.keyCenters.map { pt ->
+                val scaledX = centerX + (pt.x - centerX) * safeAdj.scaleX + safeAdj.offsetX
+                val scaledY = centerY + (pt.y - centerY) * safeAdj.scaleY + safeAdj.offsetY
+                Pair(scaledX, scaledY)
+            }
         }
 
         // 基準プロファイルの4隅アンカー

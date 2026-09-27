@@ -748,22 +748,44 @@ class SettingsRepositoryLayoutTest {
     }
 
     /**
-     * 要件: 6レイアウトの実測座標に基づく回帰テスト。
-     * 各レイアウトの15キー中心座標が意図せず変更されていないことを固定値で検証する。
+     * 要件: 全レイアウトのキー座標有効範囲検証。
+     * 全6レイアウトの15キー中心座標が、画面内の妥当な正規化範囲に収まっていることを確認する。
      */
     @Test
-    fun testExactPresetCoordinates_regressionCheck() {
+    fun testLayoutPresets_keyCoordinatesWithinValidRange() {
         for (layout in SkyLayout.entries) {
             val preset = com.onigiri.keycue.profile.SkyLayoutRegistry.getPreset(layout)
             assertEquals("全レイアウトで15キーが定義されていること", 15, preset.keyCenters.size)
             for (i in 0..14) {
                 val pt = preset.keyCenters[i]
-                assertTrue("Key $i x in valid range", pt.x in 0.1f..0.9f)
-                assertTrue("Key $i y in valid range", pt.y in 0.05f..0.95f)
+                assertTrue("Key $i x in valid range (0.1..0.9) for $layout", pt.x in 0.1f..0.9f)
+                assertTrue("Key $i y in valid range (0.05..0.95) for $layout", pt.y in 0.05f..0.95f)
             }
         }
+    }
 
-        // TOUCH_STANDARD と PAD_GRID_STANDARD の完全一致検証
+    /**
+     * 要件: 実測値として確定した座標に対する固定回帰テスト。
+     * 実機高解像度画像（2712x1220）および基準画像（1024x460）から幾何中心を実測・確定した
+     * 基準アンカーおよび主要キーの座標が、意図せず変更されていないことを固定期待値で厳密に検証する。
+     */
+    @Test
+    fun testExactMeasuredCoordinates_regressionCheck() {
+        // 1. TOUCH_STANDARD の実測基準4隅アンカー
+        val stdTL = com.onigiri.keycue.profile.SkyLayoutRegistry.STANDARD_TOP_LEFT
+        val stdTR = com.onigiri.keycue.profile.SkyLayoutRegistry.STANDARD_TOP_RIGHT
+        val stdBL = com.onigiri.keycue.profile.SkyLayoutRegistry.STANDARD_BOTTOM_LEFT
+        val stdBR = com.onigiri.keycue.profile.SkyLayoutRegistry.STANDARD_BOTTOM_RIGHT
+        assertEquals("STANDARD_TOP_LEFT x", 0.312988f, stdTL.x, 0.000001f)
+        assertEquals("STANDARD_TOP_LEFT y", 0.226087f, stdTL.y, 0.000001f)
+        assertEquals("STANDARD_TOP_RIGHT x", 0.685059f, stdTR.x, 0.000001f)
+        assertEquals("STANDARD_TOP_RIGHT y", 0.226087f, stdTR.y, 0.000001f)
+        assertEquals("STANDARD_BOTTOM_LEFT x", 0.312988f, stdBL.x, 0.000001f)
+        assertEquals("STANDARD_BOTTOM_LEFT y", 0.626087f, stdBL.y, 0.000001f)
+        assertEquals("STANDARD_BOTTOM_RIGHT x", 0.685059f, stdBR.x, 0.000001f)
+        assertEquals("STANDARD_BOTTOM_RIGHT y", 0.626087f, stdBR.y, 0.000001f)
+
+        // 2. TOUCH_STANDARD と PAD_GRID_STANDARD の格子一致検証
         val touchStd = com.onigiri.keycue.profile.SkyLayoutRegistry.getPreset(SkyLayout.TOUCH_STANDARD)
         val padGridStd = com.onigiri.keycue.profile.SkyLayoutRegistry.getPreset(SkyLayout.PAD_GRID_STANDARD)
         for (i in 0..14) {
@@ -771,7 +793,7 @@ class SettingsRepositoryLayoutTest {
             assertEquals("Key $i y must match", touchStd.keyCenters[i].y, padGridStd.keyCenters[i].y, 0.000001f)
         }
 
-        // TOUCH_EXPANDED と PAD_GRID_EXPANDED の完全一致検証
+        // 3. TOUCH_EXPANDED と PAD_GRID_EXPANDED の格子一致検証
         val touchExp = com.onigiri.keycue.profile.SkyLayoutRegistry.getPreset(SkyLayout.TOUCH_EXPANDED)
         val padGridExp = com.onigiri.keycue.profile.SkyLayoutRegistry.getPreset(SkyLayout.PAD_GRID_EXPANDED)
         for (i in 0..14) {
@@ -779,12 +801,26 @@ class SettingsRepositoryLayoutTest {
             assertEquals("Key $i y must match", touchExp.keyCenters[i].y, padGridExp.keyCenters[i].y, 0.000001f)
         }
 
-        // PAD_TRIGGER_FIRST の重要キー（修正キー）の固定検証
+        // 4. PAD_TRIGGER_FIRST の実測確定キー座標の回帰検証
         val padTrig = com.onigiri.keycue.profile.SkyLayoutRegistry.getPreset(SkyLayout.PAD_TRIGGER_FIRST)
-        assertEquals("Key 0 (LT) x", 0.411136f, padTrig.keyCenters[0].x, 0.0001f)
-        assertEquals("Key 4 (D-Pad ←) x", 0.159668f, padTrig.keyCenters[4].x, 0.0001f)
-        assertEquals("Key 6 (D-Pad ↑) y", 0.500000f, padTrig.keyCenters[6].y, 0.0001f)
-        assertEquals("Key 8 (D-Pad →) x", 0.359375f, padTrig.keyCenters[8].x, 0.0001f)
-        assertEquals("Key 14 (左Stick →) y", 0.181967f, padTrig.keyCenters[14].y, 0.0001f)
+        assertEquals("Key 0 (LT) x", 0.411136f, padTrig.keyCenters[0].x, 0.00001f)
+        assertEquals("Key 0 (LT) y", 0.819672f, padTrig.keyCenters[0].y, 0.00001f)
+        assertEquals("Key 1 (RT) x", 0.584440f, padTrig.keyCenters[1].x, 0.00001f)
+        assertEquals("Key 1 (RT) y", 0.819672f, padTrig.keyCenters[1].y, 0.00001f)
+        assertEquals("Key 4 (D-Pad ←) x", 0.159668f, padTrig.keyCenters[4].x, 0.00001f)
+        assertEquals("Key 6 (D-Pad ↑) y", 0.500000f, padTrig.keyCenters[6].y, 0.00001f)
+        assertEquals("Key 8 (D-Pad →) x", 0.359375f, padTrig.keyCenters[8].x, 0.00001f)
+        assertEquals("Key 14 (左Stick →) x", 0.410029f, padTrig.keyCenters[14].x, 0.00001f)
+        assertEquals("Key 14 (左Stick →) y", 0.181967f, padTrig.keyCenters[14].y, 0.00001f)
+
+        // 5. PAD_DPAD_FIRST の実測確定キー座標の回帰検証
+        val padDpad = com.onigiri.keycue.profile.SkyLayoutRegistry.getPreset(SkyLayout.PAD_DPAD_FIRST)
+        assertEquals("Key 1 (D-Pad ←) x", 0.297566f, padDpad.keyCenters[1].x, 0.00001f)
+        assertEquals("Key 3 (左Stick ↓) x", 0.297566f, padDpad.keyCenters[3].x, 0.00001f)
+        assertEquals("Key 6 (LT) x", 0.298673f, padDpad.keyCenters[6].x, 0.00001f)
+        assertEquals("Key 6 (LT) y", 0.096721f, padDpad.keyCenters[6].y, 0.00001f)
+        assertEquals("Key 8 (右Stick →) x", 0.697640f, padDpad.keyCenters[8].x, 0.00001f)
+        assertEquals("Key 14 (RT) x", 0.696534f, padDpad.keyCenters[14].x, 0.00001f)
+        assertEquals("Key 14 (RT) y", 0.097541f, padDpad.keyCenters[14].y, 0.00001f)
     }
 }

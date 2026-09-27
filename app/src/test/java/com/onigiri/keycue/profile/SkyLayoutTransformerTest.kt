@@ -1,6 +1,7 @@
 package com.onigiri.keycue.profile
 
 import com.onigiri.keycue.model.FitProfile
+import com.onigiri.keycue.model.NormalizedPoint
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -184,6 +185,74 @@ class SkyLayoutTransformerTest {
             assertEquals("TOUCH_STANDARD must remain identical to base", base.keyCenters[i].x, touchStdResult.keyCenters[i].x, 0.00001f)
             assertEquals("TOUCH_STANDARD must remain identical to base", base.keyCenters[i].y, touchStdResult.keyCenters[i].y, 0.00001f)
         }
+    }
+
+    /**
+     * 要件: PAD_GRID_STANDARD は TOUCH_STANDARD と同じ15キー配置なので、
+     * 4隅から再構成するのではなく、baseFitProfileの15キー座標を直接利用する。
+     *
+     * 基準プロファイルの中央キー（Key 7）等に個別の位置ずれを持たせた場合、
+     * デフォルト補正時は15キーすべてがその個別位置を含めて基準座標と完全一致することを検証する。
+     */
+    @Test
+    fun testPadGridStandard_directlyUtilizesBaseFitProfile_preservingCustomInnerOffsets() {
+        val standardBase = createStandardBaseProfile()
+
+        // 中央キー（Key 7: 中段真ん中）およびKey 6に意図的な位置ずれを与えたカスタム基準プロファイルを作成
+        val customKeys = standardBase.keyCenters.toMutableList()
+        val originalKey7 = customKeys[7]
+        val modifiedKey7 = NormalizedPoint(originalKey7.x + 0.025f, originalKey7.y - 0.015f)
+        customKeys[7] = modifiedKey7
+
+        val originalKey6 = customKeys[6]
+        val modifiedKey6 = NormalizedPoint(originalKey6.x - 0.010f, originalKey6.y + 0.020f)
+        customKeys[6] = modifiedKey6
+
+        val customBaseProfile = FitProfile(customKeys)
+
+        // 1. デフォルト補正時: 15キーすべてが基準座標と完全一致すること（中央キーのずれも保持）
+        val transformed = SkyLayoutTransformer.transform(
+            baseFitProfile = customBaseProfile,
+            targetLayout = SkyLayout.PAD_GRID_STANDARD,
+            adjustment = SkyLayoutAdjustment.DEFAULT
+        )
+
+        assertEquals("全15キーが生成されること", 15, transformed.keyCenters.size)
+        for (i in 0..14) {
+            assertEquals(
+                "Key $i のX座標はカスタム基準プロファイルと完全一致すること",
+                customBaseProfile.keyCenters[i].x,
+                transformed.keyCenters[i].x,
+                0.000001f
+            )
+            assertEquals(
+                "Key $i のY座標はカスタム基準プロファイルと完全一致すること",
+                customBaseProfile.keyCenters[i].y,
+                transformed.keyCenters[i].y,
+                0.000001f
+            )
+        }
+
+        // 特に中央キー（Key 7）とKey 6が、4隅からの再構成（線形等間隔位置）に戻されず、
+        // 個別の位置ずれを完全に維持していることを明示的に検証
+        assertEquals("ずらしたKey 7 のX座標が保持されていること", modifiedKey7.x, transformed.keyCenters[7].x, 0.000001f)
+        assertEquals("ずらしたKey 7 のY座標が保持されていること", modifiedKey7.y, transformed.keyCenters[7].y, 0.000001f)
+        assertEquals("ずらしたKey 6 のX座標が保持されていること", modifiedKey6.x, transformed.keyCenters[6].x, 0.000001f)
+        assertEquals("ずらしたKey 6 のY座標が保持されていること", modifiedKey6.y, transformed.keyCenters[6].y, 0.000001f)
+
+        // 2. PAD_GRID_STANDARD 固有の微調整適用時: カスタム配置を中心基準で微調整
+        val padAdjustment = SkyLayoutAdjustment(offsetX = 0.02f, offsetY = -0.01f, scaleX = 1.05f, scaleY = 1.05f)
+        val adjustedTransformed = SkyLayoutTransformer.transform(
+            baseFitProfile = customBaseProfile,
+            targetLayout = SkyLayout.PAD_GRID_STANDARD,
+            adjustment = padAdjustment
+        )
+        assertEquals("微調整後も15キーであること", 15, adjustedTransformed.keyCenters.size)
+
+        // 3. 基準プロファイル自体の不変性（baseFitProfileが一切変更・上書きされていないこと）
+        assertEquals("baseFitProfileのKey 7が変更されていないこと", modifiedKey7, customBaseProfile.keyCenters[7])
+        assertEquals("baseFitProfileのKey 6が変更されていないこと", modifiedKey6, customBaseProfile.keyCenters[6])
+        assertEquals("baseFitProfileのKey 0が変更されていないこと", standardBase.keyCenters[0], customBaseProfile.keyCenters[0])
     }
 }
 
