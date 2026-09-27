@@ -22,7 +22,8 @@ class ControlOverlayConfigMetronomeTest {
     fun `ControlOverlayConfig has correct default values`() {
         val config = ControlOverlayConfig()
         assertTrue("メトロノーム操作はデフォルトで表示(true)", config.showMetronomeControl)
-        assertFalse("Skyレイアウト切り替えはデフォルトで非表示(false)", config.showLayoutSelection)
+        assertTrue("Skyレイアウト切り替えはデフォルトで表示(true)", config.showLayoutSelection)
+        assertTrue("最近使った楽曲はデフォルトで表示(true)", config.showRecentSongs)
         assertTrue("ガイドクイック切替はデフォルトで表示(true)", config.showGuideQuickToggles)
     }
 
@@ -30,18 +31,20 @@ class ControlOverlayConfigMetronomeTest {
     fun `InMemorySettingsRepository holds correct defaults and updates control overlay config`() = runBlocking {
         val repo = InMemorySettingsRepository()
 
-        // 初期値
+        // 初期値（showRecentSongs, showLayoutSelection は true）
         val initial = repo.controlOverlayConfig.value
         assertTrue(initial.showMetronomeControl)
-        assertFalse(initial.showLayoutSelection)
+        assertTrue(initial.showLayoutSelection)
+        assertTrue(initial.showRecentSongs)
 
         // 更新
-        val updated = initial.copy(showMetronomeControl = false, showLayoutSelection = true)
+        val updated = initial.copy(showMetronomeControl = false, showLayoutSelection = false, showRecentSongs = false)
         repo.saveControlOverlayConfig(updated)
 
         assertEquals(updated, repo.controlOverlayConfig.value)
         assertFalse(repo.controlOverlayConfig.value.showMetronomeControl)
-        assertTrue(repo.controlOverlayConfig.value.showLayoutSelection)
+        assertFalse(repo.controlOverlayConfig.value.showLayoutSelection)
+        assertFalse(repo.controlOverlayConfig.value.showRecentSongs)
     }
 
     @Test
@@ -51,7 +54,8 @@ class ControlOverlayConfigMetronomeTest {
 
         val config = repo.controlOverlayConfig.value
         assertTrue("未保存時はshowMetronomeControlがtrue", config.showMetronomeControl)
-        assertFalse("未保存時はshowLayoutSelectionがfalse", config.showLayoutSelection)
+        assertTrue("未保存時はshowLayoutSelectionがtrue", config.showLayoutSelection)
+        assertTrue("未保存時はshowRecentSongsがtrue", config.showRecentSongs)
     }
 
     @Test
@@ -86,13 +90,31 @@ class ControlOverlayConfigMetronomeTest {
     }
 
     @Test
-    fun `SharedPreferences preserves saved showLayoutSelection true for existing users`() {
-        // 既存ユーザーが明示的にレイアウト切り替えをONにしていた場合は上書きせず維持
+    fun `SharedPreferences preserves saved false for existing users`() {
+        // 既存ユーザーが明示的にレイアウト切り替えやRecentをOFFにしていた場合は上書きせず維持
         val prefs = createFakePrefs(
-            mapOf("control_show_layout_selection" to true)
+            mapOf(
+                "control_show_layout_selection" to false,
+                "control_show_recent_songs" to false
+            )
+        )
+        val repo = SharedPreferencesSettingsRepository(prefs)
+        assertFalse("保存済みのshowLayoutSelection=falseが維持されること", repo.controlOverlayConfig.value.showLayoutSelection)
+        assertFalse("保存済みのshowRecentSongs=falseが維持されること", repo.controlOverlayConfig.value.showRecentSongs)
+    }
+
+    @Test
+    fun `SharedPreferences preserves saved true for existing users`() {
+        // 既存ユーザーが明示的にレイアウト切り替えやRecentをONにしていた場合も維持
+        val prefs = createFakePrefs(
+            mapOf(
+                "control_show_layout_selection" to true,
+                "control_show_recent_songs" to true
+            )
         )
         val repo = SharedPreferencesSettingsRepository(prefs)
         assertTrue("保存済みのshowLayoutSelection=trueが維持されること", repo.controlOverlayConfig.value.showLayoutSelection)
+        assertTrue("保存済みのshowRecentSongs=trueが維持されること", repo.controlOverlayConfig.value.showRecentSongs)
     }
 
     @Test

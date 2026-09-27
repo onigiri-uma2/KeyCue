@@ -280,29 +280,43 @@ fun SettingsAccordionSection(
     }
 
     // 6. ボタン位置設定（スクリーンショット自動検出）
-    val fittingSummary = if (uiState.fitConfigured) "設定済み" else "未設定"
+    val isFittingConfigured = uiState.fitConfigured
+    val fittingSummary = if (isFittingConfigured) {
+        "設定済み"
+    } else {
+        "スクリーンショットからボタン位置を設定してください"
+    }
     ExpandableCard(
         title = "ボタン位置設定",
         summary = fittingSummary,
         expanded = accordionUiState.isExpanded(com.onigiri.keycue.ui.home.SettingsAccordionKey.FITTING),
-        onExpandedChange = { onToggleAccordion(com.onigiri.keycue.ui.home.SettingsAccordionKey.FITTING, it) }
+        onExpandedChange = { onToggleAccordion(com.onigiri.keycue.ui.home.SettingsAccordionKey.FITTING, it) },
+        requiresAction = !isFittingConfigured,
+        actionBadgeText = "要設定"
     ) {
         FittingConfigContent(
-            isConfigured = uiState.fitConfigured,
+            isConfigured = isFittingConfigured,
             onFittingClick = onFittingClick
         )
     }
 
     // 7. オーバーレイ権限
-    val permissionSummary = if (uiState.overlayPermissionGranted) "許可済み" else "未許可"
+    val isPermissionGranted = uiState.overlayPermissionGranted
+    val permissionSummary = if (isPermissionGranted) {
+        "許可済み"
+    } else {
+        "他のアプリの上に表示する権限を許可してください"
+    }
     ExpandableCard(
         title = "オーバーレイ権限",
         summary = permissionSummary,
         expanded = accordionUiState.isExpanded(com.onigiri.keycue.ui.home.SettingsAccordionKey.OVERLAY_PERMISSION),
-        onExpandedChange = { onToggleAccordion(com.onigiri.keycue.ui.home.SettingsAccordionKey.OVERLAY_PERMISSION, it) }
+        onExpandedChange = { onToggleAccordion(com.onigiri.keycue.ui.home.SettingsAccordionKey.OVERLAY_PERMISSION, it) },
+        requiresAction = !isPermissionGranted,
+        actionBadgeText = "要許可"
     ) {
         OverlayPermissionStatusContent(
-            isGranted = uiState.overlayPermissionGranted,
+            isGranted = isPermissionGranted,
             onRequestPermissionClick = onRequestPermissionClick
         )
     }

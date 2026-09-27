@@ -16,8 +16,8 @@ package com.onigiri.keycue.model
  * @param showCountdownControl 開始前カウントダウン調整セクションの表示
  * @param showGuideQuickToggles ガイドクイック表示切替（Notes/Circle）セクションの表示
  * @param showMetronomeControl メトロノーム操作（ON/OFF切替）セクションの表示
- * @param showRecentSongs 最近使った楽曲（クイック切替）の表示
- * @param showLayoutSelection Skyボタンレイアウト切り替えボタンの表示（初期値: false）
+ * @param showRecentSongs 最近使った楽曲（クイック切替）の表示（初期値: true）
+ * @param showLayoutSelection Skyボタンレイアウト切り替えボタンの表示（初期値: true）
  */
 data class ControlOverlayConfig(
     val showSongInfo: Boolean = true,
@@ -33,6 +33,6 @@ data class ControlOverlayConfig(
     val showCountdownControl: Boolean = true,
     val showGuideQuickToggles: Boolean = true,
     val showMetronomeControl: Boolean = true,
-    val showRecentSongs: Boolean = false,
-    val showLayoutSelection: Boolean = false
+    val showRecentSongs: Boolean = true,
+    val showLayoutSelection: Boolean = true
 )

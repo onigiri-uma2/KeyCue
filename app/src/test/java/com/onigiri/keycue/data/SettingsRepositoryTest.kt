@@ -490,7 +490,8 @@ class SettingsRepositoryTest {
         assertEquals(true, config.showGuideToggle)
         assertEquals(true, config.showCountdownControl)
         assertEquals(true, config.showGuideQuickToggles)
-        assertEquals(false, config.showRecentSongs)
+        assertEquals(true, config.showRecentSongs)
+        assertEquals(true, config.showLayoutSelection)
     }
 
     @Test
@@ -534,7 +535,8 @@ class SettingsRepositoryTest {
         assertEquals(true, config.showGuideToggle)
         assertEquals(true, config.showCountdownControl)
         assertEquals(true, config.showGuideQuickToggles)
-        assertEquals(false, config.showRecentSongs)
+        assertEquals(true, config.showRecentSongs)
+        assertEquals(true, config.showLayoutSelection)
     }
 
     @Test

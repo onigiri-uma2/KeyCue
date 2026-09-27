@@ -321,8 +321,8 @@ class SharedPreferencesSettingsRepository internal constructor(
             } else {
                 prefs.getBoolean(KEY_CONTROL_SHOW_GUIDE_QUICK_TOGGLES, true)
             },
-            showRecentSongs = prefs.getBoolean(KEY_CONTROL_SHOW_RECENT_SONGS, false),
-            showLayoutSelection = prefs.getBoolean(KEY_CONTROL_SHOW_LAYOUT_SELECTION, false)
+            showRecentSongs = prefs.getBoolean(KEY_CONTROL_SHOW_RECENT_SONGS, true),
+            showLayoutSelection = prefs.getBoolean(KEY_CONTROL_SHOW_LAYOUT_SELECTION, true)
         )
     )
     override val controlOverlayConfig: StateFlow<ControlOverlayConfig> = _controlOverlayConfig.asStateFlow()
