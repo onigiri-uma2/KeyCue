@@ -49,12 +49,15 @@ data class HomeUiState(
     val controlOverlayConfig: com.onigiri.keycue.model.ControlOverlayConfig = com.onigiri.keycue.model.ControlOverlayConfig(),
     val metronomeConfig: com.onigiri.keycue.model.MetronomeConfig = com.onigiri.keycue.model.MetronomeConfig(),
     val selectedSkyLayout: com.onigiri.keycue.profile.SkyLayout = com.onigiri.keycue.profile.SkyLayout.TOUCH_STANDARD,
+    val layoutAdjustments: Map<com.onigiri.keycue.profile.SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment> = emptyMap(),
     val resolvedTimeline: com.onigiri.keycue.audio.BeatTimeline = com.onigiri.keycue.audio.MetronomeTimingResolver.resolveTimeline(
         config = com.onigiri.keycue.model.MetronomeConfig(),
         timingMetadata = null,
         durationMs = 0L
     )
 ) {
+    val currentLayoutAdjustment: com.onigiri.keycue.profile.SkyLayoutAdjustment
+        get() = layoutAdjustments[selectedSkyLayout] ?: com.onigiri.keycue.profile.SkyLayoutAdjustment.DEFAULT
     fun withoutSong(): HomeUiState = copy(
         songTitle = null,
         durationMs = 0L,

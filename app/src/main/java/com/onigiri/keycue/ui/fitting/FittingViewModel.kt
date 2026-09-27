@@ -57,6 +57,12 @@ class FittingViewModel(
                 _uiState.update { it.copy(savedProfile = saved) }
             }
         }
+        // 現在のレイアウト選択の購読
+        scope.launch {
+            settingsRepository.selectedSkyLayout.collect { layout ->
+                _uiState.update { it.copy(currentSkyLayout = layout) }
+            }
+        }
     }
 
     /**
@@ -337,6 +343,9 @@ class FittingViewModel(
         pendingDetectedGuideRadiusRatio = null
 
         scope.launch {
+            require(profile.keyCenters.size == 15) {
+                "基準FitProfileは15キーを含む必要があります。"
+            }
             settingsRepository.saveFitProfile(profile)
             if (detectedRadiusToApply != null) {
                 settingsRepository.saveGuideRadiusRatio(detectedRadiusToApply)

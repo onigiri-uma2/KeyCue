@@ -311,11 +311,21 @@ class OverlayService : Service() {
             ?: com.onigiri.keycue.model.FitProfile.createDefaultTestProfile()
         val layout = settingsRepository.selectedSkyLayout.value
         val adjustment = settingsRepository.getLayoutAdjustment(layout)
-        val activeProfile = com.onigiri.keycue.profile.SkyLayoutTransformer.transform(
+        val activeProfile = com.onigiri.keycue.profile.SkyLayoutTransformer.transformOrNull(
             baseFitProfile = baseProfile,
             targetLayout = layout,
             adjustment = adjustment
         )
+        if (activeProfile == null) {
+            android.util.Log.w("OverlayService", "レイアウト変換後のキー座標が表示可能範囲を超えています (layout=$layout)。基準位置合わせを再確認してください。")
+            serviceScope.launch(Dispatchers.Main) {
+                android.widget.Toast.makeText(
+                    this@OverlayService,
+                    "⚠️ ${layout.displayName}のボタンが画面外にはみ出ています。タッチ（標準）で位置合わせをやり直してください。",
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+            }
+        }
         windowController?.updateBaseFitProfile(baseProfile)
         windowController?.updateSkyLayout(layout)
         windowController?.updateFitProfile(activeProfile)
@@ -415,12 +425,12 @@ class OverlayService : Service() {
             }
         }
         serviceScope.launch {
-            settingsRepository.selectedSkyLayout.collect { layout ->
-                val showLabels = settingsRepository.getLayoutShowGuideLabels(layout)
-                val currentVisual = settingsRepository.visualConfig.value
-                if (currentVisual.showGuideLabels != showLabels) {
-                    settingsRepository.saveVisualConfig(currentVisual.copy(showGuideLabels = showLabels))
-                }
+            settingsRepository.selectedSkyLayout.collect {
+                recomputeActiveProfile()
+            }
+        }
+        serviceScope.launch {
+            settingsRepository.layoutAdjustments.collect {
                 recomputeActiveProfile()
             }
         }

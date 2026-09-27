@@ -258,6 +258,9 @@ fun HomeScreen(
         onMetronomeBeatOffsetChange = { viewModel.setMetronomeBeatOffsetMs(it) },
         onLayoutChange = { viewModel.setSelectedSkyLayout(it) },
         onShowLayoutSelectionChange = { viewModel.updateControlOverlayConfig { cfg -> cfg.copy(showLayoutSelection = it) } },
+        onAdjustmentInMemoryChange = { layout, adj -> viewModel.updateLayoutAdjustmentInMemory(layout, adj) },
+        onAdjustmentPersist = { layout, adj -> viewModel.persistLayoutAdjustment(layout, adj) },
+        onAdjustmentReset = { layout -> viewModel.resetLayoutAdjustment(layout) },
         onDismissError = { viewModel.clearError() }
     )
 }
@@ -322,6 +325,9 @@ fun HomeScreenContent(
     onMetronomeBeatOffsetChange: (Long) -> Unit = {},
     onLayoutChange: (com.onigiri.keycue.profile.SkyLayout) -> Unit = {},
     onShowLayoutSelectionChange: (Boolean) -> Unit = {},
+    onAdjustmentInMemoryChange: (com.onigiri.keycue.profile.SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment) -> Unit = { _, _ -> },
+    onAdjustmentPersist: (com.onigiri.keycue.profile.SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment) -> Unit = { _, _ -> },
+    onAdjustmentReset: (com.onigiri.keycue.profile.SkyLayout) -> Unit = {},
     onDismissError: () -> Unit = {}
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
@@ -429,9 +435,11 @@ fun HomeScreenContent(
                         onMetronomeSubdivisionChange = onMetronomeSubdivisionChange,
                         onMetronomeAccentEnabledChange = onMetronomeAccentEnabledChange,
                         onMetronomeVolumeChange = onMetronomeVolumeChange,
-                        onMetronomeBeatOffsetChange = onMetronomeBeatOffsetChange,
                         onLayoutChange = onLayoutChange,
                         onShowLayoutSelectionChange = onShowLayoutSelectionChange,
+                        onAdjustmentInMemoryChange = onAdjustmentInMemoryChange,
+                        onAdjustmentPersist = onAdjustmentPersist,
+                        onAdjustmentReset = onAdjustmentReset,
                         onDismissError = onDismissError
                     )
                 } else {
@@ -489,9 +497,11 @@ fun HomeScreenContent(
                         onMetronomeSubdivisionChange = onMetronomeSubdivisionChange,
                         onMetronomeAccentEnabledChange = onMetronomeAccentEnabledChange,
                         onMetronomeVolumeChange = onMetronomeVolumeChange,
-                        onMetronomeBeatOffsetChange = onMetronomeBeatOffsetChange,
                         onLayoutChange = onLayoutChange,
                         onShowLayoutSelectionChange = onShowLayoutSelectionChange,
+                        onAdjustmentInMemoryChange = onAdjustmentInMemoryChange,
+                        onAdjustmentPersist = onAdjustmentPersist,
+                        onAdjustmentReset = onAdjustmentReset,
                         onDismissError = onDismissError
                     )
                 }
@@ -561,6 +571,9 @@ private fun HomeScreenNarrowContent(
     onMetronomeBeatOffsetChange: (Long) -> Unit = {},
     onLayoutChange: (com.onigiri.keycue.profile.SkyLayout) -> Unit = {},
     onShowLayoutSelectionChange: (Boolean) -> Unit = {},
+    onAdjustmentInMemoryChange: (com.onigiri.keycue.profile.SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment) -> Unit = { _, _ -> },
+    onAdjustmentPersist: (com.onigiri.keycue.profile.SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment) -> Unit = { _, _ -> },
+    onAdjustmentReset: (com.onigiri.keycue.profile.SkyLayout) -> Unit = {},
     onDismissError: () -> Unit
 ) {
     Column(
@@ -637,7 +650,10 @@ private fun HomeScreenNarrowContent(
             onMetronomeVolumeChange = onMetronomeVolumeChange,
             onMetronomeBeatOffsetChange = onMetronomeBeatOffsetChange,
             onLayoutChange = onLayoutChange,
-            onShowLayoutSelectionChange = onShowLayoutSelectionChange
+            onShowLayoutSelectionChange = onShowLayoutSelectionChange,
+            onAdjustmentInMemoryChange = onAdjustmentInMemoryChange,
+            onAdjustmentPersist = onAdjustmentPersist,
+            onAdjustmentReset = onAdjustmentReset
         )
 
         // 演奏支援開始ボタン
@@ -734,6 +750,9 @@ private fun HomeScreenWideContent(
     onMetronomeBeatOffsetChange: (Long) -> Unit = {},
     onLayoutChange: (com.onigiri.keycue.profile.SkyLayout) -> Unit = {},
     onShowLayoutSelectionChange: (Boolean) -> Unit = {},
+    onAdjustmentInMemoryChange: (com.onigiri.keycue.profile.SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment) -> Unit = { _, _ -> },
+    onAdjustmentPersist: (com.onigiri.keycue.profile.SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment) -> Unit = { _, _ -> },
+    onAdjustmentReset: (com.onigiri.keycue.profile.SkyLayout) -> Unit = {},
     onDismissError: () -> Unit
 ) {
     Row(
@@ -865,7 +884,10 @@ private fun HomeScreenWideContent(
                 onMetronomeVolumeChange = onMetronomeVolumeChange,
                 onMetronomeBeatOffsetChange = onMetronomeBeatOffsetChange,
                 onLayoutChange = onLayoutChange,
-                onShowLayoutSelectionChange = onShowLayoutSelectionChange
+                onShowLayoutSelectionChange = onShowLayoutSelectionChange,
+                onAdjustmentInMemoryChange = onAdjustmentInMemoryChange,
+                onAdjustmentPersist = onAdjustmentPersist,
+                onAdjustmentReset = onAdjustmentReset
             )
         }
     }

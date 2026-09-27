@@ -91,7 +91,7 @@ class OverlayWindowController(
     private var guideOverlayView: GuideOverlayView? = null
     private var fittingOverlayView: FittingOverlayView? = null
 
-    private var currentFitProfile: FitProfile = FitProfile.createDefaultTestProfile()
+    private var currentFitProfile: FitProfile? = FitProfile.createDefaultTestProfile()
     private var baseFitProfile: FitProfile = FitProfile.createDefaultTestProfile()
     private var currentSkyLayout: com.onigiri.keycue.profile.SkyLayout = com.onigiri.keycue.profile.SkyLayout.TOUCH_STANDARD
     private var currentVisualConfig: com.onigiri.keycue.model.VisualConfig = com.onigiri.keycue.model.VisualConfig()
@@ -256,7 +256,11 @@ class OverlayWindowController(
         if (guideOverlayView != null) return
 
         val layoutParams = createGuideLayoutParams()
-        val view = GuideOverlayView(context, currentFitProfile, currentVisualConfig).apply {
+        val profileToUse = currentFitProfile ?: FitProfile.createDefaultTestProfile()
+        val view = GuideOverlayView(context, profileToUse, currentVisualConfig).apply {
+            if (currentFitProfile == null) {
+                visibility = View.GONE
+            }
             updateGuideLabels(currentGuideLabels)
         }
 
@@ -385,10 +389,16 @@ class OverlayWindowController(
 
     /**
      * FitProfile（アクティブな表示用プロファイル）を更新し、表示中のGuide Overlayに反映する。
+     * null の場合は無効プロファイル（画面外等）とみなし、誤描画を防ぐためガイドを非表示にする。
      */
-    fun updateFitProfile(profile: FitProfile) {
+    fun updateFitProfile(profile: FitProfile?) {
         currentFitProfile = profile
-        guideOverlayView?.updateFitProfile(profile)
+        if (profile != null) {
+            guideOverlayView?.visibility = View.VISIBLE
+            guideOverlayView?.updateFitProfile(profile)
+        } else {
+            guideOverlayView?.visibility = View.GONE
+        }
     }
 
     /**
@@ -421,9 +431,10 @@ class OverlayWindowController(
         if (currentSkyLayout != com.onigiri.keycue.profile.SkyLayout.TOUCH_STANDARD) {
             android.widget.Toast.makeText(
                 context,
-                "基準位置合わせです。Sky側の楽器UIを「タッチ（標準）」に切り替えて調整してください。",
+                "位置合わせは「タッチ（標準）」で行います。レイアウトをタッチ（標準）に変更してから実行してください。",
                 android.widget.Toast.LENGTH_LONG
             ).show()
+            return
         }
 
         // コントロールビューおよび通常ガイドビューを一時非表示
@@ -451,8 +462,10 @@ class OverlayWindowController(
             initialProfile = baseFitProfile,
             guideRadiusRatio = currentVisualConfig.guideRadiusRatio,
             onSave = { updatedProfile ->
-                baseFitProfile = updatedProfile
-                callbacks.onSaveFitProfile(updatedProfile)
+                if (currentSkyLayout == com.onigiri.keycue.profile.SkyLayout.TOUCH_STANDARD) {
+                    baseFitProfile = updatedProfile
+                    callbacks.onSaveFitProfile(updatedProfile)
+                }
                 finishManualFitting()
             },
             onCancel = {

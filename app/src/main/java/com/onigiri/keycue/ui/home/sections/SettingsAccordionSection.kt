@@ -10,13 +10,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -89,7 +94,10 @@ fun SettingsAccordionSection(
     onMetronomeVolumeChange: (Int) -> Unit = {},
     onMetronomeBeatOffsetChange: (Long) -> Unit = {},
     onLayoutChange: (SkyLayout) -> Unit = {},
-    onShowLayoutSelectionChange: (Boolean) -> Unit = {}
+    onShowLayoutSelectionChange: (Boolean) -> Unit = {},
+    onAdjustmentInMemoryChange: (SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment) -> Unit = { _, _ -> },
+    onAdjustmentPersist: (SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment) -> Unit = { _, _ -> },
+    onAdjustmentReset: (SkyLayout) -> Unit = {}
 ) {
     var midiMappingExpanded by rememberSaveable { mutableStateOf(false) }
     var timingExpanded by rememberSaveable { mutableStateOf(true) }
@@ -265,7 +273,12 @@ fun SettingsAccordionSection(
     ) {
         SkyLayoutConfigContent(
             selectedLayout = uiState.selectedSkyLayout,
-            onLayoutChange = onLayoutChange
+            fitConfigured = uiState.fitConfigured,
+            currentAdjustment = uiState.currentLayoutAdjustment,
+            onLayoutChange = onLayoutChange,
+            onAdjustmentInMemoryChange = onAdjustmentInMemoryChange,
+            onAdjustmentPersist = onAdjustmentPersist,
+            onAdjustmentReset = onAdjustmentReset
         )
     }
 
@@ -300,17 +313,52 @@ fun SettingsAccordionSection(
 }
 
 /**
- * Sky ボタンレイアウト（5種類）の選択UI。
+ * Sky ボタンレイアウト（5種類）の選択および微調整UI。
  */
 @Composable
 fun SkyLayoutConfigContent(
     selectedLayout: SkyLayout,
-    onLayoutChange: (SkyLayout) -> Unit
+    fitConfigured: Boolean,
+    currentAdjustment: com.onigiri.keycue.profile.SkyLayoutAdjustment,
+    onLayoutChange: (SkyLayout) -> Unit,
+    onAdjustmentInMemoryChange: (SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment) -> Unit = { _, _ -> },
+    onAdjustmentPersist: (SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment) -> Unit = { _, _ -> },
+    onAdjustmentReset: (SkyLayout) -> Unit = {}
 ) {
     Column(
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
+        // 未フィッティング時の警告バナー
+        if (!fitConfigured) {
+            Surface(
+                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(text = "⚠️", style = MaterialTheme.typography.titleMedium)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "基準位置合わせ（タッチ・標準）が未設定です",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                        Text(
+                            text = "正確な演奏ガイドを表示するには、まず「タッチ（標準）」でボタン位置設定を行ってください。",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                }
+            }
+        }
+
         Text(
             text = "タッチ（標準）で位置合わせした結果を基準に、各レイアウトへ自動配置します。",
             style = MaterialTheme.typography.bodySmall,
@@ -322,8 +370,8 @@ fun SkyLayoutConfigContent(
             val description = when (layout) {
                 SkyLayout.TOUCH_STANDARD -> "タッチ操作・標準（位置合わせ基準）"
                 SkyLayout.TOUCH_EXPANDED -> "タッチ操作・拡大"
-                SkyLayout.PAD_TRIGGER_FIRST -> "ゲームパッド・トリガー優先（上部にトリガー、下部に十字キー）"
-                SkyLayout.PAD_DPAD_FIRST -> "ゲームパッド・十字キー優先（上部に十字キー、下部にトリガー）"
+                SkyLayout.PAD_TRIGGER_FIRST -> "ゲームパッド・トリガー優先（下部にトリガー、上部に十字キー・各種ボタン）"
+                SkyLayout.PAD_DPAD_FIRST -> "ゲームパッド・十字キー優先（上部にトリガー、下部に十字キー）"
                 SkyLayout.PAD_GRID -> "ゲームパッド・グリッド（3行5列拡大配置）"
             }
 
@@ -368,6 +416,166 @@ fun SkyLayoutConfigContent(
                     }
                 }
             }
+        }
+
+        // 選択中レイアウトの位置・サイズ微調整セクション
+        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+        var localOffsetX by remember(selectedLayout, currentAdjustment.offsetX) { mutableFloatStateOf(currentAdjustment.offsetX) }
+        var localOffsetY by remember(selectedLayout, currentAdjustment.offsetY) { mutableFloatStateOf(currentAdjustment.offsetY) }
+        var localScaleX by remember(selectedLayout, currentAdjustment.scaleX) { mutableFloatStateOf(currentAdjustment.scaleX) }
+        var localScaleY by remember(selectedLayout, currentAdjustment.scaleY) { mutableFloatStateOf(currentAdjustment.scaleY) }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "${selectedLayout.displayName} の微調整",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold
+            )
+            TextButton(
+                onClick = {
+                    onAdjustmentReset(selectedLayout)
+                    localOffsetX = 0f
+                    localOffsetY = 0f
+                    localScaleX = 1f
+                    localScaleY = 1f
+                },
+                enabled = !currentAdjustment.isDefault
+            ) {
+                Text(text = "リセット")
+            }
+        }
+
+        // 水平オフセット (-0.20 〜 +0.20)
+        Column {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(text = "横位置オフセット", style = MaterialTheme.typography.bodySmall)
+                Text(
+                    text = String.format(Locale.US, "%+.1f%%", localOffsetX * 100),
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+            Slider(
+                value = localOffsetX,
+                onValueChange = { newVal ->
+                    localOffsetX = newVal
+                    onAdjustmentInMemoryChange(
+                        selectedLayout,
+                        currentAdjustment.copy(offsetX = newVal)
+                    )
+                },
+                onValueChangeFinished = {
+                    onAdjustmentPersist(
+                        selectedLayout,
+                        currentAdjustment.copy(offsetX = localOffsetX)
+                    )
+                },
+                valueRange = -0.20f..0.20f
+            )
+        }
+
+        // 垂直オフセット (-0.20 〜 +0.20)
+        Column {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(text = "縦位置オフセット", style = MaterialTheme.typography.bodySmall)
+                Text(
+                    text = String.format(Locale.US, "%+.1f%%", localOffsetY * 100),
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+            Slider(
+                value = localOffsetY,
+                onValueChange = { newVal ->
+                    localOffsetY = newVal
+                    onAdjustmentInMemoryChange(
+                        selectedLayout,
+                        currentAdjustment.copy(offsetY = newVal)
+                    )
+                },
+                onValueChangeFinished = {
+                    onAdjustmentPersist(
+                        selectedLayout,
+                        currentAdjustment.copy(offsetY = localOffsetY)
+                    )
+                },
+                valueRange = -0.20f..0.20f
+            )
+        }
+
+        // 水平スケール (0.80 〜 1.20)
+        Column {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(text = "横幅スケール", style = MaterialTheme.typography.bodySmall)
+                Text(
+                    text = String.format(Locale.US, "%.0f%%", localScaleX * 100),
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+            Slider(
+                value = localScaleX,
+                onValueChange = { newVal ->
+                    localScaleX = newVal
+                    onAdjustmentInMemoryChange(
+                        selectedLayout,
+                        currentAdjustment.copy(scaleX = newVal)
+                    )
+                },
+                onValueChangeFinished = {
+                    onAdjustmentPersist(
+                        selectedLayout,
+                        currentAdjustment.copy(scaleX = localScaleX)
+                    )
+                },
+                valueRange = 0.80f..1.20f
+            )
+        }
+
+        // 垂直スケール (0.80 〜 1.20)
+        Column {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(text = "縦幅スケール", style = MaterialTheme.typography.bodySmall)
+                Text(
+                    text = String.format(Locale.US, "%.0f%%", localScaleY * 100),
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+            Slider(
+                value = localScaleY,
+                onValueChange = { newVal ->
+                    localScaleY = newVal
+                    onAdjustmentInMemoryChange(
+                        selectedLayout,
+                        currentAdjustment.copy(scaleY = newVal)
+                    )
+                },
+                onValueChangeFinished = {
+                    onAdjustmentPersist(
+                        selectedLayout,
+                        currentAdjustment.copy(scaleY = localScaleY)
+                    )
+                },
+                valueRange = 0.80f..1.20f
+            )
         }
     }
 }

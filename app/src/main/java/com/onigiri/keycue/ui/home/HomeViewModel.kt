@@ -67,10 +67,11 @@ class HomeViewModel(
             combine(
                 settingsFlow,
                 settingsRepository.selectedSkyLayout,
+                settingsRepository.layoutAdjustments,
                 settingsRepository.metronomeConfig,
                 sessionRepository.currentSession
-            ) { settings, skyLayout, metroConfig, session ->
-                UnifiedRepositoryState(settings, skyLayout, metroConfig, session)
+            ) { settings, skyLayout, adjustments, metroConfig, session ->
+                UnifiedRepositoryState(settings, skyLayout, adjustments, metroConfig, session)
             }.collectLatest { state ->
                 val song = state.session?.song
                 // タイムライン構築をバックグラウンドスレッドで実行（collectLatestにより古い計算は自動キャンセル）
@@ -105,6 +106,7 @@ class HomeViewModel(
                         controlOverlayConfig = state.settings.controlOverlayConfig,
                         metronomeConfig = state.metronomeConfig,
                         selectedSkyLayout = state.selectedSkyLayout,
+                        layoutAdjustments = state.layoutAdjustments,
                         resolvedTimeline = timeline
                     )
                 }
@@ -123,6 +125,7 @@ class HomeViewModel(
     private data class UnifiedRepositoryState(
         val settings: SettingsState,
         val selectedSkyLayout: com.onigiri.keycue.profile.SkyLayout,
+        val layoutAdjustments: Map<com.onigiri.keycue.profile.SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment>,
         val metronomeConfig: com.onigiri.keycue.model.MetronomeConfig,
         val session: com.onigiri.keycue.model.PlaybackSession?
     )
@@ -446,7 +449,11 @@ class HomeViewModel(
         }
     }
 
-    fun setShowGuideLabels(show: Boolean) = updateVisualConfig { it.copy(showGuideLabels = show) }
+    fun setShowGuideLabels(show: Boolean) {
+        scope.launch {
+            settingsRepository.saveShowGuideLabels(show)
+        }
+    }
     fun setShowFallingNotes(show: Boolean) = updateVisualConfig { it.copy(showFallingNotes = show) }
     fun setShowApproachCircles(show: Boolean) = updateVisualConfig { it.copy(showApproachCircles = show) }
     fun setShowRepeatCountBadge(show: Boolean) = updateVisualConfig { it.copy(showRepeatCountBadge = show) }
@@ -487,16 +494,43 @@ class HomeViewModel(
 
     /**
      * Sky ボタンレイアウトを変更する。
-     * 同時にガイドラベル表示設定（PAD系は初期値OFF、TOUCH系は初期値ON）も更新する。
+     * ラベル設定の復元・反映は SettingsRepository 側でアトミックに実行される。
      */
     fun setSelectedSkyLayout(layout: com.onigiri.keycue.profile.SkyLayout) {
         scope.launch {
             settingsRepository.saveSelectedSkyLayout(layout)
-            val showLabels = settingsRepository.getLayoutShowGuideLabels(layout)
-            val currentVisual = settingsRepository.visualConfig.value
-            if (currentVisual.showGuideLabels != showLabels) {
-                settingsRepository.saveVisualConfig(currentVisual.copy(showGuideLabels = showLabels))
-            }
+        }
+    }
+
+    /**
+     * スライダー操作中のメモリ上のみの微調整更新（即時描画反映用）。
+     * 対象レイアウト [layout] を明示的に指定することで、切り替え競合による他レイアウトへの誤適用を防止する。
+     */
+    fun updateLayoutAdjustmentInMemory(
+        layout: com.onigiri.keycue.profile.SkyLayout,
+        adjustment: com.onigiri.keycue.profile.SkyLayoutAdjustment
+    ): Boolean {
+        return settingsRepository.updateLayoutAdjustmentInMemory(layout, adjustment)
+    }
+
+    /**
+     * スライダードラッグ終了時の微調整パラメータ永続化。
+     */
+    fun persistLayoutAdjustment(
+        layout: com.onigiri.keycue.profile.SkyLayout,
+        adjustment: com.onigiri.keycue.profile.SkyLayoutAdjustment
+    ) {
+        scope.launch {
+            settingsRepository.saveLayoutAdjustment(layout, adjustment)
+        }
+    }
+
+    /**
+     * レイアウトの微調整パラメータをデフォルト（初期値）にリセットする。
+     */
+    fun resetLayoutAdjustment(layout: com.onigiri.keycue.profile.SkyLayout) {
+        scope.launch {
+            settingsRepository.resetLayoutAdjustment(layout)
         }
     }
 

@@ -49,5 +49,6 @@ data class FittingUiState(
     val selectedCorner: Int = 0, // 0: Key0, 1: Key4, 2: Key10, 3: Key14
 
     val isSavedSuccess: Boolean = false,
-    val showDebugView: Boolean = false
+    val showDebugView: Boolean = false,
+    val currentSkyLayout: com.onigiri.keycue.profile.SkyLayout = com.onigiri.keycue.profile.SkyLayout.TOUCH_STANDARD
 )

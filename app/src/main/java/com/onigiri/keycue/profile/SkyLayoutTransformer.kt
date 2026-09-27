@@ -32,25 +32,26 @@ object SkyLayoutTransformer {
     private val deltaV = stdBottomLeft.y - stdTopLeft.y
 
     /**
-     * 基準 [baseFitProfile] から指定レイアウト [targetLayout] の描画用 [FitProfile] を生成する。
+     * 基準 [baseFitProfile] から指定レイアウト [targetLayout] に対する
+     * 各キーの幾何変換後の生座標 (x, y) のリスト（15要素）を算出する。
      *
-     * @param baseFitProfile TOUCH_STANDARD で位置合わせされた基準プロファイル
-     * @param targetLayout 変換先のレイアウト
-     * @param adjustment レイアウト固有の位置・スケール微調整値
-     * @return 変換後の描画用 [FitProfile] (activeFitProfile)
+     * 【設計原則・非Clamp】
+     * 0.0f〜1.0f への個別 clamp や自動全体縮小・マージン調整は一切行わず、
+     * バイリニア補間/外挿および微調整（scale, offset）の幾何計算結果を生の浮動小数点数として返します。
+     * これにより、微調整値の事前検証や画面外判定を正確に行うことができます。
      */
-    fun transform(
+    fun computeTransformedRawPoints(
         baseFitProfile: FitProfile,
         targetLayout: SkyLayout,
         adjustment: SkyLayoutAdjustment = SkyLayoutAdjustment.DEFAULT
-    ): FitProfile {
+    ): List<Pair<Float, Float>> {
         require(baseFitProfile.keyCenters.size == 15) {
             "baseFitProfile must contain exactly 15 key centers, but got ${baseFitProfile.keyCenters.size}"
         }
 
-        // TOUCH_STANDARD かつ 微調整なし の場合は、誤差ゼロで基準プロファイルをそのまま返す
+        // TOUCH_STANDARD かつ 微調整なし の場合は、基準プロファイルの生座標をそのまま返す
         if (targetLayout == SkyLayout.TOUCH_STANDARD && adjustment.isDefault) {
-            return baseFitProfile
+            return baseFitProfile.keyCenters.map { Pair(it.x, it.y) }
         }
 
         // 基準プロファイルの4隅アンカー
@@ -82,7 +83,7 @@ object SkyLayoutTransformer {
         val centerX = sumX / 15.0f
         val centerY = sumY / 15.0f
 
-        // 3. 微調整 (scale & offset) の適用と最終的な NormalizedPoint 生成
+        // 3. 微調整 (scale & offset) の適用
         val safeAdj = SkyLayoutAdjustment.safe(
             offsetX = adjustment.offsetX,
             offsetY = adjustment.offsetY,
@@ -90,13 +91,57 @@ object SkyLayoutTransformer {
             scaleY = adjustment.scaleY
         )
 
-        val finalCenters = rawPoints.map { pt ->
+        return rawPoints.map { pt ->
             val scaledX = centerX + (pt.first - centerX) * safeAdj.scaleX + safeAdj.offsetX
             val scaledY = centerY + (pt.second - centerY) * safeAdj.scaleY + safeAdj.offsetY
-            NormalizedPoint(
-                x = scaledX.coerceIn(0.0f, 1.0f),
-                y = scaledY.coerceIn(0.0f, 1.0f)
-            )
+            Pair(scaledX, scaledY)
+        }
+    }
+
+    /**
+     * 指定された微調整値 [adjustment] を適用した際、すべてのキーが表示可能範囲 (0.0〜1.0) に
+     * 収まっているかを検証する。
+     *
+     * 画面外に出るキーが存在する場合は false を返し、微調整の更新を採用せず直前の有効値を維持するために使用する。
+     * 例外は絶対にスローせず、安全に真偽値を返します。
+     */
+    fun isAdjustmentValid(
+        baseFitProfile: FitProfile,
+        targetLayout: SkyLayout,
+        adjustment: SkyLayoutAdjustment
+    ): Boolean {
+        if (baseFitProfile.keyCenters.size != 15) return false
+        val rawPoints = computeTransformedRawPoints(baseFitProfile, targetLayout, adjustment)
+        return rawPoints.all { (x, y) ->
+            x in 0.0f..1.0f && y in 0.0f..1.0f
+        }
+    }
+
+    /**
+     * 基準 [baseFitProfile] から指定レイアウト [targetLayout] の描画用 [FitProfile] を生成する。
+     *
+     * 【安全性の担保】
+     * 画面外のキーが存在する場合、個別clampや全体縮小を勝手に行わず、安全に null を返します。
+     * 無効な描画プロファイルを安全なものとして流通させないための設計です。
+     *
+     * @return 変換後の描画用 [FitProfile]。画面外キーが存在する場合は null
+     */
+    fun transformOrNull(
+        baseFitProfile: FitProfile,
+        targetLayout: SkyLayout,
+        adjustment: SkyLayoutAdjustment = SkyLayoutAdjustment.DEFAULT
+    ): FitProfile? {
+        if (baseFitProfile.keyCenters.size != 15) return null
+        val rawPoints = computeTransformedRawPoints(baseFitProfile, targetLayout, adjustment)
+        val allInBounds = rawPoints.all { (x, y) ->
+            x in 0.0f..1.0f && y in 0.0f..1.0f
+        }
+        if (!allInBounds) {
+            return null
+        }
+
+        val finalCenters = rawPoints.map { (x, y) ->
+            NormalizedPoint(x = x, y = y)
         }
 
         return FitProfile(
@@ -105,4 +150,163 @@ object SkyLayoutTransformer {
             landscape = baseFitProfile.landscape
         )
     }
+
+    /**
+     * 基準 [baseFitProfile] から指定レイアウト [targetLayout] の描画用 [FitProfile] を生成する。
+     *
+     * 画面外のキーが存在する場合は [IllegalStateException] をスローします。
+     * 呼び出し元が画面外を許容しない箇所で使用します。
+     */
+    fun transform(
+        baseFitProfile: FitProfile,
+        targetLayout: SkyLayout,
+        adjustment: SkyLayoutAdjustment = SkyLayoutAdjustment.DEFAULT
+    ): FitProfile {
+        return transformOrNull(baseFitProfile, targetLayout, adjustment)
+            ?: throw IllegalStateException("変換後の座標が表示可能範囲 (0.0〜1.0) を超えています。基準位置合わせを再確認してください。")
+    }
+
+    /**
+     * [GuideOverlayView] と完全に同一のロジックでキーガイド円の描画ピクセル半径を算出する。
+     *
+     * @param viewWidth 描画領域の幅 (px)
+     * @param viewHeight 描画領域の高さ (px)
+     * @param guideRadiusRatio [com.onigiri.keycue.model.VisualConfig.guideRadiusRatio]
+     * @param density 画面密度 (DisplayMetrics.density)
+     */
+    fun calculateKeyRadiusPx(
+        viewWidth: Int,
+        viewHeight: Int,
+        guideRadiusRatio: Float,
+        density: Float
+    ): Float {
+        val baseDimension = kotlin.math.min(viewWidth, viewHeight)
+        return (baseDimension * guideRadiusRatio).coerceAtLeast(8.0f * density)
+    }
+
+    /**
+     * 生座標リストに基づくレイアウト検証。
+     *
+     * - 画面外の逸脱 (x < 0, x > 1, y < 0, y > 1)
+     * - ガイド円同士の重なり警告 (中心間距離 < 2 * 半径)
+     * - 致命的な座標変換エラー・衝突 (中心間距離 < 半径)
+     */
+    fun validateRawPoints(
+        rawPoints: List<Pair<Float, Float>>,
+        viewWidth: Int,
+        viewHeight: Int,
+        guideRadiusRatio: Float,
+        density: Float = 1.0f
+    ): LayoutValidationResult {
+        val radiusPx = calculateKeyRadiusPx(viewWidth, viewHeight, guideRadiusRatio, density)
+        val pixelCenters = rawPoints.map { (x, y) ->
+            Pair(x * viewWidth, y * viewHeight)
+        }
+
+        val outOfBoundsIndices = mutableListOf<Int>()
+        for (i in rawPoints.indices) {
+            val (x, y) = rawPoints[i]
+            if (x < 0.0f || x > 1.0f || y < 0.0f || y > 1.0f) {
+                outOfBoundsIndices.add(i)
+            }
+        }
+
+        val overlapPairs = mutableListOf<Pair<Int, Int>>()
+        val collisionPairs = mutableListOf<Pair<Int, Int>>()
+        val doubleRadius = radiusPx * 2.0f
+
+        for (i in 0 until pixelCenters.size) {
+            val (x1, y1) = pixelCenters[i]
+            for (j in i + 1 until pixelCenters.size) {
+                val (x2, y2) = pixelCenters[j]
+                val dx = x1 - x2
+                val dy = y1 - y2
+                val dist = kotlin.math.sqrt(dx * dx + dy * dy)
+
+                if (dist < radiusPx) {
+                    collisionPairs.add(Pair(i, j))
+                } else if (dist < doubleRadius) {
+                    overlapPairs.add(Pair(i, j))
+                }
+            }
+        }
+
+        val warnings = mutableListOf<String>()
+        val errors = mutableListOf<String>()
+
+        if (outOfBoundsIndices.isNotEmpty()) {
+            errors.add("画面外に配置されているキーが存在します (キー番号: $outOfBoundsIndices)。基準位置合わせを再確認してください。")
+        }
+        if (collisionPairs.isNotEmpty()) {
+            errors.add("ガイド円の半径未満に接近している重篤なキー重複が存在します: $collisionPairs")
+        }
+        if (overlapPairs.isNotEmpty()) {
+            warnings.add("ガイド円同士が重なり合っているキーが存在します: $overlapPairs")
+        }
+
+        return LayoutValidationResult(
+            isValid = outOfBoundsIndices.isEmpty() && collisionPairs.isEmpty(),
+            hasOutOfBounds = outOfBoundsIndices.isNotEmpty(),
+            outOfBoundsKeys = outOfBoundsIndices,
+            overlapPairs = overlapPairs,
+            collisionPairs = collisionPairs,
+            warningMessages = warnings,
+            errorMessages = errors
+        )
+    }
+
+    /**
+     * 基準プロファイルと対象レイアウト・微調整値に基づく完全レイアウト検証。
+     */
+    fun validateLayout(
+        baseFitProfile: FitProfile,
+        targetLayout: SkyLayout,
+        adjustment: SkyLayoutAdjustment = SkyLayoutAdjustment.DEFAULT,
+        viewWidth: Int,
+        viewHeight: Int,
+        guideRadiusRatio: Float,
+        density: Float = 1.0f
+    ): LayoutValidationResult {
+        if (baseFitProfile.keyCenters.size != 15) {
+            return LayoutValidationResult(
+                isValid = false,
+                hasOutOfBounds = true,
+                outOfBoundsKeys = emptyList(),
+                overlapPairs = emptyList(),
+                collisionPairs = emptyList(),
+                warningMessages = emptyList(),
+                errorMessages = listOf("基準FitProfileのキー数が15個ではありません (${baseFitProfile.keyCenters.size}個)")
+            )
+        }
+        val rawPoints = computeTransformedRawPoints(baseFitProfile, targetLayout, adjustment)
+        return validateRawPoints(rawPoints, viewWidth, viewHeight, guideRadiusRatio, density)
+    }
+
+    /**
+     * レイアウト変換後の描画プロファイルを、実際の画面ピクセル座標およびガイド円半径に基づいて詳細に検証する。
+     */
+    fun validateLayoutProfile(
+        profile: FitProfile,
+        viewWidth: Int,
+        viewHeight: Int,
+        guideRadiusRatio: Float,
+        density: Float = 1.0f
+    ): LayoutValidationResult {
+        val rawPoints = profile.keyCenters.map { Pair(it.x, it.y) }
+        return validateRawPoints(rawPoints, viewWidth, viewHeight, guideRadiusRatio, density)
+    }
 }
+
+/**
+ * レイアウト検証結果。
+ */
+data class LayoutValidationResult(
+    val isValid: Boolean,
+    val hasOutOfBounds: Boolean,
+    val outOfBoundsKeys: List<Int>,
+    val overlapPairs: List<Pair<Int, Int>>,
+    val collisionPairs: List<Pair<Int, Int>>,
+    val warningMessages: List<String>,
+    val errorMessages: List<String>
+)
+
