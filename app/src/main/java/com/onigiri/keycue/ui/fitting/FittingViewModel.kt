@@ -220,7 +220,7 @@ class FittingViewModel(
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Detection error: ${e.message}", e)
-                withContext(Dispatchers.Main) {
+                withContext(mainDispatcher) {
                     _uiState.update { current ->
                         current.copy(
                             step = FittingStep.Failed("解析処理中にエラーが発生しました: ${e.localizedMessage}"),

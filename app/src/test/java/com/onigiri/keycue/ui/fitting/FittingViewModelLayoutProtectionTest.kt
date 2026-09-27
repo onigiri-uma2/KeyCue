@@ -221,7 +221,49 @@ class FittingViewModelLayoutProtectionTest {
 
         val viewModel = createViewModel(detector = switchingDetector)
 
-        // テスト用のダミーBitmapを設定
+        // テスト用のダミーBitmapを設定（生成失敗時は明示的にFAILさせ、スキップを防止）
+        val dummyBitmap = createFakeBitmap()
+        viewModel.setImageBitmapForTest(dummyBitmap)
+        viewModel.detectAndFit()
+
+        val state = viewModel.uiState.value
+        assertEquals("解析ステップがIdleにリセットされること", FittingStep.Idle, state.step)
+        assertNotNull("エラーメッセージが設定されること", state.errorMessage)
+        assertTrue("解析中に変更された旨が記載されていること", state.errorMessage!!.contains("画像解析中にレイアウトが変更されました"))
+        assertNull("プロファイルは未反映（null）であること", state.currentProfile)
+        assertNull("リポジトリにプロファイルは保存されていないこと", settingsRepo.fitProfile.value)
+        assertEquals("切り替え後のPAD_GRIDが維持されていること", SkyLayout.PAD_GRID, settingsRepo.selectedSkyLayout.value)
+    }
+
+    /**
+     * 追加テスト: 画像解析中に例外が発生した場合、注入された mainDispatcher を経由して
+     * JVM単体テスト環境でも安全に FittingStep.Failed とエラーメッセージが UI State に設定されることの検証。
+     */
+    @Test
+    fun testDetectAndFit_exceptionHandling_usesInjectedMainDispatcher() = runBlocking {
+        settingsRepo.saveSelectedSkyLayout(SkyLayout.TOUCH_STANDARD)
+
+        val failingDetector = object : KeyDetector {
+            override fun detect(image: android.graphics.Bitmap): List<DetectedPoint> {
+                throw RuntimeException("Simulated detector error in unit test")
+            }
+        }
+
+        val viewModel = createViewModel(detector = failingDetector)
+        val dummyBitmap = createFakeBitmap()
+        viewModel.setImageBitmapForTest(dummyBitmap)
+
+        // 例外が発生する解析を実行
+        viewModel.detectAndFit()
+
+        val state = viewModel.uiState.value
+        assertTrue("ステップがFailedになること", state.step is FittingStep.Failed)
+        val failedStep = state.step as FittingStep.Failed
+        assertTrue("エラーメッセージに例外内容が含まれること", failedStep.message.contains("Simulated detector error in unit test"))
+        assertEquals("errorMessage に例外メッセージが設定されること", "Simulated detector error in unit test", state.errorMessage)
+    }
+
+    private fun createFakeBitmap(): android.graphics.Bitmap {
         val dummyBitmap = try {
             val constructor = android.graphics.Bitmap::class.java.declaredConstructors.firstOrNull()
             constructor?.let {
@@ -232,18 +274,7 @@ class FittingViewModelLayoutProtectionTest {
         } catch (_: Exception) {
             null
         }
-
-        if (dummyBitmap != null) {
-            viewModel.setImageBitmapForTest(dummyBitmap)
-            viewModel.detectAndFit()
-
-            val state = viewModel.uiState.value
-            assertEquals("解析ステップがIdleにリセットされること", FittingStep.Idle, state.step)
-            assertNotNull("エラーメッセージが設定されること", state.errorMessage)
-            assertTrue("解析中に変更された旨が記載されていること", state.errorMessage!!.contains("画像解析中にレイアウトが変更されました"))
-            assertNull("プロファイルは未反映（null）であること", state.currentProfile)
-            assertNull("リポジトリにプロファイルは保存されていないこと", settingsRepo.fitProfile.value)
-            assertEquals("切り替え後のPAD_GRIDが維持されていること", SkyLayout.PAD_GRID, settingsRepo.selectedSkyLayout.value)
-        }
+        assertNotNull("テスト用ダミーBitmapの生成に成功すること（スキップせず必ず実行する）", dummyBitmap)
+        return dummyBitmap!!
     }
 }
