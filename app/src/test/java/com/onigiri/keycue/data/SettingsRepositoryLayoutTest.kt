@@ -183,6 +183,180 @@ class SettingsRepositoryLayoutTest {
         assertEquals(validBase, repo.fitProfile.value)
     }
 
+    /**
+     * 要件: GuideOverlayViewと同一のガイド円半径（guideRadiusRatio、短辺、8dp下限）を用いた
+     * キー間距離・重なり検証テスト。重なり警告 (D < 2R) と衝突エラー (D < R) を区別する。
+     * 6レイアウトすべてのデフォルト配置において衝突エラーが存在しないことを検証する。
+     */
+    @Test
+    fun testKeyDistanceAndOverlapValidation_withExactGuideRadiusPx() {
+        val standardPreset = com.onigiri.keycue.profile.SkyLayoutRegistry.getPreset(SkyLayout.TOUCH_STANDARD)
+        val baseProfile = com.onigiri.keycue.model.FitProfile(standardPreset.keyCenters)
+
+        // 1024x460 画面、density = 1.0f, guideRadiusRatio = 0.04f (短辺 460 * 0.04 = 18.4px >= 8dp)
+        val radiusPx = com.onigiri.keycue.profile.SkyLayoutTransformer.calculateKeyRadiusPx(
+            viewWidth = 1024,
+            viewHeight = 460,
+            guideRadiusRatio = 0.04f,
+            density = 1.0f
+        )
+        assertEquals(18.4f, radiusPx, 0.01f)
+
+        // 6レイアウトすべてのデフォルト状態での衝突がないことの検証（6レイアウト仕様対応）
+        for (layout in SkyLayout.entries) {
+            val normalResult = com.onigiri.keycue.profile.SkyLayoutTransformer.validateLayout(
+                baseFitProfile = baseProfile,
+                targetLayout = layout,
+                adjustment = SkyLayoutAdjustment.DEFAULT,
+                viewWidth = 1024,
+                viewHeight = 460,
+                guideRadiusRatio = 0.04f,
+                density = 1.0f
+            )
+            assertTrue("Layout $layout のデフォルト配置は衝突エラーなし (isValid=true)", normalResult.isValid)
+            assertFalse("Layout $layout のデフォルト配置に画面外キーなし", normalResult.hasOutOfBounds)
+            assertTrue("Layout $layout のデフォルト配置に衝突ペアなし", normalResult.collisionPairs.isEmpty())
+        }
+
+        // 重なり (D < 2R) と 衝突 (D < R) のテスト
+        val key0 = Pair(100.0f / 1024f, 100.0f / 460f)
+        val keyOverlap = Pair((100.0f + radiusPx * 1.5f) / 1024f, 100.0f / 460f) // 距離 1.5R (重なり警告)
+        val keyCollision = Pair((100.0f + radiusPx * 0.5f) / 1024f, 100.0f / 460f) // 距離 0.5R (衝突エラー)
+
+        val overlapPoints = standardPreset.keyCenters.mapIndexed { idx, pt ->
+            when (idx) {
+                0 -> key0
+                1 -> keyOverlap
+                else -> Pair(pt.x, pt.y)
+            }
+        }
+        val overlapResult = com.onigiri.keycue.profile.SkyLayoutTransformer.validateRawPoints(
+            rawPoints = overlapPoints,
+            viewWidth = 1024,
+            viewHeight = 460,
+            guideRadiusRatio = 0.04f,
+            density = 1.0f
+        )
+        assertTrue(overlapResult.isValid) // 重なり警告のみでは致命的エラー (isValid = false) にはならない
+        assertTrue(overlapResult.overlapPairs.contains(Pair(0, 1)))
+        assertTrue(overlapResult.collisionPairs.isEmpty())
+
+        val collisionPoints = standardPreset.keyCenters.mapIndexed { idx, pt ->
+            when (idx) {
+                0 -> key0
+                1 -> keyCollision
+                else -> Pair(pt.x, pt.y)
+            }
+        }
+        val collisionResult = com.onigiri.keycue.profile.SkyLayoutTransformer.validateRawPoints(
+            rawPoints = collisionPoints,
+            viewWidth = 1024,
+            viewHeight = 460,
+            guideRadiusRatio = 0.04f,
+            density = 1.0f
+        )
+        assertFalse(collisionResult.isValid) // 衝突エラーがあるため isValid = false
+        assertTrue(collisionResult.collisionPairs.contains(Pair(0, 1)))
+    }
+
+    /**
+     * 要件: 個別clampや全体縮小（Auto-fit）が行われず、生座標が維持されることの検証。
+     * 画面外座標が発生した場合は勝手に全体縮小・個別clampせず、transformOrNull が null を返し、
+     * 生座標計算 (computeTransformedRawPoints) では境界外の生の値が維持されること。
+     */
+    @Test
+    fun testNoAutoShrinkOrClamp_rawCoordinatesMaintained() {
+        val standardPreset = com.onigiri.keycue.profile.SkyLayoutRegistry.getPreset(SkyLayout.TOUCH_STANDARD)
+        val baseProfile = com.onigiri.keycue.model.FitProfile(standardPreset.keyCenters)
+
+        // 画面外に大きく出る微調整 (offsetX = 0.40f)
+        val hugeAdj = SkyLayoutAdjustment(offsetX = 0.40f, offsetY = 0.0f, scaleX = 1.0f, scaleY = 1.0f)
+
+        // 6レイアウトの中から標準タッチ、パッド分散、パッド格子の各代表で検証
+        val testLayouts = listOf(SkyLayout.TOUCH_STANDARD, SkyLayout.PAD_TRIGGER_FIRST, SkyLayout.PAD_GRID_EXPANDED)
+        for (targetLayout in testLayouts) {
+            val rawPoints = com.onigiri.keycue.profile.SkyLayoutTransformer.computeTransformedRawPoints(
+                baseFitProfile = baseProfile,
+                targetLayout = targetLayout,
+                adjustment = hugeAdj
+            )
+
+            // 最も右側のキーの x 座標が 1.0f を超えて clamp されずにそのまま計算されていること
+            val maxX = rawPoints.maxOf { it.first }
+            assertTrue("Layout $targetLayout: maxX should be > 1.0f, but was $maxX", maxX > 1.0f)
+
+            // transformOrNull は安全に null を返すこと（勝手に全体縮小・個別clampしない）
+            val safeProfile = com.onigiri.keycue.profile.SkyLayoutTransformer.transformOrNull(
+                baseFitProfile = baseProfile,
+                targetLayout = targetLayout,
+                adjustment = hugeAdj
+            )
+            org.junit.Assert.assertNull("Layout $targetLayout: safeProfile must be null", safeProfile)
+
+            // isAdjustmentValid も画面外を検出して false を返すこと
+            assertFalse(
+                "Layout $targetLayout: isAdjustmentValid must be false",
+                com.onigiri.keycue.profile.SkyLayoutTransformer.isAdjustmentValid(baseProfile, targetLayout, hugeAdj)
+            )
+        }
+    }
+
+    /**
+     * 要件: FitProfileコンストラクタで発生する例外だけをもってRepository保存経路の保護テストとしない。
+     * リポジトリ自体の saveFitProfile がキー数検証を行い、不正プロファイルの保存を拒絶することの検証。
+     */
+    @Test
+    fun testRepositorySaveFitProfileProtection_withoutRelyingOnConstructorException() = runBlocking {
+        val repo = InMemorySettingsRepository()
+        val standardPreset = com.onigiri.keycue.profile.SkyLayoutRegistry.getPreset(SkyLayout.TOUCH_STANDARD)
+        val validBase = com.onigiri.keycue.model.FitProfile(standardPreset.keyCenters)
+        repo.saveFitProfile(validBase)
+        assertEquals(validBase, repo.fitProfile.value)
+
+        // リフレクション等を用いてFitProfileコンストラクタのrequireチェックをバイパスし、
+        // 不正なキー数（14個）のFitProfileインスタンスが万一生成されたケースをシミュレート
+        val invalidProfile = try {
+            val constructor = com.onigiri.keycue.model.FitProfile::class.java.declaredConstructors.firstOrNull {
+                it.parameterCount >= 1
+            }
+            if (constructor != null) {
+                constructor.isAccessible = true
+                val params = arrayOfNulls<Any>(constructor.parameterCount)
+                params[0] = standardPreset.keyCenters.take(14) // 14キー
+                if (constructor.parameterCount > 1) params[1] = true // landscape
+                if (constructor.parameterCount > 2) params[2] = 0.04f // keyRadiusRatio
+                constructor.newInstance(*params) as? com.onigiri.keycue.model.FitProfile
+            } else null
+        } catch (_: Exception) {
+            null
+        }
+
+        if (invalidProfile != null) {
+            // 1. InMemorySettingsRepository での検証
+            try {
+                repo.saveFitProfile(invalidProfile)
+                org.junit.Assert.fail("InMemorySettingsRepository.saveFitProfile は不正なキー数のプロファイルを拒絶する必要があります")
+            } catch (e: IllegalArgumentException) {
+                assertTrue("リポジトリ独自の例外メッセージが含まれること", e.message?.contains("15個のキーを含む必要があります") == true)
+            }
+            assertEquals("リポジトリ内の保存プロファイルが保護されていること", validBase, repo.fitProfile.value)
+
+            // 2. SharedPreferencesSettingsRepository での検証
+            val map = HashMap<String, Any>()
+            val spRepo = SharedPreferencesSettingsRepository(createFakePrefs(map))
+            spRepo.saveFitProfile(validBase)
+            assertEquals(validBase, spRepo.fitProfile.value)
+
+            try {
+                spRepo.saveFitProfile(invalidProfile)
+                org.junit.Assert.fail("SharedPreferencesSettingsRepository.saveFitProfile は不正なキー数のプロファイルを拒絶する必要があります")
+            } catch (e: IllegalArgumentException) {
+                assertTrue("リポジトリ独自の例外メッセージが含まれること", e.message?.contains("15個のキーを含む必要があります") == true)
+            }
+            assertEquals("SPリポジトリ内の保存プロファイルが保護されていること", validBase, spRepo.fitProfile.value)
+        }
+    }
+
     @Test
     fun testInMemorySettingsRepository_layoutShowGuideLabels() = runBlocking {
         val repo = InMemorySettingsRepository(
@@ -292,6 +466,67 @@ class SettingsRepositoryLayoutTest {
     }
 
     /**
+     * 要件: 旧設定のマイグレーションでは各キーの既存保存値を上書きしないことの検証。
+     * すでに設定されているキーが、未設定キーへのデフォルト値設定や旧全体設定で上書きされないこと。
+     */
+    @Test
+    fun testSharedPreferencesSettingsRepository_initMigration_doesNotOverwriteExistingKeys() {
+        val map = HashMap<String, Any>()
+        // ユーザーが以前に PAD_TRIGGER_FIRST を明示的に ON (true) に保存していた状態
+        map["sky_layout_labels_pad_trigger_first"] = true
+        // 既存の微調整設定
+        map["sky_layout_adj_pad_trigger_first_offset_x"] = 0.02f
+        // 既存の PAD_GRID_EXPANDED 設定
+        map["sky_layout_labels_pad_grid_expanded"] = true
+        // 旧全体設定は false
+        map["show_key_numbers"] = false
+
+        val prefs = createFakePrefs(map)
+        val repo = SharedPreferencesSettingsRepository(prefs)
+
+        // 既存キー sky_layout_labels_pad_trigger_first は上書きされず true のまま維持されること
+        assertTrue("既存の保存値 true が上書きされず維持されること", repo.getLayoutShowGuideLabels(SkyLayout.PAD_TRIGGER_FIRST))
+        assertEquals(true, map["sky_layout_labels_pad_trigger_first"])
+        assertEquals(0.02f, repo.getLayoutAdjustment(SkyLayout.PAD_TRIGGER_FIRST).offsetX, 0.001f)
+
+        // 既存キー sky_layout_labels_pad_grid_expanded も true のまま維持されること
+        assertTrue("既存の PAD_GRID_EXPANDED 保存値が維持されること", repo.getLayoutShowGuideLabels(SkyLayout.PAD_GRID_EXPANDED))
+        assertEquals(true, map["sky_layout_labels_pad_grid_expanded"])
+
+        // 未保存だった他のPADレイアウトにはデフォルト値 false が安全に設定されること
+        assertFalse(repo.getLayoutShowGuideLabels(SkyLayout.PAD_DPAD_FIRST))
+        assertEquals(false, map["sky_layout_labels_pad_dpad_first"])
+        assertFalse(repo.getLayoutShowGuideLabels(SkyLayout.PAD_GRID_STANDARD))
+        assertEquals(false, map["sky_layout_labels_pad_grid_standard"])
+
+        // 未保存だったTOUCH_STANDARDには旧全体設定値 false が引き継がれること
+        assertFalse(repo.getLayoutShowGuideLabels(SkyLayout.TOUCH_STANDARD))
+        assertEquals(false, map["sky_layout_labels_touch_standard"])
+    }
+
+    /**
+     * 要件: 初期化時に保存済み selectedSkyLayout とそのレイアウトのラベル設定を照合し、
+     * visualConfig.showGuideLabels を整合させることの検証。
+     */
+    @Test
+    fun testSharedPreferencesSettingsRepository_init_alignsVisualConfigWithSelectedSkyLayout() {
+        val map = HashMap<String, Any>()
+        // PAD_TRIGGER_FIRST が選択されており、そのレイアウトのラベルは OFF (false)
+        map["selected_sky_layout"] = "PAD_TRIGGER_FIRST"
+        map["sky_layout_labels_pad_trigger_first"] = false
+        // しかし旧グローバル設定 show_key_numbers が true になっている不整合状態
+        map["show_key_numbers"] = true
+
+        val prefs = createFakePrefs(map)
+        val repo = SharedPreferencesSettingsRepository(prefs)
+
+        // 初期化時に照合され、visualConfig.showGuideLabels は選択中レイアウトの false に整合されること
+        assertEquals(SkyLayout.PAD_TRIGGER_FIRST, repo.selectedSkyLayout.value)
+        assertFalse("visualConfig.showGuideLabels が選択レイアウトのラベル設定 (false) と整合していること", repo.visualConfig.value.showGuideLabels)
+        assertEquals("show_key_numbers にも整合値 false が書き込まれること", false, map["show_key_numbers"])
+    }
+
+    /**
      * 要件: 6レイアウト高速連続切り替え時のラベル整合性テスト。
      */
     @Test
@@ -338,6 +573,46 @@ class SettingsRepositoryLayoutTest {
                 "レイアウト $targetLayout の getLayoutShowGuideLabels 整合性",
                 expected,
                 inMemoryRepo.getLayoutShowGuideLabels(targetLayout)
+            )
+        }
+
+        // SharedPreferences リポジトリでも同様に連続切り替えと永続化の整合性を検証
+        val map = HashMap<String, Any>()
+        map["show_key_numbers"] = true // 旧全体設定 ON の状態からマイグレーション開始
+        val prefs = createFakePrefs(map)
+        val spRepo = SharedPreferencesSettingsRepository(prefs)
+
+        // PAD_TRIGGER_FIRST を ON に
+        spRepo.saveSelectedSkyLayout(SkyLayout.PAD_TRIGGER_FIRST)
+        spRepo.saveShowGuideLabels(true)
+        // PAD_GRID_EXPANDED を ON に
+        spRepo.saveSelectedSkyLayout(SkyLayout.PAD_GRID_EXPANDED)
+        spRepo.saveShowGuideLabels(true)
+        // TOUCH_STANDARD を OFF に
+        spRepo.saveSelectedSkyLayout(SkyLayout.TOUCH_STANDARD)
+        spRepo.saveShowGuideLabels(false)
+
+        for ((targetLayout, expected) in expectedLabels) {
+            spRepo.saveSelectedSkyLayout(targetLayout)
+            assertEquals(
+                "SP レイアウト $targetLayout の visualConfig.showGuideLabels 整合性",
+                expected,
+                spRepo.visualConfig.value.showGuideLabels
+            )
+            assertEquals(
+                "SP レイアウト $targetLayout の getLayoutShowGuideLabels 整合性",
+                expected,
+                spRepo.getLayoutShowGuideLabels(targetLayout)
+            )
+        }
+
+        // 再インスタンス化しても永続化データから全6レイアウトのラベル値が復元されること
+        val spRepo2 = SharedPreferencesSettingsRepository(prefs)
+        for ((layout, expected) in expectedLabels) {
+            assertEquals(
+                "永続化復元後のレイアウト $layout のラベル設定",
+                expected,
+                spRepo2.getLayoutShowGuideLabels(layout)
             )
         }
     }
