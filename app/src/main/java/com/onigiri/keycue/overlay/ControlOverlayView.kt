@@ -177,6 +177,7 @@ class ControlOverlayView(
     private var currentIsBpmAuto: Boolean = true
     private var currentIsTimeSignatureAuto: Boolean = true
     private var isMetronomeDetailExpanded: Boolean = false
+    private var currentMetronomeInfo: String = ""
 
     private lateinit var metronomeToggleBtn: Button
     private lateinit var metronomeModeBtn: Button
@@ -1559,8 +1560,6 @@ class ControlOverlayView(
         currentShowApproachCircles = showApproachCircles
         updateGuideQuickToggleStyle()
     }
-
-    private var currentMetronomeInfo: String = ""
 
     private fun updateMetronomeView() {
         if (!::metronomeToggleBtn.isInitialized || !::metronomeModeBtn.isInitialized || !::metronomeInfoText.isInitialized) return
