@@ -61,12 +61,27 @@ object SkyLayoutTransformer {
         val pBR = baseFitProfile.keyCenters[14]  // Key 14: 右下
 
         val preset = SkyLayoutRegistry.getPreset(targetLayout)
+        val tuning = SkyLayoutRegistry.getTuning(targetLayout)
 
-        // 1. 各キーのバイリニア補間・外挿座標の算出
+        // プリセットの幾何中心（開発側既定補正 tuning のスケーリング基準）
+        var pSumX = 0.0f
+        var pSumY = 0.0f
+        for (pt in preset.keyCenters) {
+            pSumX += pt.x
+            pSumY += pt.y
+        }
+        val pCenterX = pSumX / 15.0f
+        val pCenterY = pSumY / 15.0f
+
+        // 1. 各キーの開発側既定補正適用およびバイリニア補間・外挿座標の算出
         val rawPoints = ArrayList<Pair<Float, Float>>(15)
         for (norm in preset.keyCenters) {
-            val s = (norm.x - stdTopLeft.x) / deltaU
-            val t = (norm.y - stdTopLeft.y) / deltaV
+            // 開発側既定キャリブレーション補正 (外側微拡大 scaleX, scaleY および offset) の適用
+            val tunedNormX = pCenterX + (norm.x - pCenterX) * tuning.scaleX + tuning.offsetX
+            val tunedNormY = pCenterY + (norm.y - pCenterY) * tuning.scaleY + tuning.offsetY
+
+            val s = (tunedNormX - stdTopLeft.x) / deltaU
+            val t = (tunedNormY - stdTopLeft.y) / deltaV
 
             val x = (1.0f - t) * ((1.0f - s) * pTL.x + s * pTR.x) + t * ((1.0f - s) * pBL.x + s * pBR.x)
             val y = (1.0f - s) * ((1.0f - t) * pTL.y + t * pBL.y) + s * ((1.0f - t) * pTR.y + t * pBR.y)

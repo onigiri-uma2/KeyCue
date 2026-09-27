@@ -31,7 +31,19 @@ enum class SkyLayout(
     /** 永続化およびAPI互換用の小文字識別ID */
     val id: String get() = name.lowercase()
 
+    /**
+     * 基準フィッティング（FitProfile）の保存・編集がサポートされているレイアウトかどうか。
+     * 現行仕様では [TOUCH_STANDARD] のみが全レイアウト共通の基準プロファイル（アンカー）となる。
+     */
+    val supportsFitProfileSaving: Boolean
+        get() = this == TOUCH_STANDARD
+
     companion object {
+        /**
+         * 指定されたレイアウトが基準フィッティング（FitProfile）の保存を許可されているかを判定する。
+         */
+        fun canSaveFitProfile(layout: SkyLayout?): Boolean = layout?.supportsFitProfileSaving == true
+
         /**
          * 内部ID文字列または旧識別名から安全に [SkyLayout] を解決する。
          */

@@ -198,7 +198,7 @@ class OverlayService : Service() {
             },
             onSaveFitProfile = { profile ->
                 serviceScope.launch {
-                    if (settingsRepository.selectedSkyLayout.value != com.onigiri.keycue.profile.SkyLayout.TOUCH_STANDARD) {
+                    if (!settingsRepository.selectedSkyLayout.value.supportsFitProfileSaving) {
                         return@launch
                     }
                     settingsRepository.saveFitProfile(profile)

@@ -157,4 +157,37 @@ class SkyLayoutTest {
             assertEquals("Center of keys should be around 0.5 for ${preset.layout}", 0.5, avgX, 0.05)
         }
     }
+
+    @Test
+    fun testSupportsFitProfileSaving_onlyTouchStandardIsTrue() {
+        for (layout in SkyLayout.entries) {
+            if (layout == SkyLayout.TOUCH_STANDARD) {
+                assertTrue("TOUCH_STANDARD は supportsFitProfileSaving が true であること", layout.supportsFitProfileSaving)
+                assertTrue("canSaveFitProfile(TOUCH_STANDARD) は true であること", SkyLayout.canSaveFitProfile(layout))
+            } else {
+                assertFalse("非標準レイアウト $layout は supportsFitProfileSaving が false であること", layout.supportsFitProfileSaving)
+                assertFalse("canSaveFitProfile($layout) は false であること", SkyLayout.canSaveFitProfile(layout))
+            }
+        }
+        assertFalse("null レイアウトに対する canSaveFitProfile は false であること", SkyLayout.canSaveFitProfile(null))
+    }
+
+    @Test
+    fun testSkyLayoutTuning_perLayoutConfig() {
+        for (layout in SkyLayout.entries) {
+            val tuning = SkyLayoutRegistry.getTuning(layout)
+            assertNotNull("Tuning must not be null for $layout", tuning)
+            assertTrue("ScaleX must be >= 1.0f for $layout", tuning.scaleX >= 1.0f)
+            assertTrue("ScaleY must be >= 1.0f for $layout", tuning.scaleY >= 1.0f)
+
+            if (layout == SkyLayout.TOUCH_STANDARD || layout == SkyLayout.PAD_GRID_STANDARD) {
+                assertEquals("TOUCH_STANDARD and PAD_GRID_STANDARD must have scaleX=1.0", 1.0f, tuning.scaleX, 0.0001f)
+                assertEquals("TOUCH_STANDARD and PAD_GRID_STANDARD must have scaleY=1.0", 1.0f, tuning.scaleY, 0.0001f)
+            } else {
+                assertEquals("Expanded and dispersed pad layouts have scaleX=1.003f (+0.3%)", 1.003f, tuning.scaleX, 0.0001f)
+                assertEquals("Expanded and dispersed pad layouts have scaleY=1.0f", 1.0f, tuning.scaleY, 0.0001f)
+            }
+        }
+    }
 }
+

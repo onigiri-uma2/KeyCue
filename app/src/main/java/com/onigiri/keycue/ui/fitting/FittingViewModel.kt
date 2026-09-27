@@ -181,7 +181,7 @@ class FittingViewModel(
                 )
 
                 withContext(mainDispatcher) {
-                    if (settingsRepository.selectedSkyLayout.value != com.onigiri.keycue.profile.SkyLayout.TOUCH_STANDARD) {
+                    if (!settingsRepository.selectedSkyLayout.value.supportsFitProfileSaving) {
                         _uiState.update { current ->
                             current.copy(
                                 step = FittingStep.Idle,
@@ -379,8 +379,8 @@ class FittingViewModel(
         pendingDetectedGuideRadiusRatio = null
 
         scope.launch {
-            // 保存直前に selectedSkyLayout.value を再確認（TOUCH_STANDARD 以外なら保存しない）
-            if (settingsRepository.selectedSkyLayout.value != com.onigiri.keycue.profile.SkyLayout.TOUCH_STANDARD) {
+            // 保存直前に selectedSkyLayout.value を再確認（基準プロファイル保存非対応レイアウトなら保存しない）
+            if (!settingsRepository.selectedSkyLayout.value.supportsFitProfileSaving) {
                 _uiState.update {
                     it.copy(
                         errorMessage = "位置合わせ結果の保存は「タッチ（標準）」でのみ実行できます。レイアウトをタッチ（標準）に変更してください。",

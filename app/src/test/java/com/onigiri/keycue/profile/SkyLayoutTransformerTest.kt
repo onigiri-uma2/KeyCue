@@ -155,4 +155,35 @@ class SkyLayoutTransformerTest {
             assertEquals("Shift in Y must match offsetY", uPt.y + offsetY, aPt.y, 0.001f)
         }
     }
+
+    @Test
+    fun testTuningAndAdjustmentSeparation() {
+        val base = createStandardBaseProfile()
+        val tuning = SkyLayoutRegistry.getTuning(SkyLayout.TOUCH_EXPANDED)
+        assertTrue("TOUCH_EXPANDED should have non-default tuning scaleX", tuning.scaleX > 1.0f)
+
+        // 1. DEFAULT微調整のとき: tuningは適用されるがuser adjustmentは0
+        val defaultAdjusted = SkyLayoutTransformer.transform(base, SkyLayout.TOUCH_EXPANDED, SkyLayoutAdjustment.DEFAULT)
+        assertEquals(15, defaultAdjusted.keyCenters.size)
+
+        // 2. ユーザー微調整が追加されたとき: tuningの上にuser adjustmentが合成される
+        val userAdj = SkyLayoutAdjustment(offsetX = 0.02f, offsetY = 0.01f, scaleX = 1.02f, scaleY = 1.01f)
+        val userAdjusted = SkyLayoutTransformer.transform(base, SkyLayout.TOUCH_EXPANDED, userAdj)
+        assertEquals(15, userAdjusted.keyCenters.size)
+
+        // ユーザー微調整により全体幅がさらに変化していること
+        val defWidth = defaultAdjusted.keyCenters.maxOf { it.x } - defaultAdjusted.keyCenters.minOf { it.x }
+        val userWidth = userAdjusted.keyCenters.maxOf { it.x } - userAdjusted.keyCenters.minOf { it.x }
+        assertTrue("User adjustment scaleX should further enlarge width", userWidth > defWidth)
+
+        // 3. TOUCH_STANDARD では tuning は常に DEFAULT であり、baseFitProfile と完全一致
+        val touchStdTuning = SkyLayoutRegistry.getTuning(SkyLayout.TOUCH_STANDARD)
+        assertTrue("TOUCH_STANDARD tuning must be default", touchStdTuning.isDefault)
+        val touchStdResult = SkyLayoutTransformer.transform(base, SkyLayout.TOUCH_STANDARD, SkyLayoutAdjustment.DEFAULT)
+        for (i in 0..14) {
+            assertEquals("TOUCH_STANDARD must remain identical to base", base.keyCenters[i].x, touchStdResult.keyCenters[i].x, 0.00001f)
+            assertEquals("TOUCH_STANDARD must remain identical to base", base.keyCenters[i].y, touchStdResult.keyCenters[i].y, 0.00001f)
+        }
+    }
 }
+

@@ -261,22 +261,26 @@ class SettingsRepositoryLayoutTest {
         val standardPreset = com.onigiri.keycue.profile.SkyLayoutRegistry.getPreset(SkyLayout.TOUCH_STANDARD)
         val validBase = com.onigiri.keycue.model.FitProfile(standardPreset.keyCenters)
 
-        // OverlayService.kt の onSaveFitProfile コールバック実装ロジックをシミュレート
+        // OverlayService.kt の onSaveFitProfile コールバック実装と同一の判定ロジックを使用
         val onSaveFitProfile: suspend (com.onigiri.keycue.model.FitProfile) -> Unit = { profile ->
-            if (repo.selectedSkyLayout.value == SkyLayout.TOUCH_STANDARD) {
+            if (repo.selectedSkyLayout.value.supportsFitProfileSaving) {
                 repo.saveFitProfile(profile)
             }
         }
 
-        // 非標準レイアウト（全5種）では保存がブロックされること
+        // 非標準レイアウト（全5種）では supportsFitProfileSaving が false であり保存がブロックされること
         val nonStandardLayouts = SkyLayout.entries.filter { it != SkyLayout.TOUCH_STANDARD }
         for (layout in nonStandardLayouts) {
+            assertFalse("非標準レイアウト $layout は supportsFitProfileSaving が false であること", layout.supportsFitProfileSaving)
+            assertFalse("canSaveFitProfile($layout) も false であること", SkyLayout.canSaveFitProfile(layout))
             repo.saveSelectedSkyLayout(layout)
             onSaveFitProfile(validBase)
             assertNull("非標準レイアウト $layout ではFitProfileが保存されないこと", repo.fitProfile.value)
         }
 
-        // TOUCH_STANDARD のみ保存が許可されること
+        // TOUCH_STANDARD のみ supportsFitProfileSaving が true であり保存が許可されること
+        assertTrue("TOUCH_STANDARD は supportsFitProfileSaving が true であること", SkyLayout.TOUCH_STANDARD.supportsFitProfileSaving)
+        assertTrue("canSaveFitProfile(TOUCH_STANDARD) も true であること", SkyLayout.canSaveFitProfile(SkyLayout.TOUCH_STANDARD))
         repo.saveSelectedSkyLayout(SkyLayout.TOUCH_STANDARD)
         onSaveFitProfile(validBase)
         assertEquals("TOUCH_STANDARD ではFitProfileが正常に保存されること", validBase, repo.fitProfile.value)
@@ -741,5 +745,46 @@ class SettingsRepositoryLayoutTest {
                 else -> proxy
             }
         } as android.content.SharedPreferences.Editor
+    }
+
+    /**
+     * 要件: 6レイアウトの実測座標に基づく回帰テスト。
+     * 各レイアウトの15キー中心座標が意図せず変更されていないことを固定値で検証する。
+     */
+    @Test
+    fun testExactPresetCoordinates_regressionCheck() {
+        for (layout in SkyLayout.entries) {
+            val preset = com.onigiri.keycue.profile.SkyLayoutRegistry.getPreset(layout)
+            assertEquals("全レイアウトで15キーが定義されていること", 15, preset.keyCenters.size)
+            for (i in 0..14) {
+                val pt = preset.keyCenters[i]
+                assertTrue("Key $i x in valid range", pt.x in 0.1f..0.9f)
+                assertTrue("Key $i y in valid range", pt.y in 0.05f..0.95f)
+            }
+        }
+
+        // TOUCH_STANDARD と PAD_GRID_STANDARD の完全一致検証
+        val touchStd = com.onigiri.keycue.profile.SkyLayoutRegistry.getPreset(SkyLayout.TOUCH_STANDARD)
+        val padGridStd = com.onigiri.keycue.profile.SkyLayoutRegistry.getPreset(SkyLayout.PAD_GRID_STANDARD)
+        for (i in 0..14) {
+            assertEquals("Key $i x must match", touchStd.keyCenters[i].x, padGridStd.keyCenters[i].x, 0.000001f)
+            assertEquals("Key $i y must match", touchStd.keyCenters[i].y, padGridStd.keyCenters[i].y, 0.000001f)
+        }
+
+        // TOUCH_EXPANDED と PAD_GRID_EXPANDED の完全一致検証
+        val touchExp = com.onigiri.keycue.profile.SkyLayoutRegistry.getPreset(SkyLayout.TOUCH_EXPANDED)
+        val padGridExp = com.onigiri.keycue.profile.SkyLayoutRegistry.getPreset(SkyLayout.PAD_GRID_EXPANDED)
+        for (i in 0..14) {
+            assertEquals("Key $i x must match", touchExp.keyCenters[i].x, padGridExp.keyCenters[i].x, 0.000001f)
+            assertEquals("Key $i y must match", touchExp.keyCenters[i].y, padGridExp.keyCenters[i].y, 0.000001f)
+        }
+
+        // PAD_TRIGGER_FIRST の重要キー（修正キー）の固定検証
+        val padTrig = com.onigiri.keycue.profile.SkyLayoutRegistry.getPreset(SkyLayout.PAD_TRIGGER_FIRST)
+        assertEquals("Key 0 (LT) x", 0.411136f, padTrig.keyCenters[0].x, 0.0001f)
+        assertEquals("Key 4 (D-Pad ←) x", 0.159668f, padTrig.keyCenters[4].x, 0.0001f)
+        assertEquals("Key 6 (D-Pad ↑) y", 0.500000f, padTrig.keyCenters[6].y, 0.0001f)
+        assertEquals("Key 8 (D-Pad →) x", 0.359375f, padTrig.keyCenters[8].x, 0.0001f)
+        assertEquals("Key 14 (左Stick →) y", 0.181967f, padTrig.keyCenters[14].y, 0.0001f)
     }
 }
