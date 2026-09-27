@@ -325,8 +325,8 @@ fun HomeScreenContent(
     onMetronomeBeatOffsetChange: (Long) -> Unit = {},
     onLayoutChange: (com.onigiri.keycue.profile.SkyLayout) -> Unit = {},
     onShowLayoutSelectionChange: (Boolean) -> Unit = {},
-    onAdjustmentInMemoryChange: (com.onigiri.keycue.profile.SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment) -> Unit = { _, _ -> },
-    onAdjustmentPersist: (com.onigiri.keycue.profile.SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment) -> Unit = { _, _ -> },
+    onAdjustmentInMemoryChange: (com.onigiri.keycue.profile.SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment) -> Boolean = { _, _ -> true },
+    onAdjustmentPersist: (com.onigiri.keycue.profile.SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment) -> Boolean = { _, _ -> true },
     onAdjustmentReset: (com.onigiri.keycue.profile.SkyLayout) -> Unit = {},
     onDismissError: () -> Unit = {}
 ) {
@@ -571,8 +571,8 @@ private fun HomeScreenNarrowContent(
     onMetronomeBeatOffsetChange: (Long) -> Unit = {},
     onLayoutChange: (com.onigiri.keycue.profile.SkyLayout) -> Unit = {},
     onShowLayoutSelectionChange: (Boolean) -> Unit = {},
-    onAdjustmentInMemoryChange: (com.onigiri.keycue.profile.SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment) -> Unit = { _, _ -> },
-    onAdjustmentPersist: (com.onigiri.keycue.profile.SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment) -> Unit = { _, _ -> },
+    onAdjustmentInMemoryChange: (com.onigiri.keycue.profile.SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment) -> Boolean = { _, _ -> true },
+    onAdjustmentPersist: (com.onigiri.keycue.profile.SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment) -> Boolean = { _, _ -> true },
     onAdjustmentReset: (com.onigiri.keycue.profile.SkyLayout) -> Unit = {},
     onDismissError: () -> Unit
 ) {
@@ -750,8 +750,8 @@ private fun HomeScreenWideContent(
     onMetronomeBeatOffsetChange: (Long) -> Unit = {},
     onLayoutChange: (com.onigiri.keycue.profile.SkyLayout) -> Unit = {},
     onShowLayoutSelectionChange: (Boolean) -> Unit = {},
-    onAdjustmentInMemoryChange: (com.onigiri.keycue.profile.SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment) -> Unit = { _, _ -> },
-    onAdjustmentPersist: (com.onigiri.keycue.profile.SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment) -> Unit = { _, _ -> },
+    onAdjustmentInMemoryChange: (com.onigiri.keycue.profile.SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment) -> Boolean = { _, _ -> true },
+    onAdjustmentPersist: (com.onigiri.keycue.profile.SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment) -> Boolean = { _, _ -> true },
     onAdjustmentReset: (com.onigiri.keycue.profile.SkyLayout) -> Unit = {},
     onDismissError: () -> Unit
 ) {

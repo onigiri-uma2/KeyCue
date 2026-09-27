@@ -492,17 +492,30 @@ class SharedPreferencesSettingsRepository internal constructor(
     }
 
     init {
-        // 既存タッチ系設定の保護と初期マイグレーション
-        val standardKey = "$PREFIX_LAYOUT_SHOW_LABELS${com.onigiri.keycue.profile.SkyLayout.TOUCH_STANDARD.name.lowercase()}"
-        if (!prefs.contains(standardKey)) {
-            val legacyValue = prefs.getBoolean(KEY_SHOW_GUIDE_LABELS, com.onigiri.keycue.model.VisualConfig.DEFAULT_SHOW_GUIDE_LABELS)
-            prefs.edit()
-                .putBoolean(standardKey, legacyValue)
-                .putBoolean("$PREFIX_LAYOUT_SHOW_LABELS${com.onigiri.keycue.profile.SkyLayout.TOUCH_EXPANDED.name.lowercase()}", legacyValue)
-                .putBoolean("$PREFIX_LAYOUT_SHOW_LABELS${com.onigiri.keycue.profile.SkyLayout.PAD_TRIGGER_FIRST.name.lowercase()}", false)
-                .putBoolean("$PREFIX_LAYOUT_SHOW_LABELS${com.onigiri.keycue.profile.SkyLayout.PAD_DPAD_FIRST.name.lowercase()}", false)
-                .putBoolean("$PREFIX_LAYOUT_SHOW_LABELS${com.onigiri.keycue.profile.SkyLayout.PAD_GRID.name.lowercase()}", false)
-                .apply()
+        // 既存設定の保護とレイアウト別ラベルキーの個別マイグレーション
+        // 各キーごとに prefs.contains を確認し、未保存のキーのみデフォルト値を設定（既存値は絶対に上書きしない）
+        val legacyValue = prefs.getBoolean(KEY_SHOW_GUIDE_LABELS, com.onigiri.keycue.model.VisualConfig.DEFAULT_SHOW_GUIDE_LABELS)
+        val editor = prefs.edit()
+        var hasChanges = false
+
+        for (layout in com.onigiri.keycue.profile.SkyLayout.entries) {
+            val key = "$PREFIX_LAYOUT_SHOW_LABELS${layout.name.lowercase()}"
+            if (!prefs.contains(key)) {
+                val defaultValue = if (layout.isGamepad) false else legacyValue
+                editor.putBoolean(key, defaultValue)
+                hasChanges = true
+            }
+        }
+        if (hasChanges) {
+            editor.apply()
+        }
+
+        // 初期化時の整合: 保存済み selectedSkyLayout とそのレイアウトのラベル設定を照合し、visualConfig.showGuideLabels を整合させる
+        val currentLayout = _selectedSkyLayout.value
+        val targetShow = getLayoutShowGuideLabels(currentLayout)
+        if (_visualConfig.value.showGuideLabels != targetShow || prefs.getBoolean(KEY_SHOW_GUIDE_LABELS, !targetShow) != targetShow) {
+            prefs.edit().putBoolean(KEY_SHOW_GUIDE_LABELS, targetShow).apply()
+            _visualConfig.value = _visualConfig.value.copy(showGuideLabels = targetShow)
         }
     }
 
@@ -923,6 +936,13 @@ class InMemorySettingsRepository(
         put(com.onigiri.keycue.profile.SkyLayout.PAD_TRIGGER_FIRST, false)
         put(com.onigiri.keycue.profile.SkyLayout.PAD_DPAD_FIRST, false)
         put(com.onigiri.keycue.profile.SkyLayout.PAD_GRID, false)
+    }
+
+    init {
+        val targetShowLabels = getLayoutShowGuideLabels(_selectedSkyLayout.value)
+        if (_visualConfig.value.showGuideLabels != targetShowLabels) {
+            _visualConfig.value = _visualConfig.value.copy(showGuideLabels = targetShowLabels)
+        }
     }
 
     override suspend fun saveSelectedSkyLayout(layout: com.onigiri.keycue.profile.SkyLayout) {

@@ -95,8 +95,8 @@ fun SettingsAccordionSection(
     onMetronomeBeatOffsetChange: (Long) -> Unit = {},
     onLayoutChange: (SkyLayout) -> Unit = {},
     onShowLayoutSelectionChange: (Boolean) -> Unit = {},
-    onAdjustmentInMemoryChange: (SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment) -> Unit = { _, _ -> },
-    onAdjustmentPersist: (SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment) -> Unit = { _, _ -> },
+    onAdjustmentInMemoryChange: (SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment) -> Boolean = { _, _ -> true },
+    onAdjustmentPersist: (SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment) -> Boolean = { _, _ -> true },
     onAdjustmentReset: (SkyLayout) -> Unit = {}
 ) {
     var midiMappingExpanded by rememberSaveable { mutableStateOf(false) }
@@ -321,8 +321,8 @@ fun SkyLayoutConfigContent(
     fitConfigured: Boolean,
     currentAdjustment: com.onigiri.keycue.profile.SkyLayoutAdjustment,
     onLayoutChange: (SkyLayout) -> Unit,
-    onAdjustmentInMemoryChange: (SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment) -> Unit = { _, _ -> },
-    onAdjustmentPersist: (SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment) -> Unit = { _, _ -> },
+    onAdjustmentInMemoryChange: (SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment) -> Boolean = { _, _ -> true },
+    onAdjustmentPersist: (SkyLayout, com.onigiri.keycue.profile.SkyLayoutAdjustment) -> Boolean = { _, _ -> true },
     onAdjustmentReset: (SkyLayout) -> Unit = {}
 ) {
     Column(
@@ -425,6 +425,7 @@ fun SkyLayoutConfigContent(
         var localOffsetY by remember(selectedLayout, currentAdjustment.offsetY) { mutableFloatStateOf(currentAdjustment.offsetY) }
         var localScaleX by remember(selectedLayout, currentAdjustment.scaleX) { mutableFloatStateOf(currentAdjustment.scaleX) }
         var localScaleY by remember(selectedLayout, currentAdjustment.scaleY) { mutableFloatStateOf(currentAdjustment.scaleY) }
+        var adjustmentWarningMessage by remember(selectedLayout) { mutableStateOf<String?>(null) }
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -443,10 +444,26 @@ fun SkyLayoutConfigContent(
                     localOffsetY = 0f
                     localScaleX = 1f
                     localScaleY = 1f
+                    adjustmentWarningMessage = null
                 },
                 enabled = !currentAdjustment.isDefault
             ) {
                 Text(text = "リセット")
+            }
+        }
+
+        if (adjustmentWarningMessage != null) {
+            Surface(
+                color = MaterialTheme.colorScheme.errorContainer,
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = adjustmentWarningMessage!!,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier.padding(8.dp)
+                )
             }
         }
 
@@ -466,17 +483,21 @@ fun SkyLayoutConfigContent(
             Slider(
                 value = localOffsetX,
                 onValueChange = { newVal ->
-                    localOffsetX = newVal
-                    onAdjustmentInMemoryChange(
-                        selectedLayout,
-                        currentAdjustment.copy(offsetX = newVal)
-                    )
+                    val candidate = currentAdjustment.copy(offsetX = newVal)
+                    if (onAdjustmentInMemoryChange(selectedLayout, candidate)) {
+                        localOffsetX = newVal
+                        adjustmentWarningMessage = null
+                    } else {
+                        localOffsetX = currentAdjustment.offsetX
+                        adjustmentWarningMessage = "⚠️ 画面外に出るため横位置オフセットは適用されず、直前の有効値が維持されました"
+                    }
                 },
                 onValueChangeFinished = {
-                    onAdjustmentPersist(
-                        selectedLayout,
-                        currentAdjustment.copy(offsetX = localOffsetX)
-                    )
+                    val candidate = currentAdjustment.copy(offsetX = localOffsetX)
+                    if (!onAdjustmentPersist(selectedLayout, candidate)) {
+                        localOffsetX = currentAdjustment.offsetX
+                        adjustmentWarningMessage = "⚠️ 画面外に出るため微調整の保存に失敗しました"
+                    }
                 },
                 valueRange = -0.20f..0.20f
             )
@@ -498,17 +519,21 @@ fun SkyLayoutConfigContent(
             Slider(
                 value = localOffsetY,
                 onValueChange = { newVal ->
-                    localOffsetY = newVal
-                    onAdjustmentInMemoryChange(
-                        selectedLayout,
-                        currentAdjustment.copy(offsetY = newVal)
-                    )
+                    val candidate = currentAdjustment.copy(offsetY = newVal)
+                    if (onAdjustmentInMemoryChange(selectedLayout, candidate)) {
+                        localOffsetY = newVal
+                        adjustmentWarningMessage = null
+                    } else {
+                        localOffsetY = currentAdjustment.offsetY
+                        adjustmentWarningMessage = "⚠️ 画面外に出るため縦位置オフセットは適用されず、直前の有効値が維持されました"
+                    }
                 },
                 onValueChangeFinished = {
-                    onAdjustmentPersist(
-                        selectedLayout,
-                        currentAdjustment.copy(offsetY = localOffsetY)
-                    )
+                    val candidate = currentAdjustment.copy(offsetY = localOffsetY)
+                    if (!onAdjustmentPersist(selectedLayout, candidate)) {
+                        localOffsetY = currentAdjustment.offsetY
+                        adjustmentWarningMessage = "⚠️ 画面外に出るため微調整の保存に失敗しました"
+                    }
                 },
                 valueRange = -0.20f..0.20f
             )
@@ -530,17 +555,21 @@ fun SkyLayoutConfigContent(
             Slider(
                 value = localScaleX,
                 onValueChange = { newVal ->
-                    localScaleX = newVal
-                    onAdjustmentInMemoryChange(
-                        selectedLayout,
-                        currentAdjustment.copy(scaleX = newVal)
-                    )
+                    val candidate = currentAdjustment.copy(scaleX = newVal)
+                    if (onAdjustmentInMemoryChange(selectedLayout, candidate)) {
+                        localScaleX = newVal
+                        adjustmentWarningMessage = null
+                    } else {
+                        localScaleX = currentAdjustment.scaleX
+                        adjustmentWarningMessage = "⚠️ 画面外に出るため横幅スケールは適用されず、直前の有効値が維持されました"
+                    }
                 },
                 onValueChangeFinished = {
-                    onAdjustmentPersist(
-                        selectedLayout,
-                        currentAdjustment.copy(scaleX = localScaleX)
-                    )
+                    val candidate = currentAdjustment.copy(scaleX = localScaleX)
+                    if (!onAdjustmentPersist(selectedLayout, candidate)) {
+                        localScaleX = currentAdjustment.scaleX
+                        adjustmentWarningMessage = "⚠️ 画面外に出るため微調整の保存に失敗しました"
+                    }
                 },
                 valueRange = 0.80f..1.20f
             )
@@ -562,17 +591,21 @@ fun SkyLayoutConfigContent(
             Slider(
                 value = localScaleY,
                 onValueChange = { newVal ->
-                    localScaleY = newVal
-                    onAdjustmentInMemoryChange(
-                        selectedLayout,
-                        currentAdjustment.copy(scaleY = newVal)
-                    )
+                    val candidate = currentAdjustment.copy(scaleY = newVal)
+                    if (onAdjustmentInMemoryChange(selectedLayout, candidate)) {
+                        localScaleY = newVal
+                        adjustmentWarningMessage = null
+                    } else {
+                        localScaleY = currentAdjustment.scaleY
+                        adjustmentWarningMessage = "⚠️ 画面外に出るため縦幅スケールは適用されず、直前の有効値が維持されました"
+                    }
                 },
                 onValueChangeFinished = {
-                    onAdjustmentPersist(
-                        selectedLayout,
-                        currentAdjustment.copy(scaleY = localScaleY)
-                    )
+                    val candidate = currentAdjustment.copy(scaleY = localScaleY)
+                    if (!onAdjustmentPersist(selectedLayout, candidate)) {
+                        localScaleY = currentAdjustment.scaleY
+                        adjustmentWarningMessage = "⚠️ 画面外に出るため微調整の保存に失敗しました"
+                    }
                 },
                 valueRange = 0.80f..1.20f
             )

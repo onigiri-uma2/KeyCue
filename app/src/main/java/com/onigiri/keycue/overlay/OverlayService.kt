@@ -305,27 +305,70 @@ class OverlayService : Service() {
         updateGuideLabelsForSession(session)
     }
 
+    private var lastValidationToastKey: String? = null
+
     private fun recomputeActiveProfile() {
         val baseProfile = settingsRepository.fitProfile.value
             ?: sessionRepository.currentSession.value?.fitProfile
             ?: com.onigiri.keycue.model.FitProfile.createDefaultTestProfile()
         val layout = settingsRepository.selectedSkyLayout.value
         val adjustment = settingsRepository.getLayoutAdjustment(layout)
-        val activeProfile = com.onigiri.keycue.profile.SkyLayoutTransformer.transformOrNull(
+
+        val metrics = resources.displayMetrics
+        val viewWidth = metrics.widthPixels
+        val viewHeight = metrics.heightPixels
+        val density = metrics.density
+        val guideRadiusRatio = settingsRepository.visualConfig.value.guideRadiusRatio
+
+        val validation = com.onigiri.keycue.profile.SkyLayoutTransformer.validateLayout(
             baseFitProfile = baseProfile,
             targetLayout = layout,
-            adjustment = adjustment
+            adjustment = adjustment,
+            viewWidth = viewWidth,
+            viewHeight = viewHeight,
+            guideRadiusRatio = guideRadiusRatio,
+            density = density
         )
-        if (activeProfile == null) {
-            android.util.Log.w("OverlayService", "レイアウト変換後のキー座標が表示可能範囲を超えています (layout=$layout)。基準位置合わせを再確認してください。")
-            serviceScope.launch(Dispatchers.Main) {
-                android.widget.Toast.makeText(
-                    this@OverlayService,
-                    "⚠️ ${layout.displayName}のボタンが画面外にはみ出ています。タッチ（標準）で位置合わせをやり直してください。",
-                    android.widget.Toast.LENGTH_LONG
-                ).show()
+
+        val currentToastKey = when {
+            validation.hasOutOfBounds -> "out_of_bounds_${layout.name}"
+            validation.collisionPairs.isNotEmpty() -> "collision_${layout.name}"
+            validation.overlapPairs.isNotEmpty() -> "overlap_${layout.name}"
+            else -> null
+        }
+
+        if (currentToastKey != lastValidationToastKey) {
+            lastValidationToastKey = currentToastKey
+            val toastMessage = when {
+                validation.hasOutOfBounds -> "⚠️ ${layout.displayName}のボタンが画面外にはみ出ています。タッチ（標準）で位置合わせをやり直してください。"
+                validation.collisionPairs.isNotEmpty() -> "⚠️ ${layout.displayName}のボタン同士が近接しすぎています（中心間距離が半径未満）。基準位置合わせを再確認してください。"
+                validation.overlapPairs.isNotEmpty() -> "⚠️ ${layout.displayName}の一部のボタンガイド円が重なり合っています。"
+                else -> null
+            }
+            if (toastMessage != null) {
+                android.util.Log.w("OverlayService", "$toastMessage (layout=$layout)")
+                serviceScope.launch(Dispatchers.Main) {
+                    android.widget.Toast.makeText(
+                        this@OverlayService,
+                        toastMessage,
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
+                }
             }
         }
+
+        // 致命的エラー（画面外または半径未満の重度衝突）の場合は描画プロファイルを遮断
+        // 重なり警告（半径〜2倍半径）の場合は位置の勝手な自動縮小・個別clampを行わず生プロファイルを有効とする
+        val activeProfile = if (validation.isValid) {
+            com.onigiri.keycue.profile.SkyLayoutTransformer.transformOrNull(
+                baseFitProfile = baseProfile,
+                targetLayout = layout,
+                adjustment = adjustment
+            )
+        } else {
+            null
+        }
+
         windowController?.updateBaseFitProfile(baseProfile)
         windowController?.updateSkyLayout(layout)
         windowController?.updateFitProfile(activeProfile)

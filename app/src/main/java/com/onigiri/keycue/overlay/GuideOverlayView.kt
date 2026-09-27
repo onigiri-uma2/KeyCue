@@ -27,13 +27,17 @@ import kotlin.math.min
  * - **ゼロアロケーション描画**: 60fps以上の滑らかな描画を維持するため、Paint等の描画オブジェクトは事前に確保し、onDraw 内でのメモリアロケーションを完全に回避しています。
  */
 @SuppressLint("ViewConstructor")
-class GuideOverlayView(
+open class GuideOverlayView(
     context: Context,
     private var fitProfile: FitProfile = FitProfile.createDefaultTestProfile(),
     private var visualConfig: VisualConfig = VisualConfig()
 ) : View(context) {
 
-    private val density = context.resources.displayMetrics.density
+    private val density = try {
+        context.resources?.displayMetrics?.density ?: 1.0f
+    } catch (_: Exception) {
+        1.0f
+    }
 
     // --- 専用レンダラー ---
     private val fallingNotesRenderer = FallingNotesRenderer(density)
@@ -52,11 +56,16 @@ class GuideOverlayView(
 
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.argb(220, 255, 255, 255)
-        textSize = android.util.TypedValue.applyDimension(
-            android.util.TypedValue.COMPLEX_UNIT_SP,
-            14f,
-            context.resources.displayMetrics
-        )
+        val metrics = try { context.resources?.displayMetrics } catch (_: Exception) { null }
+        textSize = if (metrics != null) {
+            android.util.TypedValue.applyDimension(
+                android.util.TypedValue.COMPLEX_UNIT_SP,
+                14f,
+                metrics
+            )
+        } else {
+            14f * density
+        }
         textAlign = Paint.Align.CENTER
         typeface = Typeface.DEFAULT_BOLD
     }
@@ -70,11 +79,16 @@ class GuideOverlayView(
     // --- カウントダウンテキスト用 Paint ---
     private val countdownPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.argb(240, 255, 255, 255)
-        textSize = android.util.TypedValue.applyDimension(
-            android.util.TypedValue.COMPLEX_UNIT_SP,
-            56f,
-            context.resources.displayMetrics
-        )
+        val metrics = try { context.resources?.displayMetrics } catch (_: Exception) { null }
+        textSize = if (metrics != null) {
+            android.util.TypedValue.applyDimension(
+                android.util.TypedValue.COMPLEX_UNIT_SP,
+                56f,
+                metrics
+            )
+        } else {
+            56f * density
+        }
         textAlign = Paint.Align.CENTER
         typeface = Typeface.DEFAULT_BOLD
         setShadowLayer(8f * density, 0f, 0f, Color.argb(180, 0, 0, 0))
@@ -110,7 +124,7 @@ class GuideOverlayView(
      * キー配置や座標構成が変更されるため、[recalculateKeyPositions] を通して
      * 従来どおり必ず [ChordVisualRenderer] の幾何キャッシュ（Geometry Cache）を破棄します。
      */
-    fun updateFitProfile(newProfile: FitProfile) {
+    open fun updateFitProfile(newProfile: FitProfile) {
         fitProfile = newProfile
         recalculateKeyPositions(width, height)
         invalidate()
@@ -125,7 +139,7 @@ class GuideOverlayView(
      * 線幅（chordStrokeWidthDp）や濃さ（chordStrokeAlphaPercent）等の Paint スタイル変更のみの場合は
      * 幾何キャッシュを破棄せず維持し、Paint更新と [invalidate] のみで高速に再描画します。
      */
-    fun updateVisualConfig(newConfig: VisualConfig) {
+    open fun updateVisualConfig(newConfig: VisualConfig) {
         val radiusChanged = visualConfig.guideRadiusRatio != newConfig.guideRadiusRatio
         visualConfig = newConfig
         applyVisualConfigPaints()
@@ -140,7 +154,7 @@ class GuideOverlayView(
      *
      * @param labels 表示するラベル文字列リスト。サイズが [DEFAULT_GUIDE_LABELS] と一致しない場合や null の場合は全体がデフォルトへフォールバックされる。
      */
-    fun updateGuideLabels(labels: List<String>?) {
+    open fun updateGuideLabels(labels: List<String>?) {
         val normalized = if (labels != null && labels.size == DEFAULT_GUIDE_LABELS.size) {
             labels
         } else {
@@ -183,7 +197,11 @@ class GuideOverlayView(
 
     private fun recalculateTextOffset() {
         val fontMetrics = textPaint.fontMetrics
-        textYOffset = (fontMetrics.descent - fontMetrics.ascent) / 2f - fontMetrics.descent
+        textYOffset = if (fontMetrics != null) {
+            (fontMetrics.descent - fontMetrics.ascent) / 2f - fontMetrics.descent
+        } else {
+            0f
+        }
     }
 
     private fun recalculateKeyPositions(viewWidth: Int, viewHeight: Int) {

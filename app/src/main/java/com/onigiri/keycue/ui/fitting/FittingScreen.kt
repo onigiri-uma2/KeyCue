@@ -368,6 +368,30 @@ private fun FittingControlsPanel(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            // 非標準レイアウト選択時の警告バナー
+            if (!uiState.isFittingAllowed) {
+                Surface(
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            text = "⚠️ 位置合わせは「タッチ（標準）」専用です",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "現在は「${uiState.currentSkyLayout.displayName}」が選択されています。位置合わせを行うには、設定でレイアウトを「タッチ（標準）」に戻してください。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                }
+            }
+
             // ステータス・信頼度表示
             when (val step = uiState.step) {
                 is FittingStep.Detecting -> {
@@ -442,6 +466,7 @@ private fun FittingControlsPanel(
                 is FittingStep.Idle -> {
                     Button(
                         onClick = onPickImage,
+                        enabled = uiState.isFittingAllowed,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(48.dp),
@@ -453,6 +478,7 @@ private fun FittingControlsPanel(
                     if (uiState.savedProfile != null) {
                         OutlinedButton(
                             onClick = onUseSavedProfile,
+                            enabled = uiState.isFittingAllowed,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(44.dp),
@@ -498,6 +524,7 @@ private fun FittingControlsPanel(
                 is FittingStep.Success -> {
                     Button(
                         onClick = onSaveCurrentProfile,
+                        enabled = uiState.isFittingAllowed,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(50.dp),

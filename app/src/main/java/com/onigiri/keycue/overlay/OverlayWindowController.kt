@@ -88,7 +88,7 @@ class OverlayWindowController(
         context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
 
     private var controlOverlayView: ControlOverlayView? = null
-    private var guideOverlayView: GuideOverlayView? = null
+    internal var guideOverlayView: GuideOverlayView? = null
     private var fittingOverlayView: FittingOverlayView? = null
 
     private var currentFitProfile: FitProfile? = FitProfile.createDefaultTestProfile()
@@ -217,11 +217,19 @@ class OverlayWindowController(
     }
 
     /**
+     * ガイドオーバーレイの表示/非表示を更新する。
+     * currentFitProfile が有効（非null）な場合のみ VISIBLE にし、無効な場合は GONE を維持する。
+     */
+    private fun updateGuideVisibility() {
+        guideOverlayView?.visibility = if (currentFitProfile != null) View.VISIBLE else View.GONE
+    }
+
+    /**
      * 外部Activity終了後にオーバーレイの表示を復元する。
      */
     fun restoreAfterFilePicker() {
         controlOverlayView?.visibility = View.VISIBLE
-        guideOverlayView?.visibility = View.VISIBLE
+        updateGuideVisibility()
     }
 
     private var isHiddenForSettings = false
@@ -244,7 +252,7 @@ class OverlayWindowController(
         if (!isHiddenForSettings) return
         isHiddenForSettings = false
         controlOverlayView?.visibility = View.VISIBLE
-        guideOverlayView?.visibility = View.VISIBLE
+        updateGuideVisibility()
     }
 
     // --- Guide Overlay 管理 ---
@@ -253,14 +261,15 @@ class OverlayWindowController(
      * Guide Overlay（全画面・タッチ透過）を表示する。すでに表示中の場合は二重追加しない。
      */
     fun showGuideOverlay() {
-        if (guideOverlayView != null) return
+        if (guideOverlayView != null) {
+            updateGuideVisibility()
+            return
+        }
 
         val layoutParams = createGuideLayoutParams()
         val profileToUse = currentFitProfile ?: FitProfile.createDefaultTestProfile()
         val view = GuideOverlayView(context, profileToUse, currentVisualConfig).apply {
-            if (currentFitProfile == null) {
-                visibility = View.GONE
-            }
+            visibility = if (currentFitProfile != null) View.VISIBLE else View.GONE
             updateGuideLabels(currentGuideLabels)
         }
 
@@ -479,7 +488,7 @@ class OverlayWindowController(
         } catch (_: Exception) {
             fittingOverlayView = null
             controlOverlayView?.visibility = View.VISIBLE
-            guideOverlayView?.visibility = View.VISIBLE
+            updateGuideVisibility()
         }
     }
 
@@ -496,7 +505,7 @@ class OverlayWindowController(
         fittingOverlayView = null
 
         controlOverlayView?.visibility = View.VISIBLE
-        guideOverlayView?.visibility = View.VISIBLE
+        updateGuideVisibility()
     }
 
     fun isFittingShowing(): Boolean = fittingOverlayView != null

@@ -515,14 +515,20 @@ class HomeViewModel(
 
     /**
      * スライダードラッグ終了時の微調整パラメータ永続化。
+     * 画面外に出る無効な値の場合は保存せず false を返す。
      */
     fun persistLayoutAdjustment(
         layout: com.onigiri.keycue.profile.SkyLayout,
         adjustment: com.onigiri.keycue.profile.SkyLayoutAdjustment
-    ) {
+    ): Boolean {
+        val baseProfile = settingsRepository.fitProfile.value ?: com.onigiri.keycue.model.FitProfile.createDefaultTestProfile()
+        if (!com.onigiri.keycue.profile.SkyLayoutTransformer.isAdjustmentValid(baseProfile, layout, adjustment)) {
+            return false
+        }
         scope.launch {
             settingsRepository.saveLayoutAdjustment(layout, adjustment)
         }
+        return true
     }
 
     /**

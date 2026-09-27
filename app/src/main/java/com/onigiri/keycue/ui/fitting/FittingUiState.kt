@@ -51,4 +51,8 @@ data class FittingUiState(
     val isSavedSuccess: Boolean = false,
     val showDebugView: Boolean = false,
     val currentSkyLayout: com.onigiri.keycue.profile.SkyLayout = com.onigiri.keycue.profile.SkyLayout.TOUCH_STANDARD
-)
+) {
+    /** 基準フィッティングの実行が許可されているか（TOUCH_STANDARDのみ許可） */
+    val isFittingAllowed: Boolean
+        get() = currentSkyLayout == com.onigiri.keycue.profile.SkyLayout.TOUCH_STANDARD
+}

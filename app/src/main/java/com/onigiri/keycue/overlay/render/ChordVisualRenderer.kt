@@ -22,7 +22,11 @@ import kotlin.math.roundToInt
  */
 class ChordVisualRenderer(context: Context) {
 
-    private val density: Float = context.resources.displayMetrics.density
+    private val density: Float = try {
+        context.resources?.displayMetrics?.density ?: 1.0f
+    } catch (_: Exception) {
+        1.0f
+    }
 
     // 再利用 Paint
     private val linkPaint = Paint().apply {

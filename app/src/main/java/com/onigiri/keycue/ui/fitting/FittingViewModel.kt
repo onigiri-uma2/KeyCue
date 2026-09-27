@@ -71,6 +71,12 @@ class FittingViewModel(
      */
     fun onImageSelected(uri: Uri?, contentResolver: ContentResolver) {
         if (uri == null) return
+        if (!_uiState.value.isFittingAllowed) {
+            _uiState.update {
+                it.copy(errorMessage = "位置合わせは「タッチ（標準）」でのみ実行できます。レイアウトをタッチ（標準）に変更してください。")
+            }
+            return
+        }
         pendingDetectedGuideRadiusRatio = null
 
         scope.launch(Dispatchers.IO) {
@@ -149,6 +155,12 @@ class FittingViewModel(
      * ボタン候補点検出とグリッドフィッティングを非同期実行する。
      */
     fun detectAndFit() {
+        if (!_uiState.value.isFittingAllowed) {
+            _uiState.update {
+                it.copy(errorMessage = "位置合わせは「タッチ（標準）」でのみ実行できます。レイアウトをタッチ（標準）に変更してください。")
+            }
+            return
+        }
         val bitmap = _uiState.value.imageBitmap ?: return
 
         _uiState.update { it.copy(step = FittingStep.Detecting, errorMessage = null) }
@@ -212,6 +224,12 @@ class FittingViewModel(
      * 手動補正モード（4点ドラッグ）を開始する。
      */
     fun startManualAdjust() {
+        if (!_uiState.value.isFittingAllowed) {
+            _uiState.update {
+                it.copy(errorMessage = "位置合わせは「タッチ（標準）」でのみ実行できます。レイアウトをタッチ（標準）に変更してください。")
+            }
+            return
+        }
         val current = _uiState.value
         val profile = current.currentProfile
             ?: current.savedProfile
@@ -337,6 +355,12 @@ class FittingViewModel(
      * 現在の FitProfile を SettingsRepository へ保存する。
      */
     fun saveCurrentProfile() {
+        if (!_uiState.value.isFittingAllowed) {
+            _uiState.update {
+                it.copy(errorMessage = "位置合わせ結果の保存は「タッチ（標準）」でのみ実行できます。レイアウトをタッチ（標準）に変更してください。")
+            }
+            return
+        }
         val profile = _uiState.value.currentProfile ?: return
         val isFirstFitting = _uiState.value.savedProfile == null
         val detectedRadiusToApply = if (isFirstFitting) pendingDetectedGuideRadiusRatio else null

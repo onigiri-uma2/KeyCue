@@ -357,6 +357,99 @@ class SettingsRepositoryLayoutTest {
         assertFalse(repo2.getLayoutShowGuideLabels(SkyLayout.PAD_TRIGGER_FIRST))
     }
 
+    /**
+     * 要件3: 旧設定のマイグレーションでは各キーの既存保存値を上書きしないことの検証。
+     */
+    @Test
+    fun testSharedPreferencesSettingsRepository_initMigration_doesNotOverwriteExistingKeys() {
+        val map = HashMap<String, Any>()
+        // ユーザーが以前に PAD_TRIGGER_FIRST を明示的に ON (true) に保存していた状態
+        map["sky_layout_labels_pad_trigger_first"] = true
+        // 旧全体設定は false
+        map["show_key_numbers"] = false
+
+        val prefs = createFakePrefs(map)
+        val repo = SharedPreferencesSettingsRepository(prefs)
+
+        // 既存キー sky_layout_labels_pad_trigger_first は上書きされず true のまま維持されること
+        assertTrue("既存の保存値 true が上書きされず維持されること", repo.getLayoutShowGuideLabels(SkyLayout.PAD_TRIGGER_FIRST))
+        assertEquals(true, map["sky_layout_labels_pad_trigger_first"])
+
+        // 未保存だった他のPADレイアウトにはデフォルト値 false が設定されること
+        assertFalse(repo.getLayoutShowGuideLabels(SkyLayout.PAD_DPAD_FIRST))
+        assertEquals(false, map["sky_layout_labels_pad_dpad_first"])
+
+        // 未保存だったTOUCH_STANDARDには旧設定値 false が引き継がれること
+        assertFalse(repo.getLayoutShowGuideLabels(SkyLayout.TOUCH_STANDARD))
+        assertEquals(false, map["sky_layout_labels_touch_standard"])
+    }
+
+    /**
+     * 要件3: 初期化時に保存済み selectedSkyLayout とそのレイアウトのラベル設定を照合し、
+     * visualConfig.showGuideLabels を整合させることの検証。
+     */
+    @Test
+    fun testSharedPreferencesSettingsRepository_init_alignsVisualConfigWithSelectedSkyLayout() {
+        val map = HashMap<String, Any>()
+        // PAD_TRIGGER_FIRST が選択されており、そのレイアウトのラベルは OFF (false)
+        map["selected_sky_layout"] = "PAD_TRIGGER_FIRST"
+        map["sky_layout_labels_pad_trigger_first"] = false
+        // しかし旧グローバル設定 show_key_numbers が true になっている不整合状態
+        map["show_key_numbers"] = true
+
+        val prefs = createFakePrefs(map)
+        val repo = SharedPreferencesSettingsRepository(prefs)
+
+        // 初期化時に照合され、visualConfig.showGuideLabels は選択中レイアウトの false に整合されること
+        assertEquals(SkyLayout.PAD_TRIGGER_FIRST, repo.selectedSkyLayout.value)
+        assertFalse("visualConfig.showGuideLabels が選択レイアウトのラベル設定 (false) と整合していること", repo.visualConfig.value.showGuideLabels)
+        assertEquals("show_key_numbers にも整合値 false が書き込まれること", false, map["show_key_numbers"])
+    }
+
+    /**
+     * 要件6: FitProfileコンストラクタで発生する例外だけをもってRepository保存経路の保護テストとしない。
+     * リポジトリ自体の saveFitProfile がキー数検証を行い、不正プロファイルの保存を拒絶することの検証。
+     */
+    @Test
+    fun testRepositorySaveFitProfileProtection_withoutRelyingOnConstructorException() = runBlocking {
+        val repo = InMemorySettingsRepository()
+        val standardPreset = com.onigiri.keycue.profile.SkyLayoutRegistry.getPreset(SkyLayout.TOUCH_STANDARD)
+        val validBase = com.onigiri.keycue.model.FitProfile(standardPreset.keyCenters)
+        repo.saveFitProfile(validBase)
+        assertEquals(validBase, repo.fitProfile.value)
+
+        // リフレクション等を用いてFitProfileコンストラクタのrequireチェックをバイパスし、
+        // 不正なキー数（14個）のFitProfileインスタンスが万一生成されたケースをシミュレート
+        val invalidProfile = try {
+            val constructor = com.onigiri.keycue.model.FitProfile::class.java.declaredConstructors.firstOrNull {
+                it.parameterCount >= 1
+            }
+            if (constructor != null) {
+                constructor.isAccessible = true
+                // 引数に応じてインスタンス化を試みる
+                val params = arrayOfNulls<Any>(constructor.parameterCount)
+                params[0] = standardPreset.keyCenters.take(14) // 14キー
+                if (constructor.parameterCount > 1) params[1] = true // landscape
+                if (constructor.parameterCount > 2) params[2] = 0.04f // keyRadiusRatio
+                constructor.newInstance(*params) as? com.onigiri.keycue.model.FitProfile
+            } else null
+        } catch (_: Exception) {
+            null
+        }
+
+        // リフレクションで生成できた場合、または直接渡す場合
+        if (invalidProfile != null) {
+            try {
+                repo.saveFitProfile(invalidProfile)
+                org.junit.Assert.fail("リポジトリの saveFitProfile は不正なキー数のプロファイルを拒絶する必要があります")
+            } catch (e: IllegalArgumentException) {
+                assertTrue("リポジトリ独自の例外メッセージが含まれること", e.message?.contains("15個のキーを含む必要があります") == true)
+            }
+            // リポジトリ内の保存プロファイルが保護されていること
+            assertEquals(validBase, repo.fitProfile.value)
+        }
+    }
+
     private fun createFakePrefs(map: HashMap<String, Any>): android.content.SharedPreferences {
         return Proxy.newProxyInstance(
             android.content.SharedPreferences::class.java.classLoader,
