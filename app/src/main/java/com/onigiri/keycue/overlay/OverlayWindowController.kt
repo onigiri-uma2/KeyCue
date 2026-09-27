@@ -54,6 +54,9 @@ class OverlayWindowController(
         onShowApproachCirclesChange: (Boolean) -> Unit = {},
         onSelectRecentSong: (RecentSongEntry) -> Unit = {},
         onMetronomeEnabledChange: (Boolean) -> Unit = {},
+        onMetronomeTimingModeChange: (com.onigiri.keycue.model.MetronomeTimingMode) -> Unit = {},
+        onMetronomeBpmChange: (Int) -> Unit = {},
+        onMetronomeBeatsPerBarChange: (Int) -> Unit = {},
         onLayoutChange: (com.onigiri.keycue.profile.SkyLayout) -> Unit = {}
     ) : this(
         context = context,
@@ -80,6 +83,9 @@ class OverlayWindowController(
             onShowApproachCirclesChange = onShowApproachCirclesChange,
             onSelectRecentSong = onSelectRecentSong,
             onMetronomeEnabledChange = onMetronomeEnabledChange,
+            onMetronomeTimingModeChange = onMetronomeTimingModeChange,
+            onMetronomeBpmChange = onMetronomeBpmChange,
+            onMetronomeBeatsPerBarChange = onMetronomeBeatsPerBarChange,
             onLayoutChange = onLayoutChange
         )
     )
@@ -346,6 +352,26 @@ class OverlayWindowController(
         controlOverlayView?.updateGuideQuickToggleState(
             showFallingNotes = config.showFallingNotes,
             showApproachCircles = config.showApproachCircles
+        )
+    }
+
+    /**
+     * メトロノームの設定・実効BPM・実効拍子・設定元情報を更新し、Control Overlay に反映する。
+     */
+    fun updateMetronomeState(
+        config: com.onigiri.keycue.model.MetronomeConfig,
+        effectiveBpm: Int,
+        effectiveTimeSignature: com.onigiri.keycue.model.timing.TimeSignature,
+        isBpmAuto: Boolean,
+        isTimeSignatureAuto: Boolean
+    ) {
+        currentMetronomeEnabled = config.enabled
+        controlOverlayView?.updateMetronomeState(
+            config = config,
+            effectiveBpm = effectiveBpm,
+            effectiveTimeSignature = effectiveTimeSignature,
+            isBpmAuto = isBpmAuto,
+            isTimeSignatureAuto = isTimeSignatureAuto
         )
     }
 

@@ -168,10 +168,26 @@ class ControlOverlayView(
     // ガイドクイックトグル
     private var currentShowFallingNotes: Boolean = true
     private var currentShowApproachCircles: Boolean = true
+
+    // メトロノーム操作拡張
     private var currentMetronomeEnabled: Boolean = false
+    private var currentMetronomeConfig: com.onigiri.keycue.model.MetronomeConfig = com.onigiri.keycue.model.MetronomeConfig()
+    private var currentEffectiveBpm: Int = 120
+    private var currentEffectiveTimeSignature: com.onigiri.keycue.model.timing.TimeSignature = com.onigiri.keycue.model.timing.TimeSignature.DEFAULT
+    private var currentIsBpmAuto: Boolean = true
+    private var currentIsTimeSignatureAuto: Boolean = true
+    private var isMetronomeDetailExpanded: Boolean = false
+
+    private lateinit var metronomeToggleBtn: Button
+    private lateinit var metronomeModeBtn: Button
+    private lateinit var metronomeInfoText: TextView
+    private lateinit var metronomeDetailToggleBtn: TextView
+    private lateinit var metronomeDetailSection: LinearLayout
+    private lateinit var metronomeManualBpmText: TextView
+    private lateinit var metronomeTimeSig3Btn: Button
+    private lateinit var metronomeTimeSig4Btn: Button
     private lateinit var notesToggleBtn: Button
     private lateinit var circleToggleBtn: Button
-    private lateinit var metronomeToggleBtn: Button
 
     // 長押し連続入力のキャンセル関数リスト（onDetachedFromWindowで一括解除）
     private val repeatPressCancelers = mutableListOf<() -> Unit>()
@@ -1297,6 +1313,7 @@ class ControlOverlayView(
 
     private fun buildMetronomeSection(): View {
         return LinearLayout(context).apply {
+            metronomeSection = this
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -1305,21 +1322,42 @@ class ControlOverlayView(
                 bottomMargin = dpToPx(6)
             }
 
-            val label = TextView(context).apply {
-                text = "Metronome"
-                setTextColor(Color.parseColor("#CFD8DC"))
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            // 1. ヘッダー行 (Metronomeラベル + 詳細展開ボタン)
+            val headerRow = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
                 layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT
                 ).apply {
                     bottomMargin = dpToPx(4)
                 }
-            }
-            addView(label)
 
-            // Metronome ON/OFF
-            val metroRow = LinearLayout(context).apply {
+                val label = TextView(context).apply {
+                    text = "Metronome"
+                    setTextColor(Color.parseColor("#CFD8DC"))
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                }
+                addView(label)
+
+                metronomeDetailToggleBtn = TextView(context).apply {
+                    text = if (isMetronomeDetailExpanded) "詳細 ▲" else "詳細 ▼"
+                    setTextColor(Color.parseColor("#80CBC4"))
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
+                    setPadding(dpToPx(4), dpToPx(2), dpToPx(4), dpToPx(2))
+                    setOnClickListener {
+                        isMetronomeDetailExpanded = !isMetronomeDetailExpanded
+                        text = if (isMetronomeDetailExpanded) "詳細 ▲" else "詳細 ▼"
+                        metronomeDetailSection.visibility = if (isMetronomeDetailExpanded) View.VISIBLE else View.GONE
+                    }
+                }
+                addView(metronomeDetailToggleBtn)
+            }
+            addView(headerRow)
+
+            // 2. メイン操作行（Metro ON/OFF + AUTO/MANUAL切替）
+            val metroMainRow = LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 layoutParams = LinearLayout.LayoutParams(
@@ -1331,10 +1369,150 @@ class ControlOverlayView(
                     callbacks.onMetronomeEnabledChange(!currentMetronomeEnabled)
                 }
                 addView(metronomeToggleBtn)
-            }
-            addView(metroRow)
 
-            updateMetronomeToggleStyle()
+                metronomeModeBtn = createQuickToggleButton("AUTO") {
+                    val nextMode = if (currentMetronomeConfig.timingMode == com.onigiri.keycue.model.MetronomeTimingMode.AUTO) {
+                        com.onigiri.keycue.model.MetronomeTimingMode.MANUAL
+                    } else {
+                        com.onigiri.keycue.model.MetronomeTimingMode.AUTO
+                    }
+                    callbacks.onMetronomeTimingModeChange(nextMode)
+                }.apply {
+                    (layoutParams as LinearLayout.LayoutParams).leftMargin = dpToPx(4)
+                }
+                addView(metronomeModeBtn)
+            }
+            addView(metroMainRow)
+
+            // 3. 設定元・実効値情報テキスト表示行
+            metronomeInfoText = TextView(context).apply {
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
+                setTextColor(Color.parseColor("#B0BEC5"))
+                gravity = Gravity.CENTER
+                setPadding(dpToPx(2), dpToPx(2), dpToPx(2), dpToPx(2))
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    topMargin = dpToPx(2)
+                }
+            }
+            addView(metronomeInfoText)
+
+            // 4. 詳細セクション（手動BPM、手動拍子）
+            metronomeDetailSection = buildMetronomeDetailSection()
+            addView(metronomeDetailSection)
+
+            updateMetronomeView()
+        }
+    }
+
+    private fun buildMetronomeDetailSection(): LinearLayout {
+        return LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = if (isMetronomeDetailExpanded) View.VISIBLE else View.GONE
+            setPadding(dpToPx(4), dpToPx(4), dpToPx(4), dpToPx(4))
+            background = createRoundedDrawable(cornerRadiusDp = 4f, fillColor = Color.parseColor("#263238"))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                topMargin = dpToPx(4)
+            }
+
+            // BPM行
+            val bpmRow = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+
+                metronomeManualBpmText = TextView(context).apply {
+                    text = "BPM: ${currentMetronomeConfig.bpm}"
+                    setTextColor(Color.WHITE)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
+                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                }
+                addView(metronomeManualBpmText)
+
+                val bpmDeltas = listOf(-5 to "-5", -1 to "-1", +1 to "+1", +5 to "+5")
+                bpmDeltas.forEach { (delta, btnText) ->
+                    val btn = Button(context).apply {
+                        text = btnText
+                        setTextColor(Color.WHITE)
+                        setTextSize(TypedValue.COMPLEX_UNIT_SP, 9f)
+                        setPadding(0, 0, 0, 0)
+                        minWidth = 0
+                        minimumWidth = 0
+                        background = createRoundedDrawable(cornerRadiusDp = 3f, fillColor = Color.parseColor("#37474F"))
+                        layoutParams = LinearLayout.LayoutParams(dpToPx(24), dpToPx(22)).apply {
+                            leftMargin = dpToPx(2)
+                        }
+                        setOnClickListener {
+                            val newBpm = (currentMetronomeConfig.bpm + delta).coerceIn(
+                                com.onigiri.keycue.model.MetronomeConfig.MIN_BPM,
+                                com.onigiri.keycue.model.MetronomeConfig.MAX_BPM
+                            )
+                            callbacks.onMetronomeBpmChange(newBpm)
+                        }
+                    }
+                    addView(btn)
+                }
+            }
+            addView(bpmRow)
+
+            // 拍子行
+            val timeSigRow = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    topMargin = dpToPx(4)
+                }
+
+                val tsLabel = TextView(context).apply {
+                    text = "拍子:"
+                    setTextColor(Color.WHITE)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
+                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                }
+                addView(tsLabel)
+
+                metronomeTimeSig3Btn = Button(context).apply {
+                    text = "3/4"
+                    setTextColor(Color.WHITE)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 9f)
+                    setPadding(0, 0, 0, 0)
+                    minWidth = 0
+                    minimumWidth = 0
+                    layoutParams = LinearLayout.LayoutParams(dpToPx(34), dpToPx(22)).apply {
+                        rightMargin = dpToPx(2)
+                    }
+                    setOnClickListener {
+                        callbacks.onMetronomeBeatsPerBarChange(3)
+                    }
+                }
+                addView(metronomeTimeSig3Btn)
+
+                metronomeTimeSig4Btn = Button(context).apply {
+                    text = "4/4"
+                    setTextColor(Color.WHITE)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 9f)
+                    setPadding(0, 0, 0, 0)
+                    minWidth = 0
+                    minimumWidth = 0
+                    layoutParams = LinearLayout.LayoutParams(dpToPx(34), dpToPx(22))
+                    setOnClickListener {
+                        callbacks.onMetronomeBeatsPerBarChange(4)
+                    }
+                }
+                addView(metronomeTimeSig4Btn)
+            }
+            addView(timeSigRow)
         }
     }
 
@@ -1384,42 +1562,88 @@ class ControlOverlayView(
 
     private var currentMetronomeInfo: String = ""
 
-    private fun updateMetronomeToggleStyle() {
-        if (!::metronomeToggleBtn.isInitialized) return
+    private fun updateMetronomeView() {
+        if (!::metronomeToggleBtn.isInitialized || !::metronomeModeBtn.isInitialized || !::metronomeInfoText.isInitialized) return
 
-        if (currentMetronomeEnabled) {
-            val label = if (currentMetronomeInfo.isNotEmpty()) {
-                "Metro ON\n$currentMetronomeInfo"
-            } else {
-                "Metro ON"
-            }
-            metronomeToggleBtn.text = label
-            metronomeToggleBtn.setTextSize(
-                TypedValue.COMPLEX_UNIT_SP,
-                if (currentMetronomeInfo.isNotEmpty()) 9f else 11f
-            )
-            metronomeToggleBtn.layoutParams = LinearLayout.LayoutParams(
-                0,
-                if (currentMetronomeInfo.isNotEmpty()) dpToPx(34) else dpToPx(28),
-                1f
-            )
-        } else {
-            metronomeToggleBtn.text = "Metro OFF"
-            metronomeToggleBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
-            metronomeToggleBtn.layoutParams = LinearLayout.LayoutParams(0, dpToPx(28), 1f)
-        }
-
+        // 1. Metro ON/OFF ボタン
+        metronomeToggleBtn.text = if (currentMetronomeEnabled) "Metro ON" else "Metro OFF"
         metronomeToggleBtn.background = createRoundedDrawable(
             cornerRadiusDp = 4f,
             fillColor = if (currentMetronomeEnabled) Color.parseColor("#00796B") else Color.parseColor("#37474F")
         )
         metronomeToggleBtn.setTextColor(if (currentMetronomeEnabled) Color.WHITE else Color.parseColor("#90A4AE"))
+
+        // 2. AUTO / MANUAL ボタン
+        val isAuto = currentMetronomeConfig.timingMode == com.onigiri.keycue.model.MetronomeTimingMode.AUTO
+        metronomeModeBtn.text = if (isAuto) "AUTO" else "MANUAL"
+        metronomeModeBtn.background = createRoundedDrawable(
+            cornerRadiusDp = 4f,
+            fillColor = if (isAuto) Color.parseColor("#00897B") else Color.parseColor("#1E88E5")
+        )
+        metronomeModeBtn.setTextColor(Color.WHITE)
+
+        // 3. 設定元・実効値情報テキスト
+        val tsStr = currentEffectiveTimeSignature.displayString
+        val info = if (isAuto) {
+            when {
+                !currentIsBpmAuto && !currentIsTimeSignatureAuto ->
+                    "AUTO (手動値を使用) $currentEffectiveBpm BPM / $tsStr"
+                !currentIsBpmAuto ->
+                    "AUTO（BPM手動値を使用） $currentEffectiveBpm BPM / $tsStr"
+                !currentIsTimeSignatureAuto ->
+                    "AUTO（拍子手動値を使用） $currentEffectiveBpm BPM / $tsStr"
+                else ->
+                    "AUTO $currentEffectiveBpm BPM / $tsStr"
+            }
+        } else {
+            "MANUAL $currentEffectiveBpm BPM / $tsStr"
+        }
+        metronomeInfoText.text = if (currentMetronomeInfo.isNotEmpty()) currentMetronomeInfo else info
+
+        // 4. 詳細セクション内の手動設定表示
+        if (::metronomeManualBpmText.isInitialized) {
+            metronomeManualBpmText.text = "手動BPM: ${currentMetronomeConfig.bpm}"
+        }
+        if (::metronomeTimeSig3Btn.isInitialized && ::metronomeTimeSig4Btn.isInitialized) {
+            val is3 = currentMetronomeConfig.beatsPerBar == 3
+            metronomeTimeSig3Btn.background = createRoundedDrawable(
+                cornerRadiusDp = 3f,
+                fillColor = if (is3) Color.parseColor("#00796B") else Color.parseColor("#37474F")
+            )
+            metronomeTimeSig4Btn.background = createRoundedDrawable(
+                cornerRadiusDp = 3f,
+                fillColor = if (!is3) Color.parseColor("#00796B") else Color.parseColor("#37474F")
+            )
+        }
     }
 
+    /**
+     * メトロノーム設定、実効BPM、実効拍子、および自動/手動設定元情報を反映する。
+     */
+    fun updateMetronomeState(
+        config: com.onigiri.keycue.model.MetronomeConfig,
+        effectiveBpm: Int,
+        effectiveTimeSignature: com.onigiri.keycue.model.timing.TimeSignature,
+        isBpmAuto: Boolean,
+        isTimeSignatureAuto: Boolean
+    ) {
+        currentMetronomeEnabled = config.enabled
+        currentMetronomeConfig = config
+        currentEffectiveBpm = effectiveBpm
+        currentEffectiveTimeSignature = effectiveTimeSignature
+        currentIsBpmAuto = isBpmAuto
+        currentIsTimeSignatureAuto = isTimeSignatureAuto
+        currentMetronomeInfo = ""
+        updateMetronomeView()
+    }
+
+    /** 後方互換用オーバーロード */
     fun updateMetronomeState(enabled: Boolean, infoText: String = "") {
         currentMetronomeEnabled = enabled
-        currentMetronomeInfo = infoText
-        updateMetronomeToggleStyle()
+        if (infoText.isNotEmpty()) {
+            currentMetronomeInfo = infoText
+        }
+        updateMetronomeView()
     }
 
     private fun buildLayoutSelectionSection(): View {

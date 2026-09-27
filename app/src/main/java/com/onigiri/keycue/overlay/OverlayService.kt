@@ -59,8 +59,10 @@ class OverlayService : Service() {
         fun setOverlayVisibleForSettings(visible: Boolean) {
             instance?.let { service ->
                 if (visible) {
+                    service.metronomeScheduler?.onSettingsClosed()
                     service.windowController?.restoreAfterSettings()
                 } else {
+                    service.pausePlaybackForSettings()
                     service.windowController?.hideForSettings()
                 }
             }
@@ -160,6 +162,9 @@ class OverlayService : Service() {
         playbackEngine.onLoopRewound = { targetPos ->
             scheduler.onLoopRewound(targetPos)
         }
+        playbackEngine.onBeforeFinish = { duration ->
+            scheduler.evaluateFinalBeat(duration)
+        }
 
         val initialSong = sessionRepository.currentSession.value?.song
         val initialMetroConfig = settingsRepository.metronomeConfig.value
@@ -245,6 +250,21 @@ class OverlayService : Service() {
             onMetronomeEnabledChange = { enabled ->
                 serviceScope.launch {
                     settingsRepository.updateMetronomeConfig { it.copy(enabled = enabled) }
+                }
+            },
+            onMetronomeTimingModeChange = { mode ->
+                serviceScope.launch {
+                    settingsRepository.updateMetronomeConfig { it.copy(timingMode = mode) }
+                }
+            },
+            onMetronomeBpmChange = { bpm ->
+                serviceScope.launch {
+                    settingsRepository.updateMetronomeConfig { it.copy(bpm = bpm) }
+                }
+            },
+            onMetronomeBeatsPerBarChange = { beats ->
+                serviceScope.launch {
+                    settingsRepository.updateMetronomeConfig { it.copy(beatsPerBar = beats) }
                 }
             },
             onLayoutChange = { newLayout ->
@@ -739,16 +759,22 @@ class OverlayService : Service() {
             )
 
             val metroConfig = settingsRepository.metronomeConfig.value
-            val metroInfo = if (metroConfig.enabled && metronomeScheduler != null) {
+            if (metronomeScheduler != null) {
                 val queryPos = if (currentPos < 0L) 0L else currentPos
                 val bpm = Math.round(metronomeScheduler!!.currentBpm(queryPos)).toInt()
                 val ts = metronomeScheduler!!.currentTimeSignature(queryPos)
-                val modeStr = if (metroConfig.timingMode == com.onigiri.keycue.model.MetronomeTimingMode.AUTO) "AUTO" else "MANUAL"
-                "$modeStr $bpm BPM / ${ts.displayString}"
+                val isBpmAuto = metronomeScheduler!!.isBpmAuto
+                val isTimeSignatureAuto = metronomeScheduler!!.isTimeSignatureAuto
+                windowController?.updateMetronomeState(
+                    config = metroConfig,
+                    effectiveBpm = bpm,
+                    effectiveTimeSignature = ts,
+                    isBpmAuto = isBpmAuto,
+                    isTimeSignatureAuto = isTimeSignatureAuto
+                )
             } else {
-                ""
+                windowController?.updateMetronomeState(metroConfig.enabled)
             }
-            windowController?.updateMetronomeState(metroConfig.enabled, metroInfo)
         }
     }
 
@@ -772,8 +798,19 @@ class OverlayService : Service() {
         }
     }
 
+    private fun pausePlaybackForSettings() {
+        when (playbackEngine.state.value) {
+            is PlaybackState.Playing -> playbackEngine.pause()
+            is PlaybackState.CountingDown -> playbackEngine.stop()
+            else -> { /* Paused, Stopped, Finished では再生位置を保持 */ }
+        }
+        metronomeScheduler?.pauseForOpeningSettings()
+    }
+
     private fun openMainActivity() {
-        // 設定画面を開く直前にオーバーレイを一時非表示にし、画面遷移中の被りを防ぐ
+        // 設定画面を開く直前に再生を一時停止し、メトロノーム発音を停止
+        pausePlaybackForSettings()
+        // オーバーレイを一時非表示にし、画面遷移中の被りを防ぐ
         windowController?.hideForSettings()
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -806,6 +843,7 @@ class OverlayService : Service() {
         metronomeSyncCoordinator?.cancel()
         metronomeSyncCoordinator = null
         playbackEngine.onLoopRewound = null
+        playbackEngine.onBeforeFinish = null
         playbackEngine.release()
         metronomeScheduler?.release()
         metronomeScheduler = null

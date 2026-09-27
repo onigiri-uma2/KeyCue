@@ -80,8 +80,14 @@ class MetronomeScheduler(
     // タイムライン準備状態（新曲非同期構築中はfalseとなり即時ミュートを保証）
     private var isTimelineReady: Boolean = true
 
+    // 設定画面表示中フラグ（表示中は発音を完全抑止）
+    private var isSettingsScreenActive: Boolean = false
+
     /** 現在タイムラインが発音可能な準備状態にあるかどうか */
     val isReady: Boolean get() = synchronized(stateLock) { isTimelineReady }
+
+    /** 現在設定画面表示中により発音が抑止されているかどうか */
+    val isSettingsActive: Boolean get() = synchronized(stateLock) { isSettingsScreenActive }
 
     init {
         if (autoStartTicker) {
@@ -348,6 +354,85 @@ class MetronomeScheduler(
     }
 
     /**
+     * 設定画面表示への遷移時に呼び出し、発音を即時停止し、設定画面内での再発音を防止する。
+     * 古いクリック予定を破棄し、再同期シグナルを送信する。
+     */
+    fun pauseForOpeningSettings() {
+        synchronized(stateLock) {
+            isSettingsScreenActive = true
+            soundPlayer.stop()
+            currentGeneration++
+            notifyResync()
+        }
+    }
+
+    /**
+     * 設定画面が閉じられた（オーバーレイへ復帰した）際に呼び出す。
+     */
+    fun onSettingsClosed() {
+        synchronized(stateLock) {
+            isSettingsScreenActive = false
+            notifyResync()
+        }
+    }
+
+    /**
+     * 楽曲終了直前（Finished遷移直前）に呼び出し、最終音符（durationMs）に該当する最終拍を評価・発音する。
+     *
+     * 【要件】
+     * - 最終音符（durationMs）が現在の拍グリッド上に存在する場合のみ発音する。
+     * - 最終音符が拍グリッドから外れている場合は発音しない（余分なクリックを生成しない）。
+     * - 既に通常Ticker等で発音済みである場合は再発音しない（二重発音防止）。
+     * - メトロノームOFF、一時停止中、設定画面表示中、またはABリピートのB地点以降である場合は発音しない。
+     *
+     * @return 最終拍が発音された場合は true、発音されなかった場合は false
+     */
+    fun evaluateFinalBeat(durationMs: Long): Boolean {
+        synchronized(stateLock) {
+            val isPlaying = isPlayingProvider()
+            val config = currentConfig
+            val duration = durationProvider()
+
+            if (!isPlaying || !config.enabled || duration <= 0L || !isTimelineReady || isSettingsScreenActive) {
+                return false
+            }
+
+            val (_, loopEnd) = loopBoundsProvider()
+            if (loopEnd != null && durationMs >= loopEnd) {
+                return false
+            }
+
+            // 現在位置として durationMs を評価し、直近の拍を取得
+            val candidateIndex = timeline.candidateBeatIndex(
+                positionMs = durationMs,
+                toleratedDelayMs = 0L
+            )
+            val beat = timeline.beatForIndex(candidateIndex) ?: return false
+
+            // 最終音符が拍グリッド上にあるか判定 (beat.timeMs == durationMs)
+            if (beat.timeMs != durationMs) {
+                return false
+            }
+
+            // 既に発音済みなら二重発音しない
+            if (lastPlayedBeatIndex >= beat.index) {
+                return false
+            }
+
+            // ABリピート終端チェック
+            if (loopEnd != null && beat.timeMs >= loopEnd) {
+                return false
+            }
+
+            // 発音実行
+            soundPlayer.playBeat(beat.isAccent, config.volumePercent)
+            lastPlayedBeatIndex = beat.index
+            nextClickIndex = beat.index + 1
+            return true
+        }
+    }
+
+    /**
      * 楽曲変更の開始時に呼び出し、発音を停止して古い曲のクリック予定を破棄する。
      * バックグラウンドでのタイムライン構築が完了するまでの間、安全なミュート状態を維持します。
      */
@@ -418,7 +503,7 @@ class MetronomeScheduler(
      *
      * @return このステップで発音が行われた場合は true、待機またはスキップの場合は false
      */
-    fun processTick(currentPos: Long, generation: Long? = null): Boolean {
+    fun processTick(currentPos: Long = timeProvider(), generation: Long? = null): Boolean {
         synchronized(stateLock) {
             if (generation != null && generation != currentGeneration) {
                 // Seekや状態遷移により世代が進んでいる場合、古い位置スナップショットを破棄
@@ -429,8 +514,8 @@ class MetronomeScheduler(
             val config = currentConfig
             val duration = durationProvider()
 
-            // タイムライン構築中 (!isTimelineReady) や停止中は一切発音しない（即時ミュート保証）
-            if (!isPlaying || !config.enabled || duration <= 0L || !isTimelineReady) {
+            // タイムライン構築中 (!isTimelineReady) や停止中、設定画面表示中は一切発音しない（即時ミュート保証）
+            if (!isPlaying || !config.enabled || duration <= 0L || !isTimelineReady || isSettingsScreenActive) {
                 return false
             }
 
@@ -471,8 +556,8 @@ class MetronomeScheduler(
                 return false
             }
 
-            // 5. 楽曲長を超えている場合は発音しない
-            if (beat.timeMs >= duration) {
+            // 5. 楽曲長を超えている場合は発音しない（beat.timeMs == duration の最終拍は発音対象に含める）
+            if (beat.timeMs > duration) {
                 return false
             }
 
@@ -504,10 +589,10 @@ class MetronomeScheduler(
         schedulerJob = scope.launch(Dispatchers.Default) {
             while (isActive) {
                 val shouldWait = synchronized(stateLock) {
-                    !isPlayingProvider() || !currentConfig.enabled || durationProvider() <= 0L || !isTimelineReady
+                    !isPlayingProvider() || !currentConfig.enabled || durationProvider() <= 0L || !isTimelineReady || isSettingsScreenActive
                 }
 
-                // 再生中でない、メトロノーム無効、楽曲が存在しない、またはタイムライン構築中の場合はシグナル待機
+                // 再生中でない、メトロノーム無効、楽曲が存在しない、タイムライン構築中、または設定画面表示中の場合はシグナル待機
                 if (shouldWait) {
                     resyncChannel.receive()
                     continue
@@ -543,7 +628,7 @@ class MetronomeScheduler(
                     withTimeoutOrNull(50L) { resyncChannel.receive() }
                     continue
                 }
-                if (beat.timeMs >= songDuration) {
+                if (beat.timeMs > songDuration) {
                     withTimeoutOrNull(100L) { resyncChannel.receive() }
                     continue
                 }

@@ -57,6 +57,9 @@ class PlaybackEngine(
     /** ABリピートによる巻き戻りが発生した際のリスナー */
     var onLoopRewound: ((Long) -> Unit)? = null
 
+    /** 楽曲終了（Finished遷移）直前に呼び出されるリスナー（最終拍の評価用） */
+    var onBeforeFinish: ((Long) -> Unit)? = null
+
     /**
      * ABリピートが有効条件を満たしているかどうかを判定する。
      * 条件: A/B双方が設定済み、A < B、かつ区間長が MIN_LOOP_DURATION_MS (300ms) 以上。
@@ -328,6 +331,7 @@ class PlaybackEngine(
 
                 // 2. 楽曲終了判定
                 if (duration > 0L && currentPos >= duration) {
+                    onBeforeFinish?.invoke(duration)
                     clock.pause()
                     _state.value = PlaybackState.Finished(duration)
                     break

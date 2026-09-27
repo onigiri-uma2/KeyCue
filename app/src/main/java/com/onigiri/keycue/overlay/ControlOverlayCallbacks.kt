@@ -60,6 +60,12 @@ data class ControlOverlayCallbacks(
     val onSelectRecentSong: (RecentSongEntry) -> Unit = {},
     /** メトロノーム音声再生ON/OFFを切り替える */
     val onMetronomeEnabledChange: (Boolean) -> Unit = {},
+    /** メトロノームタイミングモード（AUTO/MANUAL）を切り替える */
+    val onMetronomeTimingModeChange: (com.onigiri.keycue.model.MetronomeTimingMode) -> Unit = {},
+    /** メトロノーム手動BPMを変更する */
+    val onMetronomeBpmChange: (Int) -> Unit = {},
+    /** メトロノーム手動拍子を変更する */
+    val onMetronomeBeatsPerBarChange: (Int) -> Unit = {},
     /** ボタンレイアウト（SkyLayout）を切り替える */
     val onLayoutChange: (com.onigiri.keycue.profile.SkyLayout) -> Unit = {}
 )
