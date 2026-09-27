@@ -51,12 +51,17 @@ class FittingViewModelLayoutProtectionTest {
         gridFitter = GridFitter()
     }
 
-    private fun createViewModel(): FittingViewModel {
+    private fun createViewModel(
+        detector: KeyDetector = fakeDetector
+    ): FittingViewModel {
         return FittingViewModel(
             settingsRepository = settingsRepo,
-            keyDetector = fakeDetector,
+            keyDetector = detector,
             gridFitter = gridFitter,
-            externalScope = testScope
+            externalScope = testScope,
+            ioDispatcher = Dispatchers.Unconfined,
+            defaultDispatcher = Dispatchers.Unconfined,
+            mainDispatcher = Dispatchers.Unconfined
         )
     }
 
@@ -164,5 +169,81 @@ class FittingViewModelLayoutProtectionTest {
         assertTrue("保存完了フラグがtrueになること", state.isSavedSuccess)
         assertEquals("リポジトリにプロファイルが保存されること", testProfile, settingsRepo.fitProfile.value)
         assertEquals(SkyLayout.TOUCH_STANDARD, settingsRepo.selectedSkyLayout.value)
+    }
+
+    /**
+     * 追加テスト: 保存直前に標準から非標準へ変更した場合の保存ブロックテスト。
+     * TOUCH_STANDARD で調整・検出を完了した状態であっても、保存処理が実行される直前に
+     * レイアウトが非標準に変更された場合、保存を遮断して非標準レイアウトを維持すること。
+     */
+    @Test
+    fun testSaveCurrentProfile_layoutSwitchedImmediatelyBeforeSave_blocksSave() = runBlocking {
+        // 初期状態は TOUCH_STANDARD で開始
+        settingsRepo.saveSelectedSkyLayout(SkyLayout.TOUCH_STANDARD)
+        val viewModel = createViewModel()
+
+        val testProfile = FitProfile.createDefaultTestProfile(landscape = true)
+        viewModel.setDetectedResultForTest(testProfile)
+        assertEquals(FittingStep.Success(1.0f), viewModel.uiState.value.step)
+
+        // 保存直前に非標準レイアウト（PAD_TRIGGER_FIRST）へ切り替える
+        settingsRepo.saveSelectedSkyLayout(SkyLayout.PAD_TRIGGER_FIRST)
+
+        // 保存を実行
+        viewModel.saveCurrentProfile()
+
+        val state = viewModel.uiState.value
+        assertNotNull("エラーメッセージが設定されること", state.errorMessage)
+        assertTrue("タッチ（標準）専用の旨が記載されていること", state.errorMessage!!.contains("タッチ（標準）"))
+        assertFalse("保存完了フラグはfalseであること", state.isSavedSuccess)
+        assertNull("リポジトリにプロファイルが保存されていないこと", settingsRepo.fitProfile.value)
+        assertEquals("変更された非標準レイアウトが維持されていること", SkyLayout.PAD_TRIGGER_FIRST, settingsRepo.selectedSkyLayout.value)
+    }
+
+    /**
+     * 追加テスト: 画像解析中に標準から非標準へ切り替わった場合の保護テスト。
+     * TOUCH_STANDARD で detectAndFit() を開始後、画像解析（KeyDetector）実行中にレイアウトが
+     * 非標準に変更された場合、検出結果を採用せず Idle に戻しエラーメッセージを設定すること。
+     */
+    @Test
+    fun testDetectAndFit_layoutSwitchedDuringDetection_discardsResultAndResetsToIdle() = runBlocking {
+        settingsRepo.saveSelectedSkyLayout(SkyLayout.TOUCH_STANDARD)
+
+        // 解析処理中にレイアウトを PAD_GRID に変更するモック Detector
+        val switchingDetector = object : KeyDetector {
+            override fun detect(image: android.graphics.Bitmap): List<DetectedPoint> {
+                runBlocking {
+                    settingsRepo.saveSelectedSkyLayout(SkyLayout.PAD_GRID)
+                }
+                return emptyList()
+            }
+        }
+
+        val viewModel = createViewModel(detector = switchingDetector)
+
+        // テスト用のダミーBitmapを設定
+        val dummyBitmap = try {
+            val constructor = android.graphics.Bitmap::class.java.declaredConstructors.firstOrNull()
+            constructor?.let {
+                it.isAccessible = true
+                val params = arrayOfNulls<Any>(it.parameterCount)
+                it.newInstance(*params) as? android.graphics.Bitmap
+            } ?: android.graphics.Bitmap.createBitmap(100, 100, android.graphics.Bitmap.Config.ARGB_8888)
+        } catch (_: Exception) {
+            null
+        }
+
+        if (dummyBitmap != null) {
+            viewModel.setImageBitmapForTest(dummyBitmap)
+            viewModel.detectAndFit()
+
+            val state = viewModel.uiState.value
+            assertEquals("解析ステップがIdleにリセットされること", FittingStep.Idle, state.step)
+            assertNotNull("エラーメッセージが設定されること", state.errorMessage)
+            assertTrue("解析中に変更された旨が記載されていること", state.errorMessage!!.contains("画像解析中にレイアウトが変更されました"))
+            assertNull("プロファイルは未反映（null）であること", state.currentProfile)
+            assertNull("リポジトリにプロファイルは保存されていないこと", settingsRepo.fitProfile.value)
+            assertEquals("切り替え後のPAD_GRIDが維持されていること", SkyLayout.PAD_GRID, settingsRepo.selectedSkyLayout.value)
+        }
     }
 }

@@ -248,12 +248,6 @@ class OverlayService : Service() {
             onLayoutChange = { newLayout ->
                 serviceScope.launch {
                     settingsRepository.saveSelectedSkyLayout(newLayout)
-                    val showLabels = settingsRepository.getLayoutShowGuideLabels(newLayout)
-                    val currentVisual = settingsRepository.visualConfig.value
-                    if (currentVisual.showGuideLabels != showLabels) {
-                        settingsRepository.saveVisualConfig(currentVisual.copy(showGuideLabels = showLabels))
-                    }
-                    recomputeActiveProfile()
                 }
             }
         )

@@ -42,9 +42,26 @@ class OverlayWindowControllerDisplayRestoreTest {
             return if (name == Context.WINDOW_SERVICE) windowManager else null
         }
         override fun getApplicationContext(): Context = this
-        override fun getResources(): android.content.res.Resources {
-            throw UnsupportedOperationException("Unit test stub")
+        private val testResources: android.content.res.Resources by lazy {
+            val metrics = android.util.DisplayMetrics().apply {
+                density = 2.0f
+                widthPixels = 1920
+                heightPixels = 1080
+            }
+            val assetManager = try {
+                android.content.res.AssetManager::class.java.getDeclaredConstructor().apply {
+                    isAccessible = true
+                }.newInstance()
+            } catch (_: Exception) {
+                null
+            }
+            val config = android.content.res.Configuration()
+            object : android.content.res.Resources(assetManager, metrics, config) {
+                override fun getDisplayMetrics(): android.util.DisplayMetrics = metrics
+            }
         }
+
+        override fun getResources(): android.content.res.Resources = testResources
         override fun getPackageName(): String = "com.onigiri.keycue"
     }
 
@@ -166,6 +183,72 @@ class OverlayWindowControllerDisplayRestoreTest {
 
         controller.showGuideOverlay()
 
+        assertEquals(View.VISIBLE, fakeGuideView.visibility)
+    }
+
+    /**
+     * 追加テスト: 設定画面でガイドを非表示にしたまま微調整を変更
+     */
+    @Test
+    fun testUpdateFitProfile_duringSettings_keepsGuideGone_untilRestoreAfterSettings() {
+        val validProfile = FitProfile.createDefaultTestProfile()
+        controller.updateFitProfile(validProfile)
+        assertEquals(View.VISIBLE, fakeGuideView.visibility)
+
+        // 設定画面を開いて非表示にする
+        controller.hideForSettings()
+        assertEquals(View.GONE, fakeGuideView.visibility)
+
+        // 設定画面内で微調整を変更（updateFitProfile が呼ばれる）
+        controller.updateFitProfile(validProfile)
+        // 設定画面表示中なので、activeFitProfile が有効でも GONE のまま維持されること
+        assertEquals(View.GONE, fakeGuideView.visibility)
+
+        // 設定画面を閉じたときに初めて VISIBLE に復元されること
+        controller.restoreAfterSettings()
+        assertEquals(View.VISIBLE, fakeGuideView.visibility)
+    }
+
+    /**
+     * 追加テスト: ファイル選択中のプロファイル更新
+     */
+    @Test
+    fun testUpdateFitProfile_duringFilePicker_keepsGuideGone_untilRestoreAfterFilePicker() {
+        val validProfile = FitProfile.createDefaultTestProfile()
+        controller.updateFitProfile(validProfile)
+        assertEquals(View.VISIBLE, fakeGuideView.visibility)
+
+        // ファイルピッカーを開いて非表示にする
+        controller.hideForFilePicker()
+        assertEquals(View.GONE, fakeGuideView.visibility)
+
+        // ファイル選択中にプロファイル更新が通知された場合
+        controller.updateFitProfile(validProfile)
+        // ファイルピッカー表示中なので GONE のまま維持されること
+        assertEquals(View.GONE, fakeGuideView.visibility)
+
+        // ファイルピッカー終了時に初めて VISIBLE に復元されること
+        controller.restoreAfterFilePicker()
+        assertEquals(View.VISIBLE, fakeGuideView.visibility)
+    }
+
+    /**
+     * 追加テスト: 手動フィッティング中のプロファイル更新
+     */
+    @Test
+    fun testUpdateFitProfile_duringManualFitting_keepsGuideGone_untilFinishManualFitting() {
+        val validProfile = FitProfile.createDefaultTestProfile()
+        controller.updateFitProfile(validProfile)
+        assertEquals(View.VISIBLE, fakeGuideView.visibility)
+
+        // 手動フィッティング開始（fittingOverlayView が表示されている状態）
+        controller.fittingOverlayView = View(fakeGuideView.context)
+        // 手動フィッティング中は shouldShowGuide が false になり、updateFitProfile を呼んでも GONE が維持されること
+        controller.updateFitProfile(validProfile)
+        assertEquals(View.GONE, fakeGuideView.visibility)
+
+        // 手動フィッティング終了時に初めて VISIBLE に復元されること
+        controller.finishManualFitting()
         assertEquals(View.VISIBLE, fakeGuideView.visibility)
     }
 }

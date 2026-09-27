@@ -89,7 +89,7 @@ class OverlayWindowController(
 
     private var controlOverlayView: ControlOverlayView? = null
     internal var guideOverlayView: GuideOverlayView? = null
-    private var fittingOverlayView: FittingOverlayView? = null
+    internal var fittingOverlayView: View? = null
 
     private var currentFitProfile: FitProfile? = FitProfile.createDefaultTestProfile()
     private var baseFitProfile: FitProfile = FitProfile.createDefaultTestProfile()
@@ -208,31 +208,46 @@ class OverlayWindowController(
 
     fun isShowing(): Boolean = controlOverlayView != null
 
+    private var isHiddenForSettings = false
+    private var isHiddenForFilePicker = false
+
+    /**
+     * ガイドオーバーレイを表示すべきかどうかの総合判定。
+     * - 有効な activeFitProfile が存在すること
+     * - 設定画面で非表示中でないこと
+     * - ファイル選択等の外部Activityで非表示中でないこと
+     * - 手動フィッティング中でないこと
+     */
+    private val shouldShowGuide: Boolean
+        get() = currentFitProfile != null &&
+                !isHiddenForSettings &&
+                !isHiddenForFilePicker &&
+                fittingOverlayView == null
+
+    /**
+     * ガイドオーバーレイの表示/非表示を一元的に更新する。
+     */
+    private fun updateGuideVisibility() {
+        guideOverlayView?.visibility = if (shouldShowGuide) View.VISIBLE else View.GONE
+    }
+
     /**
      * 外部Activity（ファイルピッカー等）起動時にオーバーレイ全般を一時的に非表示にする。
      */
     fun hideForFilePicker() {
+        isHiddenForFilePicker = true
         controlOverlayView?.visibility = View.GONE
-        guideOverlayView?.visibility = View.GONE
-    }
-
-    /**
-     * ガイドオーバーレイの表示/非表示を更新する。
-     * currentFitProfile が有効（非null）な場合のみ VISIBLE にし、無効な場合は GONE を維持する。
-     */
-    private fun updateGuideVisibility() {
-        guideOverlayView?.visibility = if (currentFitProfile != null) View.VISIBLE else View.GONE
+        updateGuideVisibility()
     }
 
     /**
      * 外部Activity終了後にオーバーレイの表示を復元する。
      */
     fun restoreAfterFilePicker() {
+        isHiddenForFilePicker = false
         controlOverlayView?.visibility = View.VISIBLE
         updateGuideVisibility()
     }
-
-    private var isHiddenForSettings = false
 
     /**
      * 設定画面等のActivity表示中にオーバーレイ全般を一時非表示（GONE）にする。
@@ -242,7 +257,7 @@ class OverlayWindowController(
         if (isHiddenForSettings) return
         isHiddenForSettings = true
         controlOverlayView?.visibility = View.GONE
-        guideOverlayView?.visibility = View.GONE
+        updateGuideVisibility()
     }
 
     /**
@@ -269,7 +284,7 @@ class OverlayWindowController(
         val layoutParams = createGuideLayoutParams()
         val profileToUse = currentFitProfile ?: FitProfile.createDefaultTestProfile()
         val view = GuideOverlayView(context, profileToUse, currentVisualConfig).apply {
-            visibility = if (currentFitProfile != null) View.VISIBLE else View.GONE
+            visibility = if (shouldShowGuide) View.VISIBLE else View.GONE
             updateGuideLabels(currentGuideLabels)
         }
 
@@ -403,11 +418,9 @@ class OverlayWindowController(
     fun updateFitProfile(profile: FitProfile?) {
         currentFitProfile = profile
         if (profile != null) {
-            guideOverlayView?.visibility = View.VISIBLE
             guideOverlayView?.updateFitProfile(profile)
-        } else {
-            guideOverlayView?.visibility = View.GONE
         }
+        updateGuideVisibility()
     }
 
     /**
@@ -485,6 +498,7 @@ class OverlayWindowController(
         try {
             windowManager.addView(view, layoutParams)
             fittingOverlayView = view
+            updateGuideVisibility()
         } catch (_: Exception) {
             fittingOverlayView = null
             controlOverlayView?.visibility = View.VISIBLE

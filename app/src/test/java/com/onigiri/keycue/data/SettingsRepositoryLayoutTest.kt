@@ -450,6 +450,96 @@ class SettingsRepositoryLayoutTest {
         }
     }
 
+    /**
+     * 追加テスト: レイアウト連続切り替え時のラベル整合性テスト。
+     * 複数レイアウトを連続して高速・繰り返し切り替えた際にも、各レイアウト固有のラベル表示設定が
+     * 独立して保持され、visualConfig.showGuideLabels が選択レイアウトの設定と常に一致することを検証する。
+     */
+    @Test
+    fun testRapidLayoutSwitching_maintainsLabelSettingsIntegrity() = runBlocking {
+        // InMemory リポジトリでの検証
+        val inMemoryRepo = InMemorySettingsRepository(
+            initialVisualConfig = com.onigiri.keycue.model.VisualConfig(showGuideLabels = true)
+        )
+
+        // PAD_TRIGGER_FIRST を ON に設定
+        inMemoryRepo.saveSelectedSkyLayout(SkyLayout.PAD_TRIGGER_FIRST)
+        inMemoryRepo.saveShowGuideLabels(true)
+        assertTrue(inMemoryRepo.visualConfig.value.showGuideLabels)
+        assertTrue(inMemoryRepo.getLayoutShowGuideLabels(SkyLayout.PAD_TRIGGER_FIRST))
+
+        // TOUCH_STANDARD を OFF に設定
+        inMemoryRepo.saveSelectedSkyLayout(SkyLayout.TOUCH_STANDARD)
+        inMemoryRepo.saveShowGuideLabels(false)
+        assertFalse(inMemoryRepo.visualConfig.value.showGuideLabels)
+        assertFalse(inMemoryRepo.getLayoutShowGuideLabels(SkyLayout.TOUCH_STANDARD))
+
+        // 高速連続切り替えループ
+        val layoutsSequence = listOf(
+            SkyLayout.PAD_TRIGGER_FIRST, // 期待: true
+            SkyLayout.TOUCH_STANDARD,    // 期待: false
+            SkyLayout.PAD_DPAD_FIRST,    // 期待: false (デフォルト)
+            SkyLayout.TOUCH_EXPANDED,    // 期待: true (デフォルト)
+            SkyLayout.PAD_GRID,          // 期待: false (デフォルト)
+            SkyLayout.PAD_TRIGGER_FIRST, // 期待: true
+            SkyLayout.TOUCH_STANDARD     // 期待: false
+        )
+
+        val expectedLabels = mapOf(
+            SkyLayout.TOUCH_STANDARD to false,
+            SkyLayout.TOUCH_EXPANDED to true,
+            SkyLayout.PAD_TRIGGER_FIRST to true,
+            SkyLayout.PAD_DPAD_FIRST to false,
+            SkyLayout.PAD_GRID to false
+        )
+
+        for (targetLayout in layoutsSequence) {
+            inMemoryRepo.saveSelectedSkyLayout(targetLayout)
+            assertEquals(targetLayout, inMemoryRepo.selectedSkyLayout.value)
+            val expected = expectedLabels[targetLayout] ?: false
+            assertEquals(
+                "レイアウト $targetLayout の visualConfig.showGuideLabels 整合性",
+                expected,
+                inMemoryRepo.visualConfig.value.showGuideLabels
+            )
+            assertEquals(
+                "レイアウト $targetLayout の getLayoutShowGuideLabels 整合性",
+                expected,
+                inMemoryRepo.getLayoutShowGuideLabels(targetLayout)
+            )
+        }
+
+        // SharedPreferences リポジトリでも同様に連続切り替えと永続化の整合性を検証
+        val map = HashMap<String, Any>()
+        map["show_key_numbers"] = true // 旧全体設定 ON の状態からマイグレーション開始
+        val prefs = createFakePrefs(map)
+        val spRepo = SharedPreferencesSettingsRepository(prefs)
+
+        // PAD_TRIGGER_FIRST を ON に
+        spRepo.saveSelectedSkyLayout(SkyLayout.PAD_TRIGGER_FIRST)
+        spRepo.saveShowGuideLabels(true)
+        // TOUCH_STANDARD を OFF に
+        spRepo.saveSelectedSkyLayout(SkyLayout.TOUCH_STANDARD)
+        spRepo.saveShowGuideLabels(false)
+
+        for (targetLayout in layoutsSequence) {
+            spRepo.saveSelectedSkyLayout(targetLayout)
+            val expected = expectedLabels[targetLayout] ?: false
+            assertEquals(expected, spRepo.visualConfig.value.showGuideLabels)
+            assertEquals(expected, spRepo.getLayoutShowGuideLabels(targetLayout))
+        }
+
+        // 再インスタンス化しても永続化データから全レイアウトのラベル値が復元されること
+        val spRepo2 = SharedPreferencesSettingsRepository(prefs)
+        for ((layout, expected) in expectedLabels) {
+            assertEquals(
+                "永続化復元後のレイアウト $layout のラベル設定",
+                expected,
+                spRepo2.getLayoutShowGuideLabels(layout)
+            )
+        }
+    }
+
     private fun createFakePrefs(map: HashMap<String, Any>): android.content.SharedPreferences {
         return Proxy.newProxyInstance(
             android.content.SharedPreferences::class.java.classLoader,

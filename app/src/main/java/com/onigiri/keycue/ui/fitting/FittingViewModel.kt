@@ -39,7 +39,10 @@ class FittingViewModel(
     private val keyDetector: KeyDetector = OpenCvKeyDetector(),
     private val gridFitter: GridFitter = GridFitter(),
     private val gameProfile: GameProfile = GameProfileRegistry.current,
-    externalScope: kotlinx.coroutines.CoroutineScope? = null
+    externalScope: kotlinx.coroutines.CoroutineScope? = null,
+    private val ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO,
+    private val defaultDispatcher: kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.Default,
+    private val mainDispatcher: kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.Main
 ) : ViewModel() {
 
     private val scope: kotlinx.coroutines.CoroutineScope = externalScope ?: viewModelScope
@@ -79,7 +82,7 @@ class FittingViewModel(
         }
         pendingDetectedGuideRadiusRatio = null
 
-        scope.launch(Dispatchers.IO) {
+        scope.launch(ioDispatcher) {
             try {
                 // 1. 画像サイズの確認 (inJustDecodeBounds = true)
                 val boundsOptions = BitmapFactory.Options().apply {
@@ -124,7 +127,7 @@ class FittingViewModel(
 
                 val isLandscape = origWidth >= origHeight
 
-                withContext(Dispatchers.Main) {
+                withContext(mainDispatcher) {
                     _uiState.update { current ->
                         current.copy(
                             step = FittingStep.ImageSelected,
@@ -142,7 +145,7 @@ class FittingViewModel(
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to load image: ${e.message}", e)
-                withContext(Dispatchers.Main) {
+                withContext(mainDispatcher) {
                     _uiState.update {
                         it.copy(errorMessage = "画像読み込みエラー: ${e.localizedMessage}")
                     }
@@ -165,7 +168,7 @@ class FittingViewModel(
 
         _uiState.update { it.copy(step = FittingStep.Detecting, errorMessage = null) }
 
-        scope.launch(Dispatchers.Default) {
+        scope.launch(defaultDispatcher) {
             try {
                 // 1. OpenCV による候補点検出
                 val candidates = keyDetector.detect(bitmap)
@@ -177,7 +180,16 @@ class FittingViewModel(
                     imageHeight = bitmap.height
                 )
 
-                withContext(Dispatchers.Main) {
+                withContext(mainDispatcher) {
+                    if (settingsRepository.selectedSkyLayout.value != com.onigiri.keycue.profile.SkyLayout.TOUCH_STANDARD) {
+                        _uiState.update { current ->
+                            current.copy(
+                                step = FittingStep.Idle,
+                                errorMessage = "画像解析中にレイアウトが変更されました。位置合わせは「タッチ（標準）」でのみ実行できます。"
+                            )
+                        }
+                        return@withContext
+                    }
                     if (fitResult.profile != null) {
                         val profile = fitResult.profile
                         pendingDetectedGuideRadiusRatio = profile.keyRadiusRatio
@@ -367,6 +379,17 @@ class FittingViewModel(
         pendingDetectedGuideRadiusRatio = null
 
         scope.launch {
+            // 保存直前に selectedSkyLayout.value を再確認（TOUCH_STANDARD 以外なら保存しない）
+            if (settingsRepository.selectedSkyLayout.value != com.onigiri.keycue.profile.SkyLayout.TOUCH_STANDARD) {
+                _uiState.update {
+                    it.copy(
+                        errorMessage = "位置合わせ結果の保存は「タッチ（標準）」でのみ実行できます。レイアウトをタッチ（標準）に変更してください。",
+                        isSavedSuccess = false
+                    )
+                }
+                return@launch
+            }
+
             require(profile.keyCenters.size == 15) {
                 "基準FitProfileは15キーを含む必要があります。"
             }
@@ -419,6 +442,11 @@ class FittingViewModel(
                 errorMessage = null
             )
         }
+    }
+
+    @androidx.annotation.VisibleForTesting
+    internal fun setImageBitmapForTest(bitmap: android.graphics.Bitmap?) {
+        _uiState.update { it.copy(imageBitmap = bitmap) }
     }
 
     companion object {
