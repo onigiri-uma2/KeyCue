@@ -55,19 +55,6 @@ class ControlOverlayView(
     private val callbacks: ControlOverlayCallbacks
 ) : FrameLayout(context) {
 
-    private val hostContext: Context = context
-
-    init {
-        try {
-            val field = View::class.java.getDeclaredField("mContext")
-            field.isAccessible = true
-            if (field.get(this) == null) {
-                field.set(this, hostContext)
-            }
-        } catch (_: Throwable) {
-        }
-    }
-
     /** 後方互換用セカンダリコンストラクタ */
     constructor(
         context: Context,
@@ -1352,14 +1339,10 @@ class ControlOverlayView(
     }
 
     internal val isMetronomeSectionVisible: Boolean
-        get() = if (::metronomeSection.isInitialized) {
-            currentConfig.showMetronomeControl && metronomeSection.visibility != View.GONE
-        } else false
+        get() = if (::metronomeSection.isInitialized) metronomeSection.visibility == View.VISIBLE else false
 
     internal val isGuideQuickToggleSectionVisible: Boolean
-        get() = if (::guideQuickToggleSection.isInitialized) {
-            currentConfig.showGuideQuickToggles && guideQuickToggleSection.visibility != View.GONE
-        } else false
+        get() = if (::guideQuickToggleSection.isInitialized) guideQuickToggleSection.visibility == View.VISIBLE else false
 
     private fun createQuickToggleButton(text: String, onClick: () -> Unit): Button {
         return Button(context).apply {
@@ -1917,12 +1900,8 @@ class ControlOverlayView(
     }
 
     private fun dpToPx(dp: Int): Int {
-        val density = try {
-            (hostContext.resources ?: context?.resources)?.displayMetrics?.density ?: 1f
-        } catch (_: Throwable) {
-            1f
-        }
-        return (dp * density + 0.5f).toInt()
+        val scale = context.resources.displayMetrics.density
+        return (dp * scale + 0.5f).toInt()
     }
 
     companion object {

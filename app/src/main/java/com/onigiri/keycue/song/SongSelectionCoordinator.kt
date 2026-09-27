@@ -65,9 +65,9 @@ class SongSelectionCoordinator(
             is SongLoadResult.Success -> {
                 val songData = result.songData
 
-                // 4. 新しい曲の選択時（USER_SELECT, RECENT_SELECT）はメトロノームのタイミングモードをAUTOへ戻す
+                // 4. 楽曲読み込み成功時はメトロノームのタイミングモードをAUTOへ戻す（対象: USER_SELECT, RECENT_SELECT, RESTORE / 対象外: MIDI_REMAP）
                 // 重要: AUTO復帰完了後に新曲の PlaybackSession を公開する
-                if (reason == SongLoadReason.USER_SELECT || reason == SongLoadReason.RECENT_SELECT) {
+                if (reason != SongLoadReason.MIDI_REMAP) {
                     settingsRepository.updateMetronomeConfig { currentMetro ->
                         currentMetro.copy(timingMode = com.onigiri.keycue.model.MetronomeTimingMode.AUTO)
                     }

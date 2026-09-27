@@ -7,6 +7,7 @@ import android.net.Uri
 import com.onigiri.keycue.data.InMemoryPlaybackSessionRepository
 import com.onigiri.keycue.data.InMemorySettingsRepository
 import com.onigiri.keycue.data.PlaybackSessionRepository
+import com.onigiri.keycue.model.BeatSubdivision
 import com.onigiri.keycue.model.MetronomeConfig
 import com.onigiri.keycue.model.MetronomeTimingMode
 import com.onigiri.keycue.model.NoteEvent
@@ -164,10 +165,19 @@ class SongSelectionMetronomeAutoResetTest {
     }
 
     @Test
-    fun testRestore_preservesManualTimingMode() = runBlocking {
-        // 起動時の自動復元では、既存ユーザーの手動モードを勝手に上書きしない
+    fun testRestore_resetsTimingModeToAuto() = runBlocking {
+        // 起動時の自動復元(RESTORE)でもタイミングモードはAUTOへ復帰する
         settingsRepository.saveMetronomeConfig(
-            MetronomeConfig(timingMode = MetronomeTimingMode.MANUAL, bpm = 135)
+            MetronomeConfig(
+                enabled = true,
+                timingMode = MetronomeTimingMode.MANUAL,
+                bpm = 135,
+                beatsPerBar = 4,
+                volumePercent = 80,
+                subdivision = BeatSubdivision.EIGHTH,
+                accentEnabled = true,
+                beatOffsetMs = 15L
+            )
         )
 
         val fakeSongLoader = object : SongLoader() {
@@ -189,11 +199,20 @@ class SongSelectionMetronomeAutoResetTest {
         val result = coordinator.select(sampleUri, reason = SongLoadReason.RESTORE)
         assertTrue(result.isSuccess)
 
+        val currentMetro = settingsRepository.metronomeConfig.value
         assertEquals(
-            "自動復元(RESTORE)ではMANUALモードが維持されること",
-            MetronomeTimingMode.MANUAL,
-            settingsRepository.metronomeConfig.value.timingMode
+            "自動復元(RESTORE)によりtimingModeがAUTOへ復帰すること",
+            MetronomeTimingMode.AUTO,
+            currentMetro.timingMode
         )
+        // 既存のenabled、BPM、拍子、音量、拍分割、アクセント、beatOffsetMsは維持
+        assertTrue("enabledが維持されること", currentMetro.enabled)
+        assertEquals("BPMが維持されること", 135, currentMetro.bpm)
+        assertEquals("beatsPerBarが維持されること", 4, currentMetro.beatsPerBar)
+        assertEquals("volumePercentが維持されること", 80, currentMetro.volumePercent)
+        assertEquals("subdivisionが維持されること", BeatSubdivision.EIGHTH, currentMetro.subdivision)
+        assertTrue("accentEnabledが維持されること", currentMetro.accentEnabled)
+        assertEquals("beatOffsetMsが維持されること", 15L, currentMetro.beatOffsetMs)
     }
 
     @Test
